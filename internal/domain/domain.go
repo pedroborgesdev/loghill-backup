@@ -1,0 +1,207 @@
+package domain
+
+import (
+	"errors"
+	"fmt"
+	"strings"
+	"time"
+)
+
+type SenderStatus string
+
+const (
+	StatusNeverConnected SenderStatus = "never_connected"
+	StatusOnline         SenderStatus = "online"
+	StatusInactive       SenderStatus = "inactive"
+	StatusArchived       SenderStatus = "archived"
+	StatusExpired        SenderStatus = "expired"
+	StatusRevoked        SenderStatus = "revoked"
+)
+
+type Sender struct {
+	ID                string       `json:"id"`
+	Name              string       `json:"name"`
+	Description       string       `json:"description,omitempty"`
+	KeyHash           string       `json:"-"`
+	KeyPrefix         string       `json:"key_prefix,omitempty"`
+	KeyRotatedAt      *time.Time   `json:"key_rotated_at,omitempty"`
+	Status            SenderStatus `json:"status"`
+	CreatedAt         time.Time    `json:"created_at"`
+	UpdatedAt         time.Time    `json:"updated_at"`
+	LastActivityAt    *time.Time   `json:"last_activity_at"`
+	LastHealthcheckAt *time.Time   `json:"last_healthcheck_at"`
+	InactiveAt        *time.Time   `json:"inactive_at"`
+	CompactedAt       *time.Time   `json:"compacted_at"`
+	ExpiresAt         *time.Time   `json:"expires_at"`
+	ExpiredAt         *time.Time   `json:"expired_at"`
+	LogLineCount      int64        `json:"log_line_count"`
+	LogFileSize       int64        `json:"log_file_size"`
+	RecentErrorCount  int64        `json:"recent_error_count,omitempty"`
+}
+
+type LogSeverity string
+
+const (
+	Trace LogSeverity = "TRACE"
+	Debug LogSeverity = "DEBUG"
+	Info  LogSeverity = "INFO"
+	Warn  LogSeverity = "WARN"
+	Error LogSeverity = "ERROR"
+	Fatal LogSeverity = "FATAL"
+)
+
+func ParseSeverity(v string) (LogSeverity, error) {
+	s := LogSeverity(strings.ToUpper(strings.TrimSpace(v)))
+	switch s {
+	case Trace, Debug, Info, Warn, Error, Fatal:
+		return s, nil
+	}
+	return "", ErrInvalidSeverity
+}
+
+type LogEntry struct {
+	Timestamp         time.Time      `json:"timestamp"`
+	SenderID          string         `json:"sender,omitempty"`
+	Severity          LogSeverity    `json:"severity"`
+	Message           string         `json:"message"`
+	Event             string         `json:"event,omitempty"`
+	EventOccurrenceID string         `json:"event_occurrence_id,omitempty"`
+	Metadata          map[string]any `json:"metadata,omitempty"`
+}
+type Pagination struct {
+	Page       int   `json:"page"`
+	PageSize   int   `json:"page_size"`
+	Returned   int   `json:"returned,omitempty"`
+	Total      int64 `json:"total"`
+	TotalPages int   `json:"total_pages"`
+}
+type LogPage struct {
+	Sender     string     `json:"sender"`
+	Items      []LogEntry `json:"items"`
+	Pagination Pagination `json:"pagination"`
+}
+type SenderPage struct {
+	Items      []Sender   `json:"items"`
+	Pagination Pagination `json:"pagination"`
+}
+type LogFilters struct {
+	Severities     map[LogSeverity]bool
+	Search         string
+	EventMode      string
+	EventKey       string
+	Start, End     *time.Time
+	Page, PageSize int
+	Order          string
+}
+type SenderFilters struct {
+	Status                    SenderStatus
+	Name, Search, Sort, Order string
+	HasErrors                 bool
+	GroupByName               bool
+	Page, PageSize            int
+}
+
+type StorageUnit string
+
+const (
+	StorageLines StorageUnit = "lines"
+	StorageMB    StorageUnit = "mb"
+)
+
+type NumberUnitValue struct {
+	Value int         `json:"value"`
+	Unit  StorageUnit `json:"unit"`
+}
+
+type Settings struct {
+	LogLimit             NumberUnitValue `json:"log_limit"`
+	InactivePreservation NumberUnitValue `json:"inactive_preservation"`
+	UpdatedAt            time.Time       `json:"updated_at"`
+}
+
+type SettingsValidationError struct {
+	Field   string
+	Message string
+}
+
+func (e *SettingsValidationError) Error() string { return e.Message }
+
+func DefaultSettings(now time.Time) Settings {
+	return Settings{
+		LogLimit:             NumberUnitValue{Value: 10_000, Unit: StorageLines},
+		InactivePreservation: NumberUnitValue{Value: 2_000, Unit: StorageLines},
+		UpdatedAt:            now,
+	}
+}
+
+func ValidateSettings(value Settings) error {
+	if err := validateNumberUnit("log_limit", value.LogLimit, false); err != nil {
+		return err
+	}
+	if err := validateNumberUnit("inactive_preservation", value.InactivePreservation, false); err != nil {
+		return err
+	}
+	if value.LogLimit.Unit == value.InactivePreservation.Unit &&
+		value.LogLimit.Value > 0 &&
+		value.InactivePreservation.Value > value.LogLimit.Value {
+		return &SettingsValidationError{
+			Field:   "inactive_preservation.value",
+			Message: "A quantidade preservada não pode ser maior que o limite máximo.",
+		}
+	}
+	return nil
+}
+
+// ValidateStoredSettings accepts an old value above the current UI limit so it
+// can be shown and corrected without silently truncating persisted data.
+func ValidateStoredSettings(value Settings) error {
+	if err := validateNumberUnit("log_limit", value.LogLimit, true); err != nil {
+		return err
+	}
+	if err := validateNumberUnit("inactive_preservation", value.InactivePreservation, true); err != nil {
+		return err
+	}
+	if value.LogLimit.Unit == value.InactivePreservation.Unit &&
+		value.LogLimit.Value > 0 &&
+		value.InactivePreservation.Value > value.LogLimit.Value {
+		return &SettingsValidationError{
+			Field:   "inactive_preservation.value",
+			Message: "A quantidade preservada não pode ser maior que o limite máximo.",
+		}
+	}
+	return nil
+}
+
+func validateNumberUnit(field string, value NumberUnitValue, allowLegacy bool) error {
+	if value.Unit != StorageLines && value.Unit != StorageMB {
+		return &SettingsValidationError{Field: field + ".unit", Message: "Unidade inválida."}
+	}
+	if value.Value < 0 || (!allowLegacy && value.Value > 10_000) {
+		return &SettingsValidationError{
+			Field:   field + ".value",
+			Message: fmt.Sprintf("Informe um valor entre 0 e %s.", "10.000"),
+		}
+	}
+	return nil
+}
+
+var (
+	ErrNotFound                 = errors.New("sender not found")
+	ErrExpired                  = errors.New("sender expired")
+	ErrLogFileNotFound          = errors.New("log file not found")
+	ErrInvalidSeverity          = errors.New("invalid severity")
+	ErrInvalidName              = errors.New("invalid sender name")
+	ErrSenderAlreadyExists      = errors.New("sender already exists")
+	ErrInvalidSenderKey         = errors.New("invalid sender key")
+	ErrSenderRevoked            = errors.New("sender revoked")
+	ErrConflict                 = errors.New("conflict")
+	ErrTooManySubscribers       = errors.New("too many subscribers")
+	ErrInvalidSettings          = errors.New("invalid settings")
+	ErrInvalidEventKey          = errors.New("invalid event key")
+	ErrInvalidEventOccurrenceID = errors.New("invalid event occurrence id")
+)
+
+type Clock interface{ Now() time.Time }
+type SystemClock struct{}
+
+func (SystemClock) Now() time.Time { return time.Now() }

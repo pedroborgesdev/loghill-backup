@@ -1,0 +1,43 @@
+import { cleanup, render, screen, waitFor } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { normalizeSenderID } from "../../utils/senderID";
+import { CreateSenderDialog } from "./SenderDialogs";
+
+describe("cadastro administrativo de sender", () => {
+  beforeEach(() => {
+    Object.defineProperty(navigator, "clipboard", { configurable: true, value: { writeText: vi.fn(async () => undefined) } });
+  });
+  afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
+
+  it("normaliza a prévia sem hash, sufixo ou timestamp", () => {
+    expect(normalizeSenderID("  Automação   Financeira ")).toBe("automacao-financeira");
+    expect(normalizeSenderID("Consulta PJe - TRF3")).toBe("consulta-pje-trf3");
+    expect(normalizeSenderID("Cobrança / Santander")).toBe("cobranca-santander");
+  });
+
+  it("verifica disponibilidade, cria e protege a chave de exibição única", async () => {
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, options?: RequestInit) => {
+      const path = String(input);
+      if (path.includes("check-id")) return new Response(JSON.stringify({ id: "automacao-financeira", available: true }), { status: 200 });
+      expect(options?.method).toBe("POST");
+      return new Response(JSON.stringify({ sender: { id: "automacao-financeira", name: "Automação Financeira", description: "Boletos", status: "never_connected", created_at: "2026-07-31T15:00:00Z", updated_at: "2026-07-31T15:00:00Z", last_activity_at: null, last_healthcheck_at: null, inactive_at: null, compacted_at: null, expires_at: null, expired_at: null, log_line_count: 0, log_file_size: 0 }, credentials: { sender_key: "snd_12345678901234567890123456789012", displayed_once: true } }), { status: 201 });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const created = vi.fn();
+    render(<CreateSenderDialog open onClose={vi.fn()} onCreated={created} />);
+    await userEvent.type(screen.getByPlaceholderText("Automação Financeira"), "Automação Financeira");
+    await userEvent.type(screen.getByPlaceholderText("Processamento de boletos e acordos"), "Boletos");
+    expect(screen.getByText("automacao-financeira")).toBeInTheDocument();
+    expect(await screen.findByText("Identificador disponível")).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "Criar sender" }));
+    expect(await screen.findByRole("dialog", { name: "Sender criado" })).toBeInTheDocument();
+    expect(screen.getByText("snd_12345678901234567890123456789012")).toBeInTheDocument();
+    expect(created).toHaveBeenCalled();
+    await userEvent.click(screen.getByRole("button", { name: "Concluir" }));
+    expect(screen.getByRole("dialog", { name: "Você ainda não copiou a chave" })).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "Continuar nesta janela" }));
+    await userEvent.click(screen.getByRole("button", { name: "Copiar chave" }));
+    await waitFor(() => expect(navigator.clipboard.writeText).toHaveBeenCalledWith("snd_12345678901234567890123456789012"));
+  });
+});

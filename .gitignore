@@ -1,0 +1,11 @@
+/data/
+/frontend/node_modules/
+/.cache/
+/.tools-go/
+/.tools-node/
+/.tools-go.zip
+/.tools-node.zip
+*.exe
+*.test
+.env
+coverage/

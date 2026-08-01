@@ -1,0 +1,520 @@
+openapi: 3.0.0
+info:
+  title: LogHill API
+  version: 2.1.0
+  description: API para cadastro administrativo de senders, recebimento autenticado de logs, alertas e eventos assíncronos por e-mail.
+servers:
+  - url: /
+paths:
+  /health:
+    get:
+      summary: Saúde geral
+      responses:
+        "200": { description: Aplicação saudável }
+  /ready:
+    get:
+      summary: Prontidão
+      responses:
+        "200": { description: Aplicação pronta }
+        "503": { description: Aplicação indisponível }
+  /api/v1/logs:
+    post:
+      summary: Recebe um log autenticado pelo sender
+      security: [{ SenderKey: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/LogInput" }
+      responses:
+        "202": { description: Log persistido e aceito; alertas e eventos são processados de forma assíncrona }
+        "400": { description: Contrato inválido, inclusive chave de evento inválida, content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } } }
+        "401": { $ref: "#/components/responses/InvalidSenderKey" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+        "429": { description: Limite de requisições excedido }
+  /api/v1/senders:
+    get:
+      summary: Lista senders sem expor hashes ou chaves
+      security: [{ AdminApiKey: [] }]
+      parameters:
+        - { name: status, in: query, schema: { $ref: "#/components/schemas/SenderStatus" } }
+        - { name: search, in: query, schema: { type: string } }
+        - { name: group_by, in: query, schema: { type: string, enum: [name] } }
+        - { name: page, in: query, schema: { type: integer, minimum: 1 } }
+        - { name: page_size, in: query, schema: { type: integer, minimum: 1, maximum: 1000 } }
+      responses:
+        "200": { description: Página de senders }
+        "401": { $ref: "#/components/responses/AdminUnauthorized" }
+    post:
+      summary: Cria um sender administrativamente
+      description: A chave completa é retornada uma única vez nesta resposta.
+      security: [{ AdminApiKey: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CreateSenderInput" }
+      responses:
+        "201":
+          description: Sender e credenciais criados
+          content: { application/json: { schema: { $ref: "#/components/schemas/CreateSenderResponse" } } }
+        "409": { description: Identificador normalizado já utilizado, content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } } }
+        "422": { $ref: "#/components/responses/ValidationError" }
+  /api/v1/senders/check-id:
+    get:
+      summary: Verifica a disponibilidade do identificador
+      security: [{ AdminApiKey: [] }]
+      parameters:
+        - { name: id, in: query, required: true, schema: { type: string } }
+      responses:
+        "200":
+          description: Resultado da verificação
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [id, available]
+                properties: { id: { type: string }, available: { type: boolean } }
+        "422": { $ref: "#/components/responses/ValidationError" }
+  /api/v1/senders/{sender}:
+    parameters: [{ $ref: "#/components/parameters/Sender" }]
+    get:
+      summary: Detalha um sender
+      security: [{ AdminApiKey: [] }]
+      responses:
+        "200": { description: Sender, content: { application/json: { schema: { $ref: "#/components/schemas/Sender" } } } }
+        "404": { $ref: "#/components/responses/NotFound" }
+    put:
+      summary: Edita nome e descrição sem alterar o ID
+      security: [{ AdminApiKey: [] }]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/CreateSenderInput" } } } }
+      responses:
+        "200": { description: Sender atualizado, content: { application/json: { schema: { $ref: "#/components/schemas/Sender" } } } }
+        "422": { $ref: "#/components/responses/ValidationError" }
+    delete:
+      summary: Exclui o sender e seus logs
+      security: [{ AdminApiKey: [] }]
+      parameters:
+        - { name: remove_from_alerts, in: query, schema: { type: boolean, default: false }, description: Remove o sender das regras e desativa regras vazias }
+        - { name: remove_from_events, in: query, schema: { type: boolean, default: false }, description: Remove o sender dos eventos e desativa eventos vazios }
+      responses:
+        "204": { description: Sender excluído }
+        "409": { description: Sender associado a regras de alerta }
+  /api/v1/senders/{sender}/dependencies:
+    get:
+      summary: Conta regras de alerta e eventos associados ao sender
+      security: [{ AdminApiKey: [] }]
+      parameters: [{ $ref: "#/components/parameters/Sender" }]
+      responses: { "200": { description: Contagem de dependências } }
+  /api/v1/senders/{sender}/rotate-key:
+    post:
+      summary: Invalida a chave atual e gera uma nova
+      security: [{ AdminApiKey: [] }]
+      parameters: [{ $ref: "#/components/parameters/Sender" }]
+      responses:
+        "200": { description: Nova chave exibida uma vez, content: { application/json: { schema: { $ref: "#/components/schemas/RotateSenderKeyResponse" } } } }
+  /api/v1/senders/{sender}/revoke:
+    post:
+      summary: Revoga o acesso sem excluir dados ou regras
+      security: [{ AdminApiKey: [] }]
+      parameters: [{ $ref: "#/components/parameters/Sender" }]
+      responses:
+        "200": { description: Sender revogado, content: { application/json: { schema: { $ref: "#/components/schemas/Sender" } } } }
+  /api/v1/senders/{sender}/reactivate:
+    post:
+      summary: Reativa o sender com uma nova chave
+      security: [{ AdminApiKey: [] }]
+      parameters: [{ $ref: "#/components/parameters/Sender" }]
+      responses:
+        "200": { description: Sender reativado, content: { application/json: { schema: { $ref: "#/components/schemas/CreateSenderResponse" } } } }
+  /api/v1/senders/{sender}/health:
+    post:
+      summary: Registra um healthcheck autenticado
+      security: [{ SenderKey: [] }]
+      parameters: [{ $ref: "#/components/parameters/Sender" }]
+      requestBody: { content: { application/json: { schema: { type: object, additionalProperties: true } } } }
+      responses:
+        "200": { description: Healthcheck aceito }
+        "401": { $ref: "#/components/responses/InvalidSenderKey" }
+  /api/v1/senders/{sender}/logs:
+    get:
+      summary: Consulta logs
+      security: [{ AdminApiKey: [] }]
+      parameters:
+        - { $ref: "#/components/parameters/Sender" }
+        - { name: severity, in: query, schema: { type: string } }
+        - { name: search, in: query, schema: { type: string } }
+        - { name: start_date, in: query, schema: { type: string, format: date-time } }
+        - { name: end_date, in: query, schema: { type: string, format: date-time } }
+        - { name: page, in: query, schema: { type: integer, minimum: 1 } }
+        - { name: page_size, in: query, schema: { type: integer, minimum: 1 } }
+        - { name: order, in: query, schema: { type: string, enum: [asc, desc] } }
+        - { name: event, in: query, schema: { type: string, enum: [with, without] }, description: Filtra logs com ou sem evento }
+        - { name: event_key, in: query, schema: { type: string, pattern: "^[a-z0-9][a-z0-9_-]{2,79}$" }, description: Filtra pela chave exata do evento }
+      responses: { "200": { description: Página de logs }, "410": { description: Arquivo expirado } }
+  /api/v1/senders/{sender}/logs/stream:
+    get:
+      summary: Transmite novos logs via SSE
+      security: [{ AdminApiKey: [] }]
+      parameters: [{ $ref: "#/components/parameters/Sender" }]
+      responses: { "200": { description: Stream SSE, content: { text/event-stream: { schema: { type: string } } } } }
+  /api/v1/senders/{sender}/logs/download:
+    get:
+      summary: Exporta logs
+      security: [{ AdminApiKey: [] }]
+      parameters: [{ $ref: "#/components/parameters/Sender" }]
+      responses: { "200": { description: Arquivo JSON Lines } }
+  /api/v1/dashboard/summary:
+    get:
+      summary: Retorna as métricas do dashboard
+      security: [{ AdminApiKey: [] }]
+      responses: { "200": { description: Resumo } }
+  /api/v1/settings:
+    get:
+      summary: Obtém as configurações de armazenamento
+      security: [{ AdminApiKey: [] }]
+      responses: { "200": { description: Configurações, content: { application/json: { schema: { $ref: "#/components/schemas/Settings" } } } } }
+    put:
+      summary: Atualiza as configurações de armazenamento
+      security: [{ AdminApiKey: [] }]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/SettingsInput" } } } }
+      responses: { "200": { description: Configurações atualizadas }, "422": { $ref: "#/components/responses/ValidationError" } }
+  /api/v1/alerts:
+    get:
+      summary: Lista regras de alerta
+      security: [{ AdminApiKey: [] }]
+      parameters:
+        - { name: sender_id, in: query, schema: { type: string } }
+        - { name: enabled, in: query, schema: { type: boolean } }
+        - { name: search, in: query, schema: { type: string } }
+        - { name: page, in: query, schema: { type: integer, minimum: 1 } }
+        - { name: page_size, in: query, schema: { type: integer, minimum: 1 } }
+      responses: { "200": { description: Página de alertas, content: { application/json: { schema: { $ref: "#/components/schemas/AlertPage" } } } } }
+    post:
+      summary: Cria uma regra para um ou mais senders
+      security: [{ AdminApiKey: [] }]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/AlertInput" } } } }
+      responses: { "201": { description: Regra criada, content: { application/json: { schema: { $ref: "#/components/schemas/EmailAlert" } } } }, "422": { $ref: "#/components/responses/ValidationError" } }
+  /api/v1/alerts/{alertID}:
+    parameters: [{ $ref: "#/components/parameters/AlertID" }]
+    get:
+      summary: Detalha uma regra
+      security: [{ AdminApiKey: [] }]
+      responses: { "200": { description: Regra, content: { application/json: { schema: { $ref: "#/components/schemas/EmailAlert" } } } } }
+    put:
+      summary: Atualiza uma regra e seus senders
+      security: [{ AdminApiKey: [] }]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/AlertInput" } } } }
+      responses: { "200": { description: Regra atualizada, content: { application/json: { schema: { $ref: "#/components/schemas/EmailAlert" } } } } }
+    delete:
+      summary: Exclui uma regra
+      security: [{ AdminApiKey: [] }]
+      responses: { "204": { description: Regra excluída } }
+  /api/v1/alerts/{alertID}/status:
+    patch:
+      summary: Ativa ou desativa uma regra
+      security: [{ AdminApiKey: [] }]
+      parameters: [{ $ref: "#/components/parameters/AlertID" }]
+      requestBody: { required: true, content: { application/json: { schema: { type: object, required: [enabled], properties: { enabled: { type: boolean } } } } } }
+      responses: { "200": { description: Estado atualizado } }
+  /api/v1/alerts/{alertID}/test:
+    post:
+      summary: Enfileira um e-mail de teste
+      security: [{ AdminApiKey: [] }]
+      parameters: [{ $ref: "#/components/parameters/AlertID" }]
+      responses: { "202": { description: Teste enfileirado } }
+  /api/v1/events:
+    get:
+      summary: Lista eventos configurados
+      security: [{ AdminApiKey: [] }]
+      parameters:
+        - { name: search, in: query, schema: { type: string } }
+        - { name: enabled, in: query, schema: { type: boolean } }
+        - { name: sender_id, in: query, schema: { type: string } }
+        - { name: action_type, in: query, schema: { $ref: "#/components/schemas/EventActionType" } }
+        - { name: page, in: query, schema: { type: integer, minimum: 1 } }
+        - { name: page_size, in: query, schema: { type: integer, minimum: 1, maximum: 1000 } }
+      responses:
+        "200": { description: Página de eventos, content: { application/json: { schema: { $ref: "#/components/schemas/EventPage" } } } }
+        "401": { $ref: "#/components/responses/AdminUnauthorized" }
+    post:
+      summary: Cria um evento
+      description: A chave deve ser única e não poderá ser alterada depois da criação. Um evento ativo exige Outlook configurado.
+      security: [{ AdminApiKey: [] }]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/EventInput" } } } }
+      responses:
+        "201": { description: Evento criado, content: { application/json: { schema: { $ref: "#/components/schemas/EventDefinition" } } } }
+        "409": { description: Chave já utilizada ou Outlook indisponível, content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } } }
+        "422": { $ref: "#/components/responses/ValidationError" }
+  /api/v1/events/check-key:
+    get:
+      summary: Valida e verifica a disponibilidade de uma chave
+      security: [{ AdminApiKey: [] }]
+      parameters: [{ name: key, in: query, required: true, schema: { type: string, minLength: 3, maxLength: 80 } }]
+      responses:
+        "200":
+          description: Resultado da verificação
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [key, valid, available]
+                properties: { key: { type: string }, valid: { type: boolean }, available: { type: boolean } }
+  /api/v1/events/{eventID}:
+    parameters: [{ $ref: "#/components/parameters/EventID" }]
+    get:
+      summary: Detalha um evento
+      security: [{ AdminApiKey: [] }]
+      responses: { "200": { description: Evento, content: { application/json: { schema: { $ref: "#/components/schemas/EventDefinition" } } } }, "404": { description: Evento não encontrado } }
+    put:
+      summary: Atualiza nome, senders, estado e template
+      description: Se o body enviar uma chave diferente da original, a API retorna conflito.
+      security: [{ AdminApiKey: [] }]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/EventInput" } } } }
+      responses: { "200": { description: Evento atualizado, content: { application/json: { schema: { $ref: "#/components/schemas/EventDefinition" } } } }, "409": { description: Chave imutável }, "422": { $ref: "#/components/responses/ValidationError" } }
+    delete:
+      summary: Exclui um evento
+      security: [{ AdminApiKey: [] }]
+      responses: { "204": { description: Evento excluído } }
+  /api/v1/events/{eventID}/status:
+    patch:
+      summary: Ativa ou desativa um evento
+      security: [{ AdminApiKey: [] }]
+      parameters: [{ $ref: "#/components/parameters/EventID" }]
+      requestBody: { required: true, content: { application/json: { schema: { type: object, required: [enabled], properties: { enabled: { type: boolean } } } } } }
+      responses: { "200": { description: Estado atualizado, content: { application/json: { schema: { $ref: "#/components/schemas/EventDefinition" } } } }, "409": { description: Outlook não configurado } }
+  /api/v1/events/{eventID}/test:
+    post:
+      summary: Enfileira um teste com dados fictícios
+      description: O teste não incrementa a contagem de execuções reais.
+      security: [{ AdminApiKey: [] }]
+      parameters: [{ $ref: "#/components/parameters/EventID" }]
+      requestBody: { required: true, content: { application/json: { schema: { type: object, required: [recipient], properties: { recipient: { type: string, format: email } } } } } }
+      responses: { "202": { description: Teste enfileirado }, "503": { description: Fila cheia } }
+  /api/v1/settings/email:
+    get:
+      summary: Obtém a configuração segura do Outlook
+      security: [{ AdminApiKey: [] }]
+      responses: { "200": { description: Configuração sem segredos, content: { application/json: { schema: { $ref: "#/components/schemas/EmailSettings" } } } } }
+    put:
+      summary: Atualiza a configuração do Outlook
+      security: [{ AdminApiKey: [] }]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/EmailSettingsInput" } } } }
+      responses: { "200": { description: Configuração atualizada, content: { application/json: { schema: { $ref: "#/components/schemas/EmailSettings" } } } }, "422": { $ref: "#/components/responses/ValidationError" } }
+  /api/v1/settings/email/test-connection:
+    post:
+      summary: Testa a autenticação no Outlook sem enviar mensagem
+      security: [{ AdminApiKey: [] }]
+      responses: { "200": { description: Conexão válida } }
+  /api/v1/settings/email/send-test:
+    post:
+      summary: Envia um e-mail de validação
+      security: [{ AdminApiKey: [] }]
+      requestBody: { required: true, content: { application/json: { schema: { type: object, required: [recipient], properties: { recipient: { type: string, format: email } } } } } }
+      responses: { "200": { description: E-mail enviado } }
+components:
+  securitySchemes:
+    SenderKey: { type: apiKey, in: header, name: X-Sender-Key, description: Chave secreta específica do sender }
+    AdminApiKey: { type: apiKey, in: header, name: X-API-Key, description: Credencial administrativa opcional }
+  parameters:
+    Sender: { name: sender, in: path, required: true, schema: { type: string, pattern: "^[a-z0-9][a-z0-9_-]{0,62}$" } }
+    AlertID: { name: alertID, in: path, required: true, schema: { type: string, pattern: "^alert-[a-f0-9]{16}$" } }
+    EventID: { name: eventID, in: path, required: true, schema: { type: string, pattern: "^evt_[a-f0-9]{12}$" } }
+  schemas:
+    SenderStatus: { type: string, enum: [never_connected, online, inactive, archived, expired, revoked] }
+    Severity: { type: string, enum: [TRACE, DEBUG, INFO, WARN, ERROR, FATAL] }
+    LogInput:
+      type: object
+      additionalProperties: false
+      required: [sender, severity, message]
+      properties:
+        sender: { type: string, example: automacao-financeira }
+        severity: { $ref: "#/components/schemas/Severity" }
+        message: { type: string }
+        timestamp: { type: string, format: date-time }
+        event: { type: string, minLength: 3, maxLength: 80, pattern: "^[a-z0-9][a-z0-9_-]{2,79}$", description: Chave opcional que dispara eventos associados ao sender }
+        event_occurrence_id: { type: string, maxLength: 200, description: Identificador opcional reservado para idempotência; no MVP requisições repetidas ainda podem gerar novos envios }
+        metadata: { type: object, additionalProperties: true }
+    CreateSenderInput:
+      type: object
+      additionalProperties: false
+      required: [name]
+      properties:
+        name: { type: string, minLength: 3, maxLength: 80, example: Automação Financeira }
+        description: { type: string, maxLength: 250 }
+    Sender:
+      type: object
+      required: [id, name, status, created_at, updated_at]
+      properties:
+        id: { type: string, example: automacao-financeira }
+        name: { type: string }
+        description: { type: string }
+        key_prefix: { type: string, description: Prefixo não sensível para identificação }
+        key_rotated_at: { type: string, format: date-time, nullable: true }
+        status: { $ref: "#/components/schemas/SenderStatus" }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+        last_activity_at: { type: string, format: date-time, nullable: true }
+        last_healthcheck_at: { type: string, format: date-time, nullable: true }
+        log_line_count: { type: integer, format: int64 }
+        log_file_size: { type: integer, format: int64 }
+    SenderCredentials:
+      type: object
+      required: [sender_key, displayed_once]
+      properties:
+        sender_key: { type: string, writeOnly: true, pattern: "^snd_[A-Za-z0-9_-]{24,}$" }
+        displayed_once: { type: boolean, enum: [true] }
+    CreateSenderResponse:
+      type: object
+      required: [sender, credentials]
+      properties:
+        sender: { $ref: "#/components/schemas/Sender" }
+        credentials: { $ref: "#/components/schemas/SenderCredentials" }
+    RotateSenderKeyResponse:
+      type: object
+      required: [sender_id, credentials, rotated_at]
+      properties:
+        sender_id: { type: string }
+        credentials: { $ref: "#/components/schemas/SenderCredentials" }
+        rotated_at: { type: string, format: date-time }
+    AlertInput:
+      type: object
+      additionalProperties: false
+      required: [name, sender_ids, severities, recipients, provider, enabled]
+      properties:
+        name: { type: string, minLength: 3, maxLength: 100 }
+        sender_ids: { type: array, minItems: 1, uniqueItems: true, items: { type: string } }
+        severities: { type: array, minItems: 1, uniqueItems: true, items: { $ref: "#/components/schemas/Severity" } }
+        recipients: { type: array, minItems: 1, maxItems: 20, uniqueItems: true, items: { type: string, format: email } }
+        provider: { type: string, enum: [outlook] }
+        enabled: { type: boolean }
+    EmailAlert:
+      allOf:
+        - { $ref: "#/components/schemas/AlertInput" }
+        - type: object
+          required: [id, sender_names, created_at, updated_at]
+          properties:
+            id: { type: string }
+            sender_names: { type: array, items: { type: string } }
+            created_at: { type: string, format: date-time }
+            updated_at: { type: string, format: date-time }
+            last_triggered_at: { type: string, format: date-time, nullable: true }
+            last_delivery_at: { type: string, format: date-time, nullable: true }
+            last_delivery_status: { type: string, enum: [pending, sent, failed], nullable: true }
+            last_delivery_error: { type: string, nullable: true }
+            delivery_count: { type: integer, format: int64 }
+            failure_count: { type: integer, format: int64 }
+            test_delivery_count: { type: integer, format: int64 }
+    AlertPage:
+      type: object
+      properties:
+        items: { type: array, items: { $ref: "#/components/schemas/EmailAlert" } }
+        pagination: { type: object }
+        summary: { type: object }
+        email_provider: { type: object }
+    EventActionType: { type: string, enum: [email] }
+    EventInput:
+      type: object
+      additionalProperties: false
+      required: [name, key, sender_ids, action_type, recipients, subject_template, message_template, enabled]
+      properties:
+        name: { type: string, minLength: 3, maxLength: 100 }
+        key: { type: string, minLength: 3, maxLength: 80, pattern: "^[a-z0-9][a-z0-9_-]{2,79}$", description: Única e imutável após a criação }
+        sender_ids: { type: array, minItems: 1, maxItems: 100, uniqueItems: true, items: { type: string } }
+        action_type: { $ref: "#/components/schemas/EventActionType" }
+        recipients: { type: array, minItems: 1, maxItems: 20, uniqueItems: true, items: { type: string, format: email } }
+        subject_template: { type: string, minLength: 1, maxLength: 200, description: Sem CR ou LF; aceita variáveis suportadas }
+        message_template: { type: string, minLength: 1, maxLength: 10000, description: Texto puro com placeholders; HTML livre não é aceito }
+        enabled: { type: boolean }
+    EventDefinition:
+      allOf:
+        - { $ref: "#/components/schemas/EventInput" }
+        - type: object
+          required: [id, created_at, updated_at, trigger_count, delivery_count, failure_count]
+          properties:
+            id: { type: string, pattern: "^evt_[a-f0-9]{12}$" }
+            created_at: { type: string, format: date-time }
+            updated_at: { type: string, format: date-time }
+            last_triggered_at: { type: string, format: date-time, nullable: true }
+            last_delivery_at: { type: string, format: date-time, nullable: true }
+            last_delivery_status: { type: string, enum: [pending, sent, failed], nullable: true }
+            last_delivery_error: { type: string, nullable: true, description: Erro sanitizado }
+            trigger_count: { type: integer, format: int64 }
+            delivery_count: { type: integer, format: int64 }
+            failure_count: { type: integer, format: int64 }
+            test_delivery_count: { type: integer, format: int64 }
+    EventPage:
+      type: object
+      properties:
+        items: { type: array, items: { $ref: "#/components/schemas/EventDefinition" } }
+        pagination: { type: object }
+        summary: { type: object, properties: { total: { type: integer }, active: { type: integer }, recent_triggered: { type: integer }, recent_failures: { type: integer } } }
+        email_provider: { $ref: "#/components/schemas/EmailSettings" }
+    OutlookSettingsInput:
+      type: object
+      additionalProperties: false
+      required: [tenant_id, client_id, sender_email, sender_name]
+      properties:
+        tenant_id: { type: string }
+        client_id: { type: string }
+        client_secret: { type: string, format: password, writeOnly: true }
+        sender_email: { type: string, format: email }
+        sender_name: { type: string, maxLength: 100 }
+    EmailSettingsInput:
+      type: object
+      additionalProperties: false
+      required: [provider, enabled, outlook]
+      properties:
+        provider: { type: string, enum: [outlook] }
+        enabled: { type: boolean }
+        outlook: { $ref: "#/components/schemas/OutlookSettingsInput" }
+    EmailSettings:
+      type: object
+      description: Representação segura que nunca inclui client_secret ou tokens.
+      properties:
+        provider: { type: string, enum: [outlook] }
+        enabled: { type: boolean }
+        configured: { type: boolean }
+        outlook:
+          type: object
+          properties:
+            tenant_id: { type: string }
+            client_id: { type: string }
+            client_secret_configured: { type: boolean }
+            sender_email: { type: string, format: email }
+            sender_name: { type: string }
+            managed_by_environment: { type: boolean }
+        updated_at: { type: string, format: date-time }
+        last_test_at: { type: string, format: date-time, nullable: true }
+        last_test_status: { type: string, enum: [success, failed], nullable: true }
+    StorageUnit: { type: string, enum: [lines, mb] }
+    NumberUnitValue:
+      type: object
+      required: [value, unit]
+      properties: { value: { type: integer, minimum: 0 }, unit: { $ref: "#/components/schemas/StorageUnit" } }
+    SettingsInput:
+      type: object
+      required: [log_limit, inactive_preservation]
+      properties:
+        log_limit: { $ref: "#/components/schemas/NumberUnitValue" }
+        inactive_preservation: { $ref: "#/components/schemas/NumberUnitValue" }
+    Settings:
+      allOf:
+        - { $ref: "#/components/schemas/SettingsInput" }
+        - type: object
+          properties: { updated_at: { type: string, format: date-time } }
+    Error:
+      type: object
+      properties:
+        error:
+          type: object
+          properties:
+            code: { type: string }
+            message: { type: string }
+            field: { type: string }
+            request_id: { type: string }
+  responses:
+    NotFound: { description: Sender não encontrado, content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } } }
+    ValidationError: { description: Dados inválidos, content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } } }
+    InvalidSenderKey: { description: Chave ausente ou inválida sem revelar a existência do sender, content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } } }
+    AdminUnauthorized: { description: Credencial administrativa inválida, content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } } }
