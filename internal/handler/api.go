@@ -17,6 +17,8 @@ import (
 	swaggerFiles "github.com/swaggo/files"
 	ginSwagger "github.com/swaggo/gin-swagger"
 	"logtheater/internal/alerts"
+	"logtheater/internal/app"
+	"logtheater/internal/auth"
 	"logtheater/internal/config"
 	"logtheater/internal/domain"
 	"logtheater/internal/emailconfig"
@@ -35,6 +37,8 @@ type API struct {
 	cfg           config.Config
 	scheduler     *scheduler.Scheduler
 	assets        fs.FS
+	sessions      *auth.Manager
+	lifecycle     *app.SenderLifecycle
 	alerts        *alerts.Service
 	emailConfig   *emailconfig.Store
 	emailProvider emailprovider.Provider
@@ -48,11 +52,13 @@ func (a *API) ConfigureExecutions(store *executions.Store) *API { a.executions =
 
 func (a *API) ConfigureEvents(eventService *events.Service) *API {
 	a.events = eventService
+	a.ensureLifecycle()
 	return a
 }
 
 func (a *API) ConfigureMonitoring(service *monitoring.Service) *API {
 	a.monitoring = service
+	a.ensureLifecycle()
 	return a
 }
 
@@ -61,11 +67,28 @@ func (a *API) ConfigureNotifications(alertsService *alerts.Service, emailSetting
 	a.emailConfig = emailSettings
 	a.emailProvider = provider
 	a.dispatcher = dispatcher
+	a.ensureLifecycle()
 	return a
 }
 
+func (a *API) ConfigureAuth(sessions *auth.Manager) *API {
+	a.sessions = sessions
+	return a
+}
+
+func (a *API) ensureLifecycle() {
+	a.lifecycle = &app.SenderLifecycle{
+		Senders:    a.svc,
+		Alerts:     a.alerts,
+		Events:     a.events,
+		Monitoring: a.monitoring,
+	}
+}
+
 func New(svc *service.Service, cfg config.Config, s *scheduler.Scheduler, assets fs.FS) *API {
-	return &API{svc: svc, cfg: cfg, scheduler: s, assets: assets}
+	api := &API{svc: svc, cfg: cfg, scheduler: s, assets: assets}
+	api.ensureLifecycle()
+	return api
 }
 func (a *API) Router() *gin.Engine {
 	gin.SetMode(gin.ReleaseMode)
@@ -81,8 +104,11 @@ func (a *API) Router() *gin.Engine {
 		ginSwagger.PersistAuthorization(true),
 	))
 	v1 := r.Group("/api/v1")
+	v1.POST("/auth/login", a.login)
+	v1.POST("/auth/logout", a.logout)
+	v1.GET("/auth/session", a.sessionStatus)
 	read := v1.Group("")
-	read.Use(middleware.APIKey(a.cfg.AdminAuthEnabled, a.cfg.AdminAPIKey))
+	read.Use(middleware.Session(a.sessions, a.cfg.AuthEnabled, a.cfg.AppPassword))
 	read.GET("/senders", a.listSenders)
 	read.POST("/senders", a.createSender)
 	read.GET("/senders/check-id", a.checkSenderID)
@@ -240,16 +266,10 @@ func (a *API) updateSender(c *gin.Context) {
 	if !decodeOne(c, &input) {
 		return
 	}
-	item, err := a.svc.UpdateSender(c.Request.Context(), c.Param("sender"), input.Name, input.Description)
+	item, err := a.lifecycle.Update(c.Request.Context(), c.Param("sender"), input.Name, input.Description)
 	if err != nil {
 		a.fail(c, err)
 		return
-	}
-	if a.alerts != nil {
-		if err = a.alerts.RenameSender(item.ID, item.Name); err != nil {
-			a.failAlert(c, err)
-			return
-		}
 	}
 	c.JSON(http.StatusOK, item)
 }
@@ -282,69 +302,26 @@ func (a *API) reactivateSender(c *gin.Context) {
 }
 
 func (a *API) senderDependencies(c *gin.Context) {
-	count, eventCount, monitoringCount := 0, 0, 0
-	if a.alerts != nil {
-		count = a.alerts.SenderUsageCount(c.Param("sender"))
-	}
-	if a.events != nil {
-		eventCount = a.events.SenderUsageCount(c.Param("sender"))
-	}
-	if a.monitoring != nil {
-		monitoringCount = a.monitoring.SenderUsageCount(c.Param("sender"))
-	}
-	c.JSON(http.StatusOK, gin.H{"sender_id": c.Param("sender"), "alert_rules": count, "events": eventCount, "monitoring_rules": monitoringCount})
+	deps := a.lifecycle.Dependencies(c.Param("sender"))
+	c.JSON(http.StatusOK, gin.H{"sender_id": c.Param("sender"), "alert_rules": deps.AlertRules, "events": deps.Events, "monitoring_rules": deps.MonitoringRules})
 }
 
 func (a *API) deleteSender(c *gin.Context) {
-	id := c.Param("sender")
-	usage := 0
-	eventUsage := 0
-	monitoringUsage := 0
-	if a.alerts != nil {
-		usage = a.alerts.SenderUsageCount(id)
-	}
-	if a.events != nil {
-		eventUsage = a.events.SenderUsageCount(id)
-	}
-	if a.monitoring != nil {
-		monitoringUsage = a.monitoring.SenderUsageCount(id)
-	}
-	if (usage > 0 && c.Query("remove_from_alerts") != "true") || (eventUsage > 0 && c.Query("remove_from_events") != "true") || (monitoringUsage > 0 && c.Query("remove_from_monitoring") != "true") {
-		code := "SENDER_HAS_DEPENDENCIES"
-		message := fmt.Sprintf("Este sender está associado a %d regras de alerta e %d eventos.", usage, eventUsage)
-		if eventUsage == 0 {
-			code = "SENDER_HAS_ALERTS"
-			message = fmt.Sprintf("Este sender está associado a %d regras de alerta.", usage)
-		} else if usage == 0 {
-			code = "SENDER_HAS_EVENTS"
-			message = fmt.Sprintf("Este sender está associado a %d eventos.", eventUsage)
-		}
-		body := errorBodyWithField(c, code, message, "")
-		body["alert_rules"] = usage
-		body["events"] = eventUsage
-		body["monitoring_rules"] = monitoringUsage
-		c.JSON(http.StatusConflict, body)
-		return
-	}
-	if usage > 0 {
-		if _, err := a.alerts.RemoveSender(id); err != nil {
-			a.failAlert(c, err)
+	err := a.lifecycle.Delete(c.Request.Context(), c.Param("sender"), app.DeleteSenderOptions{
+		RemoveFromAlerts:     c.Query("remove_from_alerts") == "true",
+		RemoveFromEvents:     c.Query("remove_from_events") == "true",
+		RemoveFromMonitoring: c.Query("remove_from_monitoring") == "true",
+	})
+	if err != nil {
+		var conflict *app.DependencyConflictError
+		if errors.As(err, &conflict) {
+			body := errorBodyWithField(c, conflict.Code, conflict.Message, "")
+			body["alert_rules"] = conflict.Dependencies.AlertRules
+			body["events"] = conflict.Dependencies.Events
+			body["monitoring_rules"] = conflict.Dependencies.MonitoringRules
+			c.JSON(http.StatusConflict, body)
 			return
 		}
-	}
-	if eventUsage > 0 {
-		if _, err := a.events.RemoveSender(id); err != nil {
-			a.failEvent(c, err)
-			return
-		}
-	}
-	if monitoringUsage > 0 {
-		if err := a.monitoring.RemoveSender(id); err != nil {
-			a.monitoringError(c, err)
-			return
-		}
-	}
-	if err := a.svc.DeleteSender(c.Request.Context(), id); err != nil {
 		a.fail(c, err)
 		return
 	}

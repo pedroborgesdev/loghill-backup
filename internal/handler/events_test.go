@@ -34,7 +34,7 @@ type eventHTTPFixture struct {
 func newEventHTTPFixture(t *testing.T, admin bool) eventHTTPFixture {
 	t.Helper()
 	dir := t.TempDir()
-	cfg := config.Config{DataDir: dir, MaxBodySize: 1024 * 1024, MaxMessageSize: 1024, MaxMetadataSize: 1024, MaxPageSize: 100, MaxLogLines: 1000, SSEBuffer: 10, SSEMaxClients: 10, SSEHeartbeat: time.Second, AdminAuthEnabled: admin, AdminAPIKey: "admin-secret", EmailManagedByEnvironment: true, OutlookEnabled: true, OutlookTenantID: "tenant", OutlookClientID: "client", OutlookClientSecret: "secret", OutlookSenderEmail: "logs@example.com", OutlookSenderName: "LogHill", EmailAlertSendTimeout: time.Second}
+	cfg := config.Config{DataDir: dir, MaxBodySize: 1024 * 1024, MaxMessageSize: 1024, MaxMetadataSize: 1024, MaxPageSize: 100, MaxLogLines: 1000, SSEBuffer: 10, SSEMaxClients: 10, SSEHeartbeat: time.Second, AuthEnabled: admin, AppPassword: "admin-secret", EmailManagedByEnvironment: true, OutlookEnabled: true, OutlookTenantID: "tenant", OutlookClientID: "client", OutlookClientSecret: "secret", OutlookSenderEmail: "logs@example.com", OutlookSenderName: "LogHill", EmailAlertSendTimeout: time.Second}
 	repo := repository.New(dir)
 	if err := repo.Init(); err != nil {
 		t.Fatal(err)

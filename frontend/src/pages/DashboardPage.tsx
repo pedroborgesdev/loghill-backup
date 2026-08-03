@@ -14,6 +14,7 @@ import {
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Link, useLocation, useSearchParams } from "react-router-dom";
 import { api } from "../api";
+import { queryClient } from "../api/queryClient";
 import { executionsApi } from "../api/executions";
 import { ExecutionDetailsDrawer } from "../components/executions/ExecutionView";
 import { ExecutionStatusBadge } from "../components/executions/ExecutionStatusBadge";
@@ -331,8 +332,18 @@ export function DashboardPage() {
           setSelectedSender(sender);
         }}
         onDeleted={(id) => {
-          setData((current) => current ? { ...current, items: current.items.filter((item) => item.id !== id), pagination: { ...current.pagination, total: Math.max(0, current.pagination.total - 1) } } : current);
-          setSummary((current) => ({ ...current, senders: { ...current.senders, total: Math.max(0, current.senders.total - 1) } }));
+          setData((current) => {
+            if (!current) return current;
+            const next = {
+              ...current,
+              items: current.items.filter((item) => item.id !== id),
+              pagination: { ...current.pagination, total: Math.max(0, current.pagination.total - 1) },
+            };
+            dataRef.current = next;
+            return next;
+          });
+          queryClient.removeQueries({ queryKey: ["view", "sender", id] });
+          void load();
         }}
       />
       <ExecutionDetailsDrawer record={selectedExecution} onClose={()=>setSelectedExecution(undefined)}/>

@@ -1,5 +1,5 @@
 import { Database, HardDrive, Radio, Server } from "lucide-react";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useEffect } from "react";
 import { api } from "../api";
 import {
   ErrorAlert,
@@ -9,39 +9,25 @@ import {
   StatusIndicator,
 } from "../components/ui";
 import { useAppShell } from "../layouts/appShellContext";
-import { useCachedState } from "../hooks/useCachedState";
-import type { HealthResponse } from "../types/api";
+import { useAppQuery } from "../hooks/useAppQuery";
 import { formatDate, formatNumber } from "../utils/format";
-import { waitForMinimumLoading } from "../utils/minimumLoading";
 
 export function SystemStatusPage() {
-  const { refreshToken, setRefreshing } = useAppShell();
-  const [health, setHealth] = useCachedState<HealthResponse>(["view", "system-status"]);
-  const healthRef = useRef<HealthResponse | undefined>(undefined);
-  const [error, setError] = useState("");
+  const { refreshToken, setRefreshing, setStreamState } = useAppShell();
+  const query = useAppQuery(["view", "system-status"], api.health, {
+    refetchOnMount: "always",
+  });
 
-  const load = useCallback(async () => {
-    const hasPrevious = Boolean(healthRef.current);
-    const startedAt = performance.now();
-    setRefreshing(Boolean(healthRef.current));
-    try {
-      const response = await api.health();
-      if (!hasPrevious) await waitForMinimumLoading(startedAt);
-      healthRef.current = response;
-      setHealth(response);
-      setError("");
-    } catch (requestError) {
-      setError(
-        requestError instanceof Error
-          ? requestError.message
-          : "Falha ao consultar o sistema",
-      );
-    } finally {
-      setRefreshing(false);
-    }
-  }, [setHealth, setRefreshing]);
+  useEffect(() => setStreamState(null), [setStreamState]);
+  useEffect(() => {
+    if (refreshToken > 0) void query.refetch();
+  }, [query, refreshToken]);
+  useEffect(() => {
+    setRefreshing(query.isFetching && Boolean(query.data));
+  }, [query.data, query.isFetching, setRefreshing]);
 
-  useEffect(() => { void load(); }, [load, refreshToken]);
+  const health = query.data;
+  const error = query.error?.message ?? "";
 
   return (
     <div className="space-y-4">
@@ -51,7 +37,7 @@ export function SystemStatusPage() {
           Disponibilidade da API e do armazenamento.
         </p>
       </div>
-      {error && <ErrorAlert message={error} onRetry={() => void load()} />}
+      {error && <ErrorAlert message={error} onRetry={() => void query.refetch()} />}
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <MetricCard label="API" value={health?.status ?? "—"} hint="Estado atual" icon={<Server className="size-4" />} loading={!health} />
         <MetricCard label="Uptime" value={health ? `${formatNumber(health.uptime_seconds)}s` : "—"} hint="Desde a inicialização" icon={<Radio className="size-4" />} loading={!health} />

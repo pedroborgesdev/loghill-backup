@@ -15,7 +15,7 @@ import {
   Trash2,
   Zap,
 } from "lucide-react";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { api } from "../api";
 import { queryClient } from "../api/queryClient";
@@ -43,7 +43,7 @@ import {
   useLogStream,
 } from "../hooks/useLogStream";
 import { useAppShell } from "../layouts/appShellContext";
-import type { LogPage, LogSeverity, Sender, SenderInstance } from "../types/api";
+import type { LogPage, LogSeverity, Sender, SenderInstance, SenderPage } from "../types/api";
 import { formatBytes, formatDate, formatNumber } from "../utils/format";
 import {
   calculateLivePagination,
@@ -69,43 +69,6 @@ function SenderHeaderSkeleton() {
   );
 }
 
-function InstanceSelectionSkeleton() {
-  return (
-    <div role="status" aria-label="Carregando instâncias do sender" className="flex h-full min-h-0 flex-col gap-4">
-      <div className="flex items-end justify-between gap-3">
-        <div className="space-y-2">
-          <Skeleton className="h-3 w-28" />
-          <Skeleton className="h-6 w-52" />
-          <Skeleton className="h-4 w-72" />
-        </div>
-        <Skeleton className="h-9 w-40" />
-      </div>
-      <Panel className="flex min-h-0 flex-1 flex-col overflow-hidden">
-        <div className="shrink-0 space-y-2 border-b border-zinc-800 px-4 py-3">
-          <Skeleton className="h-4 w-40" />
-          <Skeleton className="h-3 w-72" />
-        </div>
-        <div className="min-h-0 flex-1 overflow-hidden">
-          <div className="grid h-10 grid-cols-[9rem_1fr_11rem_11rem_8rem_5rem] items-center gap-4 border-b border-zinc-800 px-4">
-            {Array.from({ length: 6 }, (_, index) => <Skeleton key={index} className="h-3 w-16" />)}
-          </div>
-          {Array.from({ length: 6 }, (_, index) => (
-            <div key={index} className="grid h-14 grid-cols-[9rem_1fr_11rem_11rem_8rem_5rem] items-center gap-4 border-b border-zinc-800/70 px-4">
-              <Skeleton className="h-5 w-16 rounded-full" />
-              <div className="flex items-center gap-3"><Skeleton className="size-8" /><div className="space-y-1.5"><Skeleton className="h-3 w-32" /><Skeleton className="h-2.5 w-44" /></div></div>
-              <Skeleton className="h-3 w-28" />
-              <Skeleton className="h-3 w-28" />
-              <Skeleton className="h-3 w-12" />
-              <Skeleton className="ml-auto size-8" />
-            </div>
-          ))}
-        </div>
-        <div className="flex h-14 shrink-0 items-center justify-between border-t border-zinc-800 px-4"><Skeleton className="h-3 w-20" /><Skeleton className="h-8 w-52" /></div>
-      </Panel>
-    </div>
-  );
-}
-
 function instanceOptionLabel(instance: SenderInstance, senderName: string) {
   return `${senderName} · ${instance.id.slice(-6)}`;
 }
@@ -127,6 +90,7 @@ export function SenderDetailsPage() {
   const [logs, setLogs] = useCachedState<LogPage>(["view", "sender", sender, "logs"]);
   const [instances, setInstances] = useCachedState<SenderInstance[]>(["view", "sender", sender, "instances"], []);
   const logsRef = useRef<LogPage | undefined>(undefined);
+  const autoSelectedQuery = useRef("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [search, setSearch] = useState(params.get("search") ?? "");
@@ -154,21 +118,40 @@ export function SenderDetailsPage() {
   const choosingInstance = instances.length > 1 && !instances.some((instance) => instance.id === instanceID);
   const selectedInstance = instances.find((instance) => instance.id === instanceID);
 
-  const query = useMemo(() => {
-    const queryParams = new URLSearchParams({
-      page: String(page),
-      page_size: String(pageSize),
-      order,
-    });
-    if (selectedKey) queryParams.set("severity", selectedKey);
-    if (debounced) queryParams.set("search", debounced);
-    if (startDate) queryParams.set("start_date", new Date(startDate).toISOString());
-    if (endDate) queryParams.set("end_date", new Date(endDate).toISOString());
-    if (eventMode !== "all") queryParams.set("event", eventMode);
-    if (eventKey) queryParams.set("event_key", eventKey);
-    if (instanceID) queryParams.set("instance_id", instanceID);
-    return queryParams.toString();
-  }, [debounced, endDate, eventKey, eventMode, instanceID, order, page, pageSize, selectedKey, startDate]);
+  // Só os logs começam vazios; cabeçalho/instâncias reaproveitam prefetch/cache.
+  useLayoutEffect(() => {
+    logsRef.current = undefined;
+    autoSelectedQuery.current = "";
+    setLogs(undefined);
+    setLoading(true);
+    setError("");
+    if (!queryClient.getQueryData<Sender>(["view", "sender", sender, "details"])) {
+      const dashboard = queryClient.getQueryData<SenderPage>(["view", "dashboard", "senders"]);
+      const seeded = dashboard?.items.find((item) => item.id === sender);
+      if (seeded) setDetails(seeded);
+    }
+  }, [sender, setDetails, setLogs]);
+
+  const buildQuery = useCallback(
+    (forInstance: string) => {
+      const queryParams = new URLSearchParams({
+        page: String(page),
+        page_size: String(pageSize),
+        order,
+      });
+      if (selectedKey) queryParams.set("severity", selectedKey);
+      if (debounced) queryParams.set("search", debounced);
+      if (startDate) queryParams.set("start_date", new Date(startDate).toISOString());
+      if (endDate) queryParams.set("end_date", new Date(endDate).toISOString());
+      if (eventMode !== "all") queryParams.set("event", eventMode);
+      if (eventKey) queryParams.set("event_key", eventKey);
+      if (forInstance) queryParams.set("instance_id", forInstance);
+      return queryParams.toString();
+    },
+    [debounced, endDate, eventKey, eventMode, order, page, pageSize, selectedKey, startDate],
+  );
+
+  const query = useMemo(() => buildQuery(instanceID), [buildQuery, instanceID]);
 
   const stream = useLogStream(choosingInstance ? "" : sender, selected, paused, instanceID);
   const receivedCountRef = useRef(stream.receivedCount);
@@ -181,34 +164,50 @@ export function SenderDetailsPage() {
   }, [setStreamState, stream.state]);
 
   const load = useCallback(async () => {
+    // A seleção automática da única instância reescreve a URL; sem isso o novo
+    // instance_id dispararia um segundo fetch idêntico ao que acabou de chegar.
+    if (autoSelectedQuery.current === query) {
+      autoSelectedQuery.current = "";
+      return;
+    }
+    autoSelectedQuery.current = "";
     const hasPrevious = Boolean(logsRef.current);
     const startedAt = performance.now();
     setLoading(true);
-    setRefreshing(Boolean(logsRef.current));
+    setRefreshing(hasPrevious);
     try {
-      const [nextDetails, instancePage] = await Promise.all([
-        api.sender(sender),
-        api.senderInstances(sender),
+      const [nextDetails, nextInstances] = await Promise.all([
+        queryClient.fetchQuery({
+          queryKey: ["view", "sender", sender, "details"],
+          queryFn: () => api.sender(sender),
+        }),
+        queryClient.fetchQuery({
+          queryKey: ["view", "sender", sender, "instances"],
+          queryFn: async () => (await api.senderInstances(sender)).items,
+        }),
       ]);
       setDetails(nextDetails);
-      setInstances(instancePage.items);
-      if (instancePage.items.length > 1 && !instancePage.items.some((instance) => instance.id === instanceID)) {
+      setInstances(nextInstances);
+      if (nextInstances.length > 1 && !nextInstances.some((instance) => instance.id === instanceID)) {
         logsRef.current = undefined;
         setLogs(undefined);
         setError("");
         return;
       }
-      if (instancePage.items.length === 1 && !instanceID) {
-        setParams((current) => { const next = new URLSearchParams(current); next.set("instance_id", instancePage.items[0].id); next.set("page", "1"); return next; }, { replace: true });
-        return;
-      }
-      const nextLogs = await api.logs(sender, query);
+      const activeInstance =
+        instanceID || (nextInstances.length === 1 ? nextInstances[0].id : "");
+      const activeQuery = buildQuery(activeInstance);
+      const nextLogs = await api.logs(sender, activeQuery);
       if (!hasPrevious) await waitForMinimumLoading(startedAt);
       logsRef.current = nextLogs;
       setLogs(nextLogs);
-      if (instanceID) queryClient.setQueryData(["view", "sender", sender, "instance-logs", instanceID], nextLogs);
+      if (activeInstance) queryClient.setQueryData(["view", "sender", sender, "instance-logs", activeInstance], nextLogs);
       receivedAtLastLoad.current = receivedCountRef.current;
       setError("");
+      if (activeInstance !== instanceID) {
+        autoSelectedQuery.current = activeQuery;
+        setParams((current) => { const next = new URLSearchParams(current); next.set("instance_id", activeInstance); return next; }, { replace: true });
+      }
     } catch (requestError) {
       setError(
         requestError instanceof Error
@@ -219,7 +218,7 @@ export function SenderDetailsPage() {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [instanceID, query, sender, setDetails, setInstances, setLogs, setParams, setRefreshing]);
+  }, [buildQuery, instanceID, query, sender, setDetails, setInstances, setLogs, setParams, setRefreshing]);
 
   useEffect(() => { void load(); }, [load, refreshToken]);
 
@@ -295,10 +294,41 @@ export function SenderDetailsPage() {
 
   const deleteInstance = async () => {
     if (!deletingInstance || deletingInstanceBusy) return;
+    const deletedID = deletingInstance.id;
     setDeletingInstanceBusy(true);
     try {
-      await api.deleteSenderInstance(sender, deletingInstance.id);
+      await api.deleteSenderInstance(sender, deletedID);
       setDeletingInstance(undefined);
+      // O fetchQuery do load reaproveita cache fresco (staleTime 20s); sem invalidar a tabela fica com a instância excluída.
+      queryClient.removeQueries({ queryKey: ["view", "sender", sender, "instances"] });
+      queryClient.removeQueries({ queryKey: ["view", "sender", sender, "details"] });
+      queryClient.removeQueries({ queryKey: ["view", "sender", sender, "instance-logs", deletedID] });
+      const remaining = instances.filter((instance) => instance.id !== deletedID);
+      setInstances(remaining);
+      setDetails((current) => current ? { ...current, instance_count: Math.max(0, (current.instance_count ?? 1) - 1) } : current);
+      const dashboard = queryClient.getQueryData<SenderPage>(["view", "dashboard", "senders"]);
+      if (dashboard) {
+        queryClient.setQueryData(["view", "dashboard", "senders"], {
+          ...dashboard,
+          items: dashboard.items.map((item) => item.id === sender
+            ? { ...item, instance_count: Math.max(0, (item.instance_count ?? 1) - 1) }
+            : item),
+        });
+      }
+      const nextInstanceID = remaining.length === 1 ? remaining[0].id : instanceID === deletedID ? "" : instanceID;
+      if (nextInstanceID !== instanceID) {
+        logsRef.current = undefined;
+        setLogs(undefined);
+        setParams((current) => {
+          const next = new URLSearchParams(current);
+          if (nextInstanceID) next.set("instance_id", nextInstanceID);
+          else next.delete("instance_id");
+          next.set("page", "1");
+          return next;
+        }, { replace: true });
+        // O useEffect de load reage à mudança de instance_id.
+        return;
+      }
       await load();
     } catch (requestError) {
       setError(requestError instanceof Error ? requestError.message : "Não foi possível excluir a instância.");
@@ -306,10 +336,6 @@ export function SenderDetailsPage() {
       setDeletingInstanceBusy(false);
     }
   };
-
-  if (loading && !instanceID && instances.length === 0) {
-    return <InstanceSelectionSkeleton />;
-  }
 
   if (choosingInstance) {
     const instancePage = Math.max(1, Number(params.get("instance_page") ?? 1));
@@ -535,7 +561,7 @@ export function SenderDetailsPage() {
 
         {!logs ? (
           <div className="min-h-0 flex-1 space-y-px overflow-hidden bg-zinc-800">
-            {Array.from({ length: 10 }, (_, index) => (
+            {Array.from({ length: 24 }, (_, index) => (
               <div key={index} className="flex h-11 items-center gap-3 bg-[#111113] px-3">
                 <Skeleton className="h-3 w-20" />
                 <Skeleton className="h-5 w-14" />
@@ -598,7 +624,18 @@ export function SenderDetailsPage() {
           action?.();
         }}
       />
-      <SenderActionDialogs sender={details} action={senderAction} onClose={() => setSenderAction(undefined)} onChanged={setDetails} onDeleted={() => navigate("/senders")} />
+      <SenderActionDialogs sender={details} action={senderAction} onClose={() => setSenderAction(undefined)} onChanged={setDetails} onDeleted={(id) => {
+        const dashboard = queryClient.getQueryData<SenderPage>(["view", "dashboard", "senders"]);
+        if (dashboard) {
+          queryClient.setQueryData(["view", "dashboard", "senders"], {
+            ...dashboard,
+            items: dashboard.items.filter((item) => item.id !== id),
+            pagination: { ...dashboard.pagination, total: Math.max(0, dashboard.pagination.total - 1) },
+          });
+        }
+        queryClient.removeQueries({ queryKey: ["view", "sender", id] });
+        navigate("/senders");
+      }} />
       <SenderAssociationsDialog kind={associationKind} senderId={sender} senderAvailable={Boolean(details && details.status !== "expired" && details.status !== "revoked")} onClose={() => setAssociationKind(undefined)} />
     </div>
   );

@@ -28,7 +28,7 @@ APP_PUBLIC_URL=https://logs.empresa.com
 
 Os aliases `O365_TENANT_ID`, `O365_CLIENT_ID`, `O365_CLIENT_SECRET`, `EMAIL_FROM_ADDR` e `EMAIL_USER` mantêm compatibilidade com o repositório de referência.
 
-Para salvar um novo secret pela interface, configure `EMAIL_SETTINGS_ENCRYPTION_KEY` com 32 bytes em Base64. O arquivo `data/email-settings.json` recebe apenas o ciphertext AES-256-GCM. A chave fica fora do arquivo e respostas HTTP nunca incluem secret ou tokens.
+Para salvar um novo secret pela interface, o servidor usa `EMAIL_SETTINGS_ENCRYPTION_KEY` (Base64 de 32 bytes) ou gera automaticamente `DATA_DIR/email-encryption.key` se a variável estiver vazia/inválida. O arquivo `data/email-settings.json` recebe apenas o ciphertext AES-256-GCM. A chave fica fora do arquivo e respostas HTTP nunca incluem secret ou tokens.
 
 ## Operação
 
@@ -51,7 +51,7 @@ Uma conexão autenticada não garante permissão para enviar. Se o teste de envi
 
 Depois da alteração, aguarde a propagação da Microsoft e execute **Testar conexão** novamente. O teste manual solicita um token novo para não reutilizar uma permissão antiga em cache.
 
-Os endpoints estão descritos integralmente em `docs/openapi.yaml`. Quando `ADMIN_AUTH_ENABLED=true`, todos os endpoints de alertas e configuração de e-mail exigem `X-API-Key`.
+Os endpoints estão descritos integralmente em `docs/openapi.yaml`. Quando `APP_PASSWORD` está definido (auth habilitada), os endpoints de alertas e configuração de e-mail exigem sessão autenticada ou `X-API-Key` com a mesma senha.
 
 ## Limitações da primeira versão
 

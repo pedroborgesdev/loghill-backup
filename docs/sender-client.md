@@ -7,9 +7,11 @@ Guarde a chave em um cofre de secrets. Não a coloque em código-fonte, URL, que
 ## Variáveis de ambiente
 
 ```env
-LOG_API_URL=http://localhost:8080
-LOG_SENDER_KEY=snd_chave_copiada_na_interface
+LOGHILL_API_URL=http://localhost:8080
+LOGHILL_SENDER_KEY=snd_chave_copiada_na_interface
 ```
+
+O cliente Python também aceita `LOGHILL_SENDER_ID` como alias da chave, além dos nomes legados `LOG_API_URL` e `LOG_SENDER_KEY`.
 
 ## Requisições
 
@@ -18,9 +20,9 @@ Cada processo cliente deve começar chamando `POST /api/v1/instances/init`. A re
 O ID da instância existe exclusivamente para separar os consoles de logs de processos simultâneos. Alertas, eventos e regras de monitoramento continuam associados ao sender e não à instância.
 
 ```bash
-curl -X POST "$LOG_API_URL/api/v1/instances/init" \
+curl -X POST "$LOGHILL_API_URL/api/v1/instances/init" \
   -H "Content-Type: application/json" \
-  -H "X-Sender-Key: $LOG_SENDER_KEY" \
+  -H "X-Sender-Key: $LOGHILL_SENDER_KEY" \
   -d '{}'
 ```
 
@@ -35,9 +37,9 @@ Clientes antigos sem handshake continuam aceitos, mas somente inicializações c
 O campo opcional `event` chama uma configuração explícita de **Eventos**. Consulte [events.md](events.md) para matching, templates e limites.
 
 ```bash
-curl -X POST "$LOG_API_URL/api/v1/logs" \
+curl -X POST "$LOGHILL_API_URL/api/v1/logs" \
   -H "Content-Type: application/json" \
-  -H "X-Sender-Key: $LOG_SENDER_KEY" \
+  -H "X-Sender-Key: $LOGHILL_SENDER_KEY" \
   -H "X-Sender-Instance-ID: $LOG_INSTANCE_ID" \
   -d '{"sender":"automacao-financeira","severity":"ERROR","message":"Falha ao processar boleto"}'
 ```
@@ -93,21 +95,38 @@ func (client *LogClient) Send(ctx context.Context, severity, message string) err
 
 ## Python
 
-O arquivo [`examples/python_log_client.py`](../examples/python_log_client.py) fornece `LogHillHandler`, integrado ao módulo `logging`, e um fluxo com `log.info("teste 1")`. Ele recebe URL e chave, descobre o sender no handshake e mantém a instância online com healthchecks autenticados.
-
-O mesmo cliente aceita evento e metadata diretamente:
+- [`examples/python_log_client.py`](../examples/python_log_client.py) — classe `LogHill` (lê `.env`, handshake, healthcheck, integração com `logging`)
+- [`examples/simulate_logs.py`](../examples/simulate_logs.py) — script de exemplo que envia logs em loop
 
 ```python
-log.info(
-    "Processamento concluído",
-    event="processamento_finalizado",
-    metadata={"protocolo": "ABC-123"},
-)
+from python_log_client import LogHill
+
+with LogHill.from_env() as client:
+    log = client.logger()
+    log.info(
+        "Processamento concluído",
+        event="processamento_finalizado",
+        metadata={"protocolo": "ABC-123"},
+    )
+```
+
+Também dá para enviar sem o módulo `logging`:
+
+```python
+client = LogHill.from_env()
+client.send("Falha ao processar boleto", severity="ERROR")
+client.close()
+```
+
+Para ver o fluxo completo:
+
+```bash
+python examples/simulate_logs.py
 ```
 
 ## Rotação e reativação
 
-Ao gerar uma nova chave, a anterior deixa de funcionar imediatamente. Atualize `LOG_SENDER_KEY` no cofre e reinicie/recarregue o cliente. Reativar um sender revogado também gera uma chave nova; a chave revogada nunca é restaurada.
+Ao gerar uma nova chave, a anterior deixa de funcionar imediatamente. Atualize `LOGHILL_SENDER_KEY` no cofre e reinicie/recarregue o cliente. Reativar um sender revogado também gera uma chave nova; a chave revogada nunca é restaurada.
 
 Senders criados antes da autenticação por chave mantêm o ID e o diretório originais. Antes de reconectar um cliente legado, use **Gerar nova chave** na interface e configure a credencial gerada; nenhum ID legado é renomeado automaticamente.
 

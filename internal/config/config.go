@@ -1,9 +1,13 @@
 package config
 
 import (
+	"bufio"
+	"crypto/rand"
+	"encoding/base64"
 	"fmt"
 	"net/url"
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
@@ -20,8 +24,8 @@ type Config struct {
 	AllowedOrigins                                                 []string
 	RateRequests                                                   int
 	RateWindow                                                     time.Duration
-	APIKeyEnabled, AdminAuthEnabled                                bool
-	APIKey, AdminAPIKey                                            string
+	AuthEnabled                                                    bool
+	AppPassword                                                    string
 	SSEBuffer, SSEMaxClients                                       int
 	ShutdownTimeout                                                time.Duration
 	EmailProvider                                                  string
@@ -40,6 +44,7 @@ type Config struct {
 }
 
 func Load() (Config, error) {
+	loadDotEnv(".env")
 	emailProvider := strings.ToLower(strings.TrimSpace(env("EMAIL_PROVIDER", "outlook")))
 	if emailProvider == "o365" {
 		emailProvider = "outlook"
@@ -65,6 +70,17 @@ func Load() (Config, error) {
 	if _, managed := os.LookupEnv("SMTP_ENABLED"); !managed && emailProvider == "gmail" {
 		smtpEnabled = smtpHost != "" && smtpPort > 0 && smtpUsername != "" && smtpPassword != "" && smtpFrom != ""
 	}
+	appPassword := firstEnvironment("APP_PASSWORD", "ADMIN_API_KEY")
+	authEnabled := appPassword != ""
+	if raw, ok := os.LookupEnv("APP_AUTH_ENABLED"); ok {
+		parsed, err := strconv.ParseBool(strings.TrimSpace(raw))
+		if err != nil {
+			return Config{}, fmt.Errorf("APP_AUTH_ENABLED must be a boolean")
+		}
+		authEnabled = parsed
+	} else if _, ok := os.LookupEnv("ADMIN_AUTH_ENABLED"); ok {
+		authEnabled = envBool("ADMIN_AUTH_ENABLED", false)
+	}
 	c := Config{
 		Host: env("APP_HOST", "0.0.0.0"), Port: env("APP_PORT", "8080"), DataDir: env("DATA_DIR", "./data"),
 		MaxLogLines: envInt("MAX_LOG_LINES", 100000), CompactTarget: envInt("LOG_COMPACT_TARGET_LINES", 95000),
@@ -75,15 +91,15 @@ func Load() (Config, error) {
 		HealthcheckInterval: envDuration("HEALTHCHECK_INTERVAL", time.Minute), SSEHeartbeat: envDuration("SSE_HEARTBEAT_INTERVAL", 20*time.Second),
 		LogCountsAsActivity: envBool("LOG_COUNTS_AS_ACTIVITY", true), CORS: envBool("CORS_ENABLED", false),
 		RateLimit: envBool("RATE_LIMIT_ENABLED", false), RateRequests: envInt("RATE_LIMIT_REQUESTS", 120),
-		RateWindow: envDuration("RATE_LIMIT_WINDOW", time.Minute), APIKeyEnabled: envBool("API_KEY_ENABLED", false),
-		AdminAuthEnabled: envBool("ADMIN_AUTH_ENABLED", false), APIKey: os.Getenv("API_KEY"), AdminAPIKey: os.Getenv("ADMIN_API_KEY"),
+		RateWindow: envDuration("RATE_LIMIT_WINDOW", time.Minute),
+		AuthEnabled: authEnabled, AppPassword: appPassword,
 		SSEBuffer: envInt("SSE_CLIENT_BUFFER", 100), SSEMaxClients: envInt("SSE_MAX_CLIENTS_PER_SENDER", 100),
 		ShutdownTimeout: envDuration("SHUTDOWN_TIMEOUT", 10*time.Second),
 		PublicURL:       strings.TrimRight(env("APP_PUBLIC_URL", "http://localhost:8080"), "/"),
 		EmailProvider:   emailProvider, OutlookEnabled: outlookEnabled, OutlookEnabledManaged: outlookEnabledManaged,
 		OutlookTenantID: outlookTenantID, OutlookClientID: outlookClientID,
 		OutlookClientSecret: outlookClientSecret, OutlookSenderEmail: outlookSenderEmail,
-		OutlookSenderName: env("OUTLOOK_SENDER_NAME", "LogHill"), EmailSettingsEncryptionKey: env("EMAIL_SETTINGS_ENCRYPTION_KEY", "NHYVqkvuHied51HKZjaREtdzdbGsKsOkU+62pzs+Q7Q="),
+		OutlookSenderName: env("OUTLOOK_SENDER_NAME", "LogHill"), EmailSettingsEncryptionKey: strings.TrimSpace(os.Getenv("EMAIL_SETTINGS_ENCRYPTION_KEY")),
 		SMTPHost: smtpHost, SMTPPort: smtpPort, SMTPUsername: smtpUsername, SMTPPassword: smtpPassword,
 		SMTPFrom: smtpFrom, SMTPSenderName: env("SMTP_SENDER_NAME", "LogHill"), SMTPEnabled: smtpEnabled,
 		EmailAlertQueueSize: envInt("EMAIL_ALERT_QUEUE_SIZE", 1000), EmailAlertWorkers: envInt("EMAIL_ALERT_WORKERS", 2),
@@ -106,12 +122,14 @@ func Load() (Config, error) {
 	if c.CompactTarget >= c.MaxLogLines || c.CompactTarget < 1 || c.CompactKeep < 0 || c.MaxPageSize < 1 {
 		return c, fmt.Errorf("invalid compaction or pagination configuration")
 	}
-	if c.APIKeyEnabled && c.APIKey == "" {
-		return c, fmt.Errorf("API_KEY is required when API_KEY_ENABLED=true")
+	if c.AuthEnabled && c.AppPassword == "" {
+		return c, fmt.Errorf("APP_PASSWORD is required when authentication is enabled")
 	}
-	if c.AdminAuthEnabled && c.AdminAPIKey == "" {
-		return c, fmt.Errorf("ADMIN_API_KEY is required when ADMIN_AUTH_ENABLED=true")
+	encryptionKey, err := resolveEmailEncryptionKey(c.DataDir, c.EmailSettingsEncryptionKey)
+	if err != nil {
+		return c, err
 	}
+	c.EmailSettingsEncryptionKey = encryptionKey
 	if c.EmailProvider != "outlook" && c.EmailProvider != "gmail" {
 		return c, fmt.Errorf("EMAIL_PROVIDER must be outlook or gmail")
 	}
@@ -132,6 +150,106 @@ func Load() (Config, error) {
 }
 
 func (c Config) Address() string { return c.Host + ":" + c.Port }
+
+const emailEncryptionKeyFile = "email-encryption.key"
+
+func resolveEmailEncryptionKey(dataDir, fromEnv string) (string, error) {
+	if key, ok := validEmailEncryptionKey(fromEnv); ok {
+		return key, nil
+	}
+	path := filepath.Join(dataDir, emailEncryptionKeyFile)
+	if raw, err := os.ReadFile(path); err == nil {
+		if key, ok := validEmailEncryptionKey(string(raw)); ok {
+			return key, nil
+		}
+	}
+	buf := make([]byte, 32)
+	if _, err := rand.Read(buf); err != nil {
+		return "", fmt.Errorf("generate EMAIL_SETTINGS_ENCRYPTION_KEY: %w", err)
+	}
+	encoded := base64.StdEncoding.EncodeToString(buf)
+	if err := os.MkdirAll(dataDir, 0o750); err != nil {
+		return "", fmt.Errorf("create data dir for encryption key: %w", err)
+	}
+	if err := os.WriteFile(path, []byte(encoded+"\n"), 0o600); err != nil {
+		return "", fmt.Errorf("persist EMAIL_SETTINGS_ENCRYPTION_KEY: %w", err)
+	}
+	return encoded, nil
+}
+
+func validEmailEncryptionKey(value string) (string, bool) {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return "", false
+	}
+	decoded, err := base64.StdEncoding.DecodeString(value)
+	if err != nil || len(decoded) != 32 {
+		return "", false
+	}
+	return value, true
+}
+
+func loadDotEnv(paths ...string) {
+	seen := map[string]bool{}
+	for _, path := range paths {
+		if path == "" {
+			continue
+		}
+		candidates := []string{path}
+		if !filepath.IsAbs(path) {
+			if cwd, err := os.Getwd(); err == nil {
+				candidates = append([]string{filepath.Join(cwd, path)}, candidates...)
+			}
+		}
+		for _, candidate := range candidates {
+			if seen[candidate] {
+				continue
+			}
+			seen[candidate] = true
+			_ = applyDotEnvFile(candidate)
+		}
+	}
+}
+
+func applyDotEnvFile(path string) error {
+	file, err := os.Open(path)
+	if err != nil {
+		return err
+	}
+	defer file.Close()
+	scanner := bufio.NewScanner(file)
+	for scanner.Scan() {
+		line := strings.TrimSpace(scanner.Text())
+		if line == "" || strings.HasPrefix(line, "#") {
+			continue
+		}
+		if strings.HasPrefix(line, "export ") {
+			line = strings.TrimSpace(strings.TrimPrefix(line, "export "))
+		}
+		key, value, ok := strings.Cut(line, "=")
+		if !ok {
+			continue
+		}
+		key = strings.TrimSpace(key)
+		if key == "" {
+			continue
+		}
+		if _, exists := os.LookupEnv(key); exists {
+			continue
+		}
+		value = strings.TrimSpace(value)
+		if len(value) >= 2 {
+			if value[0] == '"' && value[len(value)-1] == '"' {
+				value = strings.ReplaceAll(value[1:len(value)-1], `\"`, `"`)
+			} else if value[0] == '\'' && value[len(value)-1] == '\'' {
+				value = value[1 : len(value)-1]
+			}
+		}
+		_ = os.Setenv(key, value)
+	}
+	return scanner.Err()
+}
+
 func env(k, d string) string {
 	if v := os.Getenv(k); v != "" {
 		return v

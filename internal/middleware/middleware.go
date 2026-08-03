@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"logtheater/internal/auth"
 	"logtheater/internal/config"
 )
 
@@ -26,6 +27,7 @@ func RequestID() gin.HandlerFunc {
 		c.Next()
 	}
 }
+
 func Security() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		c.Header("X-Content-Type-Options", "nosniff")
@@ -39,6 +41,7 @@ func Security() gin.HandlerFunc {
 		c.Next()
 	}
 }
+
 func BodyLimit(max int64) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		if c.Request.Body != nil {
@@ -47,21 +50,40 @@ func BodyLimit(max int64) gin.HandlerFunc {
 		c.Next()
 	}
 }
-func APIKey(enabled bool, key string) gin.HandlerFunc {
+
+// Session protects UI/admin API routes with a cookie session.
+// Password header X-API-Key remains accepted for non-browser clients.
+func Session(manager *auth.Manager, enabled bool, password string) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		if enabled && !secureEqual(c.GetHeader("X-API-Key"), key) {
-			c.AbortWithStatusJSON(http.StatusUnauthorized, errorBody(c, "UNAUTHORIZED", "Credencial inválida"))
+		if !enabled {
+			c.Next()
 			return
 		}
-		c.Next()
+		if manager != nil && manager.Valid(auth.TokenFromRequest(c.Request)) {
+			c.Next()
+			return
+		}
+		if password != "" && secureEqual(c.GetHeader("X-API-Key"), password) {
+			c.Next()
+			return
+		}
+		c.AbortWithStatusJSON(http.StatusUnauthorized, errorBody(c, "UNAUTHORIZED", "Credencial inválida"))
 	}
 }
+
+// APIKey is retained for compatibility with older call sites/tests.
+func APIKey(enabled bool, key string) gin.HandlerFunc {
+	return Session(nil, enabled, key)
+}
+
 func secureEqual(a, b string) bool {
 	return len(a) == len(b) && subtle.ConstantTimeCompare([]byte(a), []byte(b)) == 1
 }
+
 func errorBody(c *gin.Context, code, msg string) gin.H {
 	return gin.H{"error": gin.H{"code": code, "message": msg, "request_id": c.GetString("request_id")}}
 }
+
 func CORS(cfg config.Config) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		if !cfg.CORS {
@@ -72,11 +94,12 @@ func CORS(cfg config.Config) gin.HandlerFunc {
 		for _, allowed := range cfg.AllowedOrigins {
 			if origin == allowed {
 				c.Header("Access-Control-Allow-Origin", origin)
+				c.Header("Access-Control-Allow-Credentials", "true")
 				c.Header("Vary", "Origin")
 				break
 			}
 		}
-		c.Header("Access-Control-Allow-Headers", "Content-Type, X-API-Key, X-Admin-API-Key, X-Sender-Key")
+		c.Header("Access-Control-Allow-Headers", "Content-Type, X-API-Key, X-Sender-Key, X-Sender-Instance-ID")
 		c.Header("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS")
 		if c.Request.Method == "OPTIONS" {
 			c.AbortWithStatus(204)

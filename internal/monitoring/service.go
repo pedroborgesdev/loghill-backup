@@ -299,7 +299,7 @@ func (s *Service) Validate(ctx context.Context, in RuleInput, currentID string) 
 	}
 	hasTrigger := false
 	walkConditions(in.Expression, func(c Condition) {
-		if !c.Negated && (c.Type == ConditionEvent || c.Type == ConditionAlert || c.Type == ConditionSenderStatus || c.Type == ConditionMessage || c.Type == ConditionSeverity || c.Type == ConditionMetadata) {
+		if !c.Negated && (c.Type == ConditionEvent || c.Type == ConditionAlert || c.Type == ConditionSenderStatus || c.Type == ConditionLogReceived || c.Type == ConditionMessage || c.Type == ConditionSeverity || c.Type == ConditionMetadata) {
 			hasTrigger = true
 		}
 	})
@@ -377,6 +377,12 @@ func stringValue(v map[string]any, key string) string {
 	return strings.TrimSpace(x)
 }
 func validateCondition(c Condition) error {
+	if c.Type == ConditionLogReceived {
+		if c.Operator != "received" {
+			return &ValidationError{"expression", "O operador não é compatível com a condição."}
+		}
+		return nil
+	}
 	v, err := rawMap(c.Value)
 	if err != nil {
 		return &ValidationError{"expression", "Preencha os valores da condição."}
@@ -598,6 +604,8 @@ func (s *Service) evalCondition(c Condition, e domain.LogEntry, alertID string, 
 		}
 	case ConditionSenderStatus:
 		matched = stringValue(v, "status") == stringValue(e.Metadata, "sender_status") && stringValue(e.Metadata, "previous_sender_status") != stringValue(e.Metadata, "sender_status")
+	case ConditionLogReceived:
+		matched = true
 	case ConditionMessage:
 		matched = compareText(e.Message, stringValue(v, "text"), c.Operator)
 	case ConditionSeverity:
@@ -805,6 +813,8 @@ func conditionSummary(c Condition) string {
 	case ConditionSenderStatus:
 		status := map[string]string{"online": "ativo", "inactive": "inativo"}[stringValue(v, "status")]
 		return prefix + "o sender ficar " + status
+	case ConditionLogReceived:
+		return prefix + "qualquer log for recebido"
 	case ConditionMessage:
 		return prefix + "a mensagem " + strings.ReplaceAll(c.Operator, "_", " ") + " “" + stringValue(v, "text") + "”"
 	case ConditionSeverity:
@@ -1107,23 +1117,9 @@ func (s *Service) EventUsageCount(id string) int {
 	return count
 }
 func (s *Service) AlertUsageCount(id string) int {
-	count := 0
-	for _, rule := range s.store.All() {
-		used := false
-		walkConditions(rule.Expression, func(condition Condition) {
-			if condition.Type != ConditionAlert {
-				return
-			}
-			value, _ := rawMap(condition.Value)
-			if stringValue(value, "alert_id") == id {
-				used = true
-			}
-		})
-		if used {
-			count++
-		}
-	}
-	return count
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return len(s.byAlert[id])
 }
 func (s *Service) RemoveSender(id string) error {
 	for _, r := range s.store.All() {
@@ -1171,24 +1167,36 @@ func (s *Service) rebuild() {
 	byEvent := map[string][]string{}
 	byAlert := map[string][]string{}
 	for _, r := range s.store.All() {
-		if !r.Enabled || r.Status == "draft" {
-			continue
-		}
 		for _, id := range r.SenderIDs {
 			bySender[id] = append(bySender[id], r.ID)
+		}
+		for _, action := range r.Actions {
+			if action.Type != ActionEvent {
+				continue
+			}
+			value, _ := rawMap(action.Config)
+			if eventID := stringValue(value, "event_id"); eventID != "" {
+				byEvent[eventID] = append(byEvent[eventID], r.ID)
+			}
 		}
 		walkConditions(r.Expression, func(c Condition) {
 			v, _ := rawMap(c.Value)
 			if c.Type == ConditionEvent {
-				byEvent[stringValue(v, "event_key")] = append(byEvent[stringValue(v, "event_key")], r.ID)
+				if key := stringValue(v, "event_key"); key != "" {
+					byEvent[key] = append(byEvent[key], r.ID)
+				}
 			}
 			if c.Type == ConditionAlert {
-				byAlert[stringValue(v, "alert_id")] = append(byAlert[stringValue(v, "alert_id")], r.ID)
+				if alertID := stringValue(v, "alert_id"); alertID != "" {
+					byAlert[alertID] = append(byAlert[alertID], r.ID)
+				}
 			}
 		})
 	}
-	for _, v := range bySender {
-		sort.Strings(v)
+	for _, group := range []map[string][]string{bySender, byEvent, byAlert} {
+		for _, v := range group {
+			sort.Strings(v)
+		}
 	}
 	s.mu.Lock()
 	s.bySender, s.byEvent, s.byAlert = bySender, byEvent, byAlert

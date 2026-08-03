@@ -7,10 +7,12 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
 	"logtheater/internal/alerts"
+	"logtheater/internal/auth"
 	"logtheater/internal/config"
 	"logtheater/internal/domain"
 	"logtheater/internal/emailconfig"
@@ -118,7 +120,14 @@ func main() {
 		slog.Error("frontend assets unavailable", "error", err)
 		os.Exit(1)
 	}
-	api := handler.New(svc, cfg, sched, assets).ConfigureNotifications(alertService, emailSettings, emailProvider, dispatcher).ConfigureEvents(eventService).ConfigureMonitoring(monitoringService).ConfigureExecutions(executionStore)
+	secureCookies := strings.HasPrefix(cfg.PublicURL, "https://")
+	sessions := auth.NewManager(cfg.AppPassword, 12*time.Hour, secureCookies)
+	api := handler.New(svc, cfg, sched, assets).
+		ConfigureAuth(sessions).
+		ConfigureNotifications(alertService, emailSettings, emailProvider, dispatcher).
+		ConfigureEvents(eventService).
+		ConfigureMonitoring(monitoringService).
+		ConfigureExecutions(executionStore)
 	server := &http.Server{Addr: cfg.Address(), Handler: api.Router(), ReadHeaderTimeout: 10 * time.Second, ReadTimeout: 30 * time.Second, WriteTimeout: 0, IdleTimeout: 60 * time.Second}
 	done := make(chan error, 1)
 	go func() { slog.Info("server started", "address", cfg.Address()); done <- server.ListenAndServe() }()

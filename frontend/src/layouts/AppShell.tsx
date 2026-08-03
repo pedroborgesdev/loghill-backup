@@ -3,6 +3,7 @@ import {
   Bell,
   ChevronRight,
   LayoutDashboard,
+  LogOut,
   Menu,
   PanelLeftClose,
   RefreshCw,
@@ -22,6 +23,7 @@ import { alertsApi } from "../api/alerts";
 import { eventsApi } from "../api/events";
 import { monitoringApi } from "../api/monitoring";
 import { queryClient } from "../api/queryClient";
+import { useAuth } from "../auth/AuthProvider";
 import { SettingsButton, SettingsDialog } from "../components/SettingsDialog";
 import type { SettingsCategory } from "../components/SettingsDialog";
 import type { StreamState } from "../hooks/useLogStream";
@@ -75,11 +77,15 @@ function SidebarContent({
   onCollapse,
   onNavigate,
   onOpenSettings,
+  onLogout,
+  authRequired,
 }: {
   collapsed: boolean;
   onCollapse: () => void;
   onNavigate?: () => void;
   onOpenSettings: (trigger: HTMLButtonElement) => void;
+  onLogout: () => void;
+  authRequired: boolean;
 }) {
   return (
     <div className="flex h-full flex-col">
@@ -130,10 +136,25 @@ function SidebarContent({
           <SettingsButton collapsed={collapsed} onOpen={onOpenSettings} />
         </div>
         <IconButton
+          label="Sair"
+          tooltipClassName="block w-full"
+          onClick={onLogout}
+          className={`${authRequired ? "" : "hidden"} w-full border-transparent ${collapsed ? "justify-center" : "justify-start px-5"}`}
+        >
+          {collapsed ? (
+            <LogOut className="size-4" />
+          ) : (
+            <span className="flex items-center gap-3">
+              <LogOut className="size-4" />
+              <span className="text-xs">Sair</span>
+            </span>
+          )}
+        </IconButton>
+        <IconButton
           label={collapsed ? "Expandir sidebar" : "Recolher sidebar"}
           tooltipClassName="block w-full"
           onClick={onCollapse}
-          className={`mt-4 hidden w-full border-transparent lg:inline-flex ${
+          className={`mt-2 hidden w-full border-transparent lg:inline-flex ${
             collapsed ? "justify-center" : "justify-start px-5"
           }`}
         >
@@ -164,6 +185,7 @@ function pageInformation(pathname: string, sender?: string) {
 
 export function AppShell() {
   const location = useLocation();
+  const { logout, authRequired } = useAuth();
   const [collapsed, setCollapsed] = useState(
     () => localStorage.getItem("sidebar-collapsed") === "true",
   );
@@ -245,6 +267,11 @@ export function AppShell() {
             collapsed={collapsed}
             onCollapse={toggleCollapsed}
             onOpenSettings={openSettings}
+            authRequired={authRequired}
+            onLogout={() => {
+              if (!authRequired) return;
+              void logout();
+            }}
           />
         </aside>
 
@@ -268,6 +295,11 @@ export function AppShell() {
                 onCollapse={() => setMobileOpen(false)}
                 onNavigate={() => setMobileOpen(false)}
                 onOpenSettings={openSettings}
+                authRequired={authRequired}
+                onLogout={() => {
+                  if (!authRequired) return;
+                  void logout();
+                }}
               />
             </aside>
           </div>

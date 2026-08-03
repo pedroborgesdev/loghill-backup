@@ -132,7 +132,7 @@ Criar um sender:
 ```bash
 curl -X POST http://localhost:8080/api/v1/senders \
   -H "Content-Type: application/json" \
-  -H "X-API-Key: $ADMIN_API_KEY" \
+  -H "X-API-Key: $APP_PASSWORD" \
   -d '{"name":"Automação Teste","description":"Processamento de exemplo"}'
 ```
 
@@ -166,7 +166,7 @@ A infraestrutura é configurada por variáveis de ambiente e não depende de arq
 
 As unidades internas aceitas são `lines` e `mb`, considerando `1 MB = 1024 × 1024 bytes`. O valor `0` desativa o limite máximo; para preservação, `0` esvazia o arquivo quando o sender se torna inativo. Em MB, a leitura ocorre a partir do fim e somente entradas JSON Lines completas são mantidas. Quando ambas as opções usam a mesma unidade, a preservação não pode superar o limite máximo, exceto quando o máximo é `0`.
 
-As rotas de configuração são administrativas e usam `X-API-Key` quando `ADMIN_AUTH_ENABLED=true`. Consulte [`.env.example`](.env.example) para as variáveis de infraestrutura.
+As rotas de configuração são administrativas e exigem sessão autenticada (ou `X-API-Key` com `APP_PASSWORD`) quando a autenticação está habilitada. Consulte [`.env.example`](.env.example) para as variáveis de infraestrutura. O arquivo `.env` na raiz é carregado automaticamente na subida do servidor.
 
 As principais variáveis são:
 
@@ -179,10 +179,11 @@ As principais variáveis são:
 | `INACTIVE_AFTER` | `5m` | Prazo de inatividade |
 | `COMPACT_KEEP_LINES` | `2000` | Linhas mantidas ao inativar |
 | `DELETE_AFTER` | `168h` | Prazo para expiração |
-| `API_KEY_ENABLED` | `false` | Legado; a ingestão usa a chave específica do sender |
-| `ADMIN_AUTH_ENABLED` | `false` | Protege leitura e dashboard |
+| `APP_PASSWORD` | _(vazio)_ | Senha da interface. Se definida, o login é exigido |
+| `APP_AUTH_ENABLED` | _(auto)_ | Força auth on/off; por padrão segue `APP_PASSWORD` |
+| `EMAIL_SETTINGS_ENCRYPTION_KEY` | auto (`DATA_DIR/email-encryption.key`) | Base64 de 32 bytes para secrets salvos pela UI. Se vazio/inválido, é gerada e persistida automaticamente |
 
-Logs e healthchecks sempre usam `X-Sender-Key`, gerada no cadastro administrativo. A chave completa não é persistida e só aparece na criação, rotação ou reativação. As rotas administrativas usam `X-API-Key` quando `ADMIN_AUTH_ENABLED=true`.
+Logs de ingestão e healthchecks de sender usam `X-Sender-Key`, gerada no cadastro administrativo. A chave completa não é persistida e só aparece na criação, rotação ou reativação. A interface autentica com cookie de sessão (`APP_PASSWORD`); clientes não-browser podem enviar `X-API-Key` com a mesma senha.
 
 ## Alertas por e-mail e Outlook
 
@@ -209,7 +210,7 @@ APP_PUBLIC_URL=https://logs.empresa.com
 
 Também são aceitos os nomes legados do repositório de referência: `O365_TENANT_ID`, `O365_CLIENT_ID`, `O365_CLIENT_SECRET` e `EMAIL_FROM_ADDR`. Os nomes `OUTLOOK_*` têm prioridade. O access token permanece somente em memória e é renovado automaticamente antes de expirar.
 
-Quando a credencial é informada pela interface, defina `EMAIL_SETTINGS_ENCRYPTION_KEY` com uma chave aleatória de 32 bytes codificada em Base64. O secret é persistido com AES-256-GCM em `data/email-settings.json`; a chave nunca é salva nesse arquivo e a API devolve apenas `client_secret_configured`. Se a configuração vier do ambiente, a interface a identifica como gerenciada e impede alterações.
+Quando a credencial é informada pela interface, o secret é persistido com AES-256-GCM em `data/email-settings.json`. A chave de criptografia vem de `EMAIL_SETTINGS_ENCRYPTION_KEY` ou, se estiver vazia/inválida, é gerada automaticamente em `DATA_DIR/email-encryption.key`. A chave nunca é salva no arquivo de settings e a API devolve apenas `client_secret_configured`. Se a configuração vier do ambiente, a interface a identifica como gerenciada e impede alterações.
 
 O endpoint de logs apenas tenta colocar a notificação em uma fila limitada e retorna sem aguardar o Outlook. Workers aplicam timeout e retry em background. A fila é somente em memória: tarefas pendentes não sobrevivem a um reinício. Tamanho, workers e retry são controlados por `EMAIL_ALERT_QUEUE_SIZE`, `EMAIL_ALERT_WORKERS`, `EMAIL_ALERT_SEND_TIMEOUT`, `EMAIL_ALERT_MAX_RETRIES` e `EMAIL_ALERT_RETRY_INTERVAL`.
 

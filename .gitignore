@@ -9,3 +9,5 @@
 *.test
 .env
 coverage/
+**/__pycache__/
+*.py[cod]

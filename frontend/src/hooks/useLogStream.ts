@@ -83,6 +83,7 @@ export function useLogStream(
     const query = params.size ? `?${params}` : "";
     const source = new EventSource(
       `/api/v1/senders/${encodeURIComponent(sender)}/logs/stream${query}`,
+      { withCredentials: true },
     );
     connectedRef.current = false;
     setState(pausedRef.current ? "paused" : "reconnecting");

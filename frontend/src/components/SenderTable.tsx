@@ -20,6 +20,8 @@ import {
 } from "react";
 import { createPortal } from "react-dom";
 import { Link, useNavigate } from "react-router-dom";
+import { api } from "../api";
+import { queryClient } from "../api/queryClient";
 import type { Sender } from "../types/api";
 import type { SenderAction } from "./senders/SenderDialogs";
 import {
@@ -32,6 +34,18 @@ import {
   type SenderGroup,
 } from "../utils/senders";
 import { EmptyState, IconButton, Skeleton, StatusBadge } from "./ui";
+
+// Prefetch só do cabeçalho (sender + instâncias). Logs ficam de fora de propósito.
+function prefetchSenderHeader(id: string) {
+  void queryClient.prefetchQuery({
+    queryKey: ["view", "sender", id, "details"],
+    queryFn: () => api.sender(id),
+  });
+  void queryClient.prefetchQuery({
+    queryKey: ["view", "sender", id, "instances"],
+    queryFn: async () => (await api.senderInstances(id)).items,
+  });
+}
 
 function activateRow(
   event: KeyboardEvent<HTMLElement>,
@@ -189,6 +203,8 @@ function InstanceChooser({
                 role="link"
                 tabIndex={0}
                 aria-label={`Abrir instância ${sender.id}`}
+                onMouseEnter={() => prefetchSenderHeader(sender.id)}
+                onFocus={() => prefetchSenderHeader(sender.id)}
                 onClick={() => navigate(`/senders/${sender.id}`)}
                 onKeyDown={(event) =>
                   activateRow(event, () => navigate(`/senders/${sender.id}`))
@@ -237,6 +253,8 @@ function InstanceChooser({
             role="link"
             tabIndex={0}
             aria-label={`Abrir instância ${sender.id}`}
+            onMouseEnter={() => prefetchSenderHeader(sender.id)}
+            onFocus={() => prefetchSenderHeader(sender.id)}
             onClick={() => navigate(`/senders/${sender.id}`)}
             onKeyDown={(event) =>
               activateRow(event, () => navigate(`/senders/${sender.id}`))
@@ -332,6 +350,9 @@ export function SenderTable({ items, onAction }: { items: Sender[]; onAction?: (
                 if (multiple) setSelectedGroupKey(group.key);
                 else navigate(`/senders/${sender.id}`);
               };
+              const prefetchGroup = () => {
+                if (!multiple) prefetchSenderHeader(sender.id);
+              };
               return (
                 <tr
                   key={group.key}
@@ -342,6 +363,8 @@ export function SenderTable({ items, onAction }: { items: Sender[]; onAction?: (
                       ? `Abrir grupo ${group.name} com ${group.items.length} instâncias`
                       : `Abrir sender ${sender.name}`
                   }
+                  onMouseEnter={prefetchGroup}
+                  onFocus={prefetchGroup}
                   onClick={openGroup}
                   onKeyDown={(event) => activateRow(event, openGroup)}
                   className="h-[52px] cursor-pointer hover:bg-zinc-900/60 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-white/50"
@@ -427,6 +450,9 @@ export function SenderTable({ items, onAction }: { items: Sender[]; onAction?: (
             if (multiple) setSelectedGroupKey(group.key);
             else navigate(`/senders/${sender.id}`);
           };
+          const prefetchGroup = () => {
+            if (!multiple) prefetchSenderHeader(sender.id);
+          };
           return (
             <article
               key={group.key}
@@ -437,6 +463,8 @@ export function SenderTable({ items, onAction }: { items: Sender[]; onAction?: (
                   ? `Abrir grupo ${group.name} com ${group.items.length} instâncias`
                   : `Abrir sender ${sender.name}`
               }
+              onMouseEnter={prefetchGroup}
+              onFocus={prefetchGroup}
               onClick={openGroup}
               onKeyDown={(event) => activateRow(event, openGroup)}
               className="cursor-pointer p-3 hover:bg-zinc-900/60 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-white/50"

@@ -8,38 +8,38 @@ export interface EventDefinition {
   id: string;
   name: string;
   key: string;
-  senderIds: string[];
-  actionType: EventActionType;
+  sender_ids: string[];
+  action_type: EventActionType;
   recipients: string[];
-  subjectTemplate: string;
-  messageTemplate: string;
+  subject_template: string;
+  message_template: string;
   enabled: boolean;
-  createdAt: string;
-  updatedAt: string;
-  lastTriggeredAt?: string;
-  lastDeliveryAt?: string;
-  lastDeliveryStatus?: DeliveryStatus;
-  lastDeliveryError?: string;
-  triggerCount: number;
-  deliveryCount: number;
-  failureCount: number;
-  testDeliveryCount: number;
+  created_at: string;
+  updated_at: string;
+  last_triggered_at?: string | null;
+  last_delivery_at?: string | null;
+  last_delivery_status?: DeliveryStatus | null;
+  last_delivery_error?: string | null;
+  trigger_count: number;
+  delivery_count: number;
+  failure_count: number;
+  test_delivery_count: number;
 }
 
 export interface EventInput {
   name: string;
   key: string;
-  senderIds: string[];
-  actionType: EventActionType;
+  sender_ids: string[];
+  action_type: EventActionType;
   recipients: string[];
-  subjectTemplate: string;
-  messageTemplate: string;
+  subject_template: string;
+  message_template: string;
   enabled: boolean;
 }
 
 export interface EventPage {
   items: EventDefinition[];
   pagination: Pagination;
-  summary: { total: number; active: number; recentTriggered: number; recentFailures: number };
-  emailProvider: EmailSettings;
+  summary: { total: number; active: number; recent_triggered: number; recent_failures: number };
+  email_provider: EmailSettings;
 }

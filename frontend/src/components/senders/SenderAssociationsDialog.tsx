@@ -99,9 +99,9 @@ export function SenderAssociationsDialog({
         } else {
           const event = item.source as EventDefinition;
           await eventsApi.update(event.id, {
-            name: event.name, key: event.key, senderIds, actionType: event.actionType,
-            recipients: event.recipients, subjectTemplate: event.subjectTemplate,
-            messageTemplate: event.messageTemplate, enabled: event.enabled,
+            name: event.name, key: event.key, sender_ids: senderIds, action_type: event.action_type,
+            recipients: event.recipients, subject_template: event.subject_template,
+            message_template: event.message_template, enabled: event.enabled,
           });
         }
       }

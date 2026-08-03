@@ -26,7 +26,7 @@ async function loadAll(kind: AssociationKind) {
       totalPages = result.pagination.total_pages;
     } else {
       const result = await eventsApi.list(query);
-      items.push(...result.items.map((event) => ({ id: event.id, name: event.name, description: event.key, enabled: event.enabled, senderIds: event.senderIds, source: event })));
+      items.push(...result.items.map((event) => ({ id: event.id, name: event.name, description: event.key, enabled: event.enabled, senderIds: event.sender_ids, source: event })));
       totalPages = result.pagination.total_pages;
     }
     page += 1;

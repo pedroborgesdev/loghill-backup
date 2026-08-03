@@ -31,8 +31,8 @@ func settingsRouter(t *testing.T, adminEnabled bool) http.Handler {
 		SSEBuffer:        10,
 		SSEMaxClients:    10,
 		SSEHeartbeat:     time.Second,
-		AdminAuthEnabled: adminEnabled,
-		AdminAPIKey:      "secret",
+		AuthEnabled: adminEnabled,
+		AppPassword: "secret",
 	}
 	repo := repository.New(dataDir)
 	if err := repo.Init(); err != nil {

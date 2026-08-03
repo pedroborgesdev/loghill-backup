@@ -497,7 +497,7 @@ components:
         pagination: { $ref: "#/components/schemas/Pagination" }
     MonitoringConditionType:
       type: string
-      enum: [event_triggered, alert_triggered, sender_status, message, severity, metadata, time, weekday, date]
+      enum: [event_triggered, alert_triggered, sender_status, log_received, message, severity, metadata, time, weekday, date]
     MonitoringActionType:
       type: string
       enum: [trigger_event, send_email]

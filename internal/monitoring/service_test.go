@@ -161,6 +161,53 @@ func TestDirectEventCycleIsRejected(t *testing.T) {
 	}
 }
 
+func TestLogReceivedTriggerMatchesEveryLogWithoutSeverityFilter(t *testing.T) {
+	service, _, _ := testService(t)
+	input := baseInput()
+	input.Expression.Nodes = []ExpressionNode{{Condition: &Condition{Type: ConditionLogReceived, Operator: "received"}}}
+	rule, err := service.Create(context.Background(), input)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, severity := range everySeverity {
+		result := service.Evaluate(rule, domain.Sender{ID: "sender-a"}, domain.LogEntry{SenderID: "sender-a", Severity: severity, Message: "qualquer"}, "", false)
+		if !result.Matched {
+			t.Fatalf("severity %s should have matched the generic log trigger", severity)
+		}
+	}
+}
+
+func TestLegacySeverityTriggerIsMigratedToLogReceived(t *testing.T) {
+	dir := filepath.Join(t.TempDir(), "data")
+	store, err := Open(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	legacy := Rule{ID: "mon_legacy", Name: "Logs", SenderIDs: []string{"sender-a"}, Enabled: true, Status: "active", Expression: ExpressionGroup{ID: "grp", Operator: LogicalAnd, Nodes: []ExpressionNode{{Condition: &Condition{ID: "cond", Type: ConditionSeverity, Operator: "in", Value: raw(map[string]any{"severities": []string{"TRACE", "DEBUG", "INFO", "WARN", "ERROR", "FATAL"}, "source": "log_received"})}}}}}
+	if err = store.Put(legacy); err != nil {
+		t.Fatal(err)
+	}
+	reopened, err := Open(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	migrated, ok := reopened.Get("mon_legacy")
+	if !ok {
+		t.Fatal("legacy rule was not loaded")
+	}
+	condition := migrated.Expression.Nodes[0].Condition
+	if condition.Type != ConditionLogReceived || condition.Operator != "received" || string(condition.Value) != "{}" {
+		t.Fatalf("legacy trigger was not migrated: %#v", condition)
+	}
+	persisted, err := Open(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if again, _ := persisted.Get("mon_legacy"); again.Expression.Nodes[0].Condition.Type != ConditionLogReceived {
+		t.Fatal("migration was not written back to disk")
+	}
+}
+
 func TestIncompleteDraftCanBePersistedButNotEnabled(t *testing.T) {
 	service, _, _ := testService(t)
 	draft, err := service.Create(context.Background(), RuleInput{Name: "Rascunho inicial", Status: "draft", Expression: ExpressionGroup{Operator: LogicalAnd}})

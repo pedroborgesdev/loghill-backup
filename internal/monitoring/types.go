@@ -15,6 +15,7 @@ const (
 	ConditionEvent        ConditionType   = "event_triggered"
 	ConditionAlert        ConditionType   = "alert_triggered"
 	ConditionSenderStatus ConditionType   = "sender_status"
+	ConditionLogReceived  ConditionType   = "log_received"
 	ConditionMessage      ConditionType   = "message"
 	ConditionSeverity     ConditionType   = "severity"
 	ConditionMetadata     ConditionType   = "metadata"

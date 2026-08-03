@@ -70,7 +70,7 @@ type LogMonitoringSink interface {
 }
 
 func New(repo *repository.FileRepository, cfg config.Config, clock domain.Clock, settings *settingsstore.Store) *Service {
-	return &Service{repo: repo, cfg: cfg, clock: clock, settings: settings, Hub: NewHub(cfg.SSEMaxClients, cfg.SSEBuffer), started: clock.Now(), locks: &storage.LockManager{}}
+	return &Service{repo: repo, cfg: cfg, clock: clock, settings: settings, Hub: NewHub(cfg.SSEMaxClients, cfg.SSEBuffer), started: clock.Now(), locks: repo.Locks()}
 }
 
 func (s *Service) SetAlertSink(sink LogAlertSink)           { s.alertSink = sink }
@@ -197,6 +197,7 @@ func (s *Service) UpdateSender(ctx context.Context, id, name, description string
 	lock := s.locks.Get(id)
 	lock.Lock()
 	defer lock.Unlock()
+	ctx = storage.ContextWithSenderLock(ctx, id)
 	item, err := s.repo.Get(ctx, id)
 	if err != nil {
 		return item, err
@@ -211,6 +212,7 @@ func (s *Service) RotateSenderKey(ctx context.Context, id string) (domain.Sender
 	lock := s.locks.Get(id)
 	lock.Lock()
 	defer lock.Unlock()
+	ctx = storage.ContextWithSenderLock(ctx, id)
 	item, err := s.repo.Get(ctx, id)
 	if err != nil {
 		return item, SenderCredentials{}, time.Time{}, err
@@ -237,6 +239,7 @@ func (s *Service) RevokeSender(ctx context.Context, id string) (domain.Sender, e
 	lock := s.locks.Get(id)
 	lock.Lock()
 	defer lock.Unlock()
+	ctx = storage.ContextWithSenderLock(ctx, id)
 	item, err := s.repo.Get(ctx, id)
 	if err != nil {
 		return item, err
@@ -251,6 +254,7 @@ func (s *Service) ReactivateSender(ctx context.Context, id string) (domain.Sende
 	lock := s.locks.Get(id)
 	lock.Lock()
 	defer lock.Unlock()
+	ctx = storage.ContextWithSenderLock(ctx, id)
 	item, err := s.repo.Get(ctx, id)
 	if err != nil {
 		return item, SenderCredentials{}, err
@@ -286,6 +290,7 @@ func (s *Service) InitInstance(ctx context.Context, senderID, senderKey string) 
 	lock := s.locks.Get(senderID)
 	lock.Lock()
 	defer lock.Unlock()
+	ctx = storage.ContextWithSenderLock(ctx, senderID)
 	sender, err := s.repo.Get(ctx, senderID)
 	if err != nil {
 		return domain.SenderInstance{}, domain.ErrInvalidSenderKey
@@ -377,6 +382,7 @@ func (s *Service) ReceiveLogWithInstanceAndEvent(ctx context.Context, id, sender
 	lock := s.locks.Get(id)
 	lock.Lock()
 	defer lock.Unlock()
+	ctx = storage.ContextWithSenderLock(ctx, id)
 	if strings.TrimSpace(message) == "" || int64(len(message)) > s.cfg.MaxMessageSize {
 		return domain.LogEntry{}, time.Time{}, fmt.Errorf("invalid message")
 	}
@@ -452,6 +458,7 @@ func (s *Service) HealthWithInstance(ctx context.Context, id, senderKey, instanc
 	lock := s.locks.Get(id)
 	lock.Lock()
 	defer lock.Unlock()
+	ctx = storage.ContextWithSenderLock(ctx, id)
 	item, err := s.repo.Get(ctx, id)
 	if err != nil {
 		return item, time.Time{}, domain.ErrInvalidSenderKey
@@ -603,6 +610,7 @@ func (s *Service) Tick(ctx context.Context) error {
 		}
 		lock := s.locks.Get(item.ID)
 		lock.Lock()
+		ctx = storage.ContextWithSenderLock(ctx, item.ID)
 		if item.Status == domain.StatusInactive && item.InactiveAt != nil {
 			expires := item.InactiveAt.Add(time.Duration(currentSettings.DeleteInactiveDays) * 24 * time.Hour)
 			if item.ExpiresAt == nil || !item.ExpiresAt.Equal(expires) {
@@ -682,6 +690,7 @@ func (s *Service) DeleteSender(ctx context.Context, id string) error {
 	lock := s.locks.Get(id)
 	lock.Lock()
 	defer lock.Unlock()
+	ctx = storage.ContextWithSenderLock(ctx, id)
 	return s.repo.Delete(ctx, id)
 }
 

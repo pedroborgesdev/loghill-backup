@@ -9,12 +9,17 @@ import (
 	"path/filepath"
 	"sort"
 	"sync"
+
+	"logtheater/internal/domain"
 )
 
 type persistedRules struct {
 	Version int    `json:"version"`
 	Rules   []Rule `json:"rules"`
 }
+
+var everySeverity = []domain.LogSeverity{domain.Trace, domain.Debug, domain.Info, domain.Warn, domain.Error, domain.Fatal}
+
 type persistedPending struct {
 	Version int                 `json:"version"`
 	Items   []PendingEvaluation `json:"items"`
@@ -56,6 +61,7 @@ func (s *Store) loadRules() error {
 	if p.Version != 1 {
 		return fmt.Errorf("unsupported monitoring rules version %d", p.Version)
 	}
+	migrated := false
 	for _, r := range p.Rules {
 		if r.ID == "" {
 			return errors.New("stored monitoring rule has no id")
@@ -63,9 +69,63 @@ func (s *Store) loadRules() error {
 		if r.Status == "" {
 			r.Status = "active"
 		}
+		if migrateLogReceived(&r.Expression) {
+			migrated = true
+		}
 		s.rules[r.ID] = r
 	}
+	if migrated {
+		items := make([]Rule, 0, len(s.rules))
+		for _, r := range s.rules {
+			items = append(items, r)
+		}
+		return s.writeRules(items)
+	}
 	return nil
+}
+
+// migrateLogReceived converte o gatilho genérico antigo, gravado como
+// "severity in [todas as severities]", no tipo dedicado log_received.
+func migrateLogReceived(g *ExpressionGroup) bool {
+	changed := false
+	for i := range g.Nodes {
+		if group := g.Nodes[i].Group; group != nil && migrateLogReceived(group) {
+			changed = true
+		}
+		condition := g.Nodes[i].Condition
+		if condition == nil || condition.Type != ConditionSeverity || condition.Operator != "in" {
+			continue
+		}
+		value, err := rawMap(condition.Value)
+		if err != nil {
+			continue
+		}
+		if stringValue(value, "source") != "log_received" && !coversEverySeverity(value["severities"]) {
+			continue
+		}
+		condition.Type = ConditionLogReceived
+		condition.Operator = "received"
+		condition.Value = json.RawMessage("{}")
+		changed = true
+	}
+	return changed
+}
+
+func coversEverySeverity(raw any) bool {
+	list, ok := raw.([]any)
+	if !ok {
+		return false
+	}
+	present := map[string]bool{}
+	for _, item := range list {
+		present[fmt.Sprint(item)] = true
+	}
+	for _, severity := range everySeverity {
+		if !present[string(severity)] {
+			return false
+		}
+	}
+	return true
 }
 func (s *Store) loadPending() error {
 	b, err := os.ReadFile(s.pendingPath)

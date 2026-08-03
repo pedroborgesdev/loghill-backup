@@ -1,6 +1,6 @@
 import type { LogSeverity } from "./api";
 
-export type MonitoringConditionType = "event_triggered" | "alert_triggered" | "sender_status" | "message" | "severity" | "metadata" | "time" | "weekday" | "date";
+export type MonitoringConditionType = "event_triggered" | "alert_triggered" | "sender_status" | "log_received" | "message" | "severity" | "metadata" | "time" | "weekday" | "date";
 export type MonitoringActionType = "trigger_event" | "send_email";
 export type LogicalOperator = "and" | "or";
 export interface MonitoringCondition { id?: string; type: MonitoringConditionType; operator: string; value: Record<string, unknown>; negated: boolean }
