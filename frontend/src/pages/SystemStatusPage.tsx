@@ -9,19 +9,24 @@ import {
   StatusIndicator,
 } from "../components/ui";
 import { useAppShell } from "../layouts/appShellContext";
+import { useCachedState } from "../hooks/useCachedState";
 import type { HealthResponse } from "../types/api";
 import { formatDate, formatNumber } from "../utils/format";
+import { waitForMinimumLoading } from "../utils/minimumLoading";
 
 export function SystemStatusPage() {
   const { refreshToken, setRefreshing } = useAppShell();
-  const [health, setHealth] = useState<HealthResponse>();
+  const [health, setHealth] = useCachedState<HealthResponse>(["view", "system-status"]);
   const healthRef = useRef<HealthResponse | undefined>(undefined);
   const [error, setError] = useState("");
 
   const load = useCallback(async () => {
+    const hasPrevious = Boolean(healthRef.current);
+    const startedAt = performance.now();
     setRefreshing(Boolean(healthRef.current));
     try {
       const response = await api.health();
+      if (!hasPrevious) await waitForMinimumLoading(startedAt);
       healthRef.current = response;
       setHealth(response);
       setError("");
@@ -34,7 +39,7 @@ export function SystemStatusPage() {
     } finally {
       setRefreshing(false);
     }
-  }, [setRefreshing]);
+  }, [setHealth, setRefreshing]);
 
   useEffect(() => { void load(); }, [load, refreshToken]);
 

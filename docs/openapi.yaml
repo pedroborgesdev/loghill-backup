@@ -1,7 +1,7 @@
 openapi: 3.0.0
 info:
   title: LogHill API
-  version: 2.1.0
+  version: 2.4.0
   description: API para cadastro administrativo de senders, recebimento autenticado de logs, alertas e eventos assíncronos por e-mail.
 servers:
   - url: /
@@ -21,6 +21,7 @@ paths:
     post:
       summary: Recebe um log autenticado pelo sender
       security: [{ SenderKey: [] }]
+      parameters: [{ $ref: "#/components/parameters/SenderInstanceHeader" }]
       requestBody:
         required: true
         content:
@@ -131,11 +132,51 @@ paths:
     post:
       summary: Registra um healthcheck autenticado
       security: [{ SenderKey: [] }]
-      parameters: [{ $ref: "#/components/parameters/Sender" }]
+      parameters: [{ $ref: "#/components/parameters/Sender" }, { $ref: "#/components/parameters/SenderInstanceHeader" }]
       requestBody: { content: { application/json: { schema: { type: object, additionalProperties: true } } } }
       responses:
         "200": { description: Healthcheck aceito }
         "401": { $ref: "#/components/responses/InvalidSenderKey" }
+  /api/v1/senders/{sender}/instances/init:
+    post:
+      summary: Inicializa uma execução do cliente e retorna seu ID interno único
+      description: O ID separa somente os logs de processos simultâneos; alertas, eventos e monitoramentos continuam associados ao sender.
+      security: [{ SenderKey: [] }]
+      parameters: [{ $ref: "#/components/parameters/Sender" }]
+      requestBody: { content: { application/json: { schema: { type: object, additionalProperties: false } } } }
+      responses:
+        "201": { description: Instância inicializada, content: { application/json: { schema: { $ref: "#/components/schemas/SenderInstanceInitResponse" } } } }
+        "401": { $ref: "#/components/responses/InvalidSenderKey" }
+  /api/v1/instances/init:
+    post:
+      summary: Identifica o sender pela chave e inicializa uma instância
+      description: Endpoint recomendado para clientes. Não exige que o sender_id seja configurado na aplicação produtora.
+      security: [{ SenderKey: [] }]
+      requestBody: { content: { application/json: { schema: { type: object, additionalProperties: false } } } }
+      responses:
+        "201": { description: Sender identificado e instância inicializada, content: { application/json: { schema: { $ref: "#/components/schemas/SenderInstanceInitResponse" } } } }
+        "401": { $ref: "#/components/responses/InvalidSenderKey" }
+  /api/v1/senders/{sender}/instances:
+    get:
+      summary: Lista as instâncias conhecidas e o volume retido de logs de cada uma
+      security: [{ AdminApiKey: [] }]
+      parameters:
+        - { $ref: "#/components/parameters/Sender" }
+        - { name: page, in: query, schema: { type: integer, minimum: 1 } }
+        - { name: page_size, in: query, schema: { type: integer, minimum: 1, maximum: 1000 } }
+      responses:
+        "200": { description: Página de instâncias, content: { application/json: { schema: { $ref: "#/components/schemas/SenderInstancePage" } } } }
+  /api/v1/senders/{sender}/instances/{instance}:
+    delete:
+      summary: Exclui uma instância e todos os seus logs
+      description: Não remove o sender lógico nem altera seus alertas, eventos ou regras de monitoramento.
+      security: [{ AdminApiKey: [] }]
+      parameters:
+        - { $ref: "#/components/parameters/Sender" }
+        - { name: instance, in: path, required: true, schema: { type: string } }
+      responses:
+        "204": { description: Instância excluída }
+        "404": { description: Sender ou instância não encontrado }
   /api/v1/senders/{sender}/logs:
     get:
       summary: Consulta logs
@@ -151,12 +192,13 @@ paths:
         - { name: order, in: query, schema: { type: string, enum: [asc, desc] } }
         - { name: event, in: query, schema: { type: string, enum: [with, without] }, description: Filtra logs com ou sem evento }
         - { name: event_key, in: query, schema: { type: string, pattern: "^[a-z0-9][a-z0-9_-]{2,79}$" }, description: Filtra pela chave exata do evento }
+        - { name: instance_id, in: query, schema: { type: string }, description: Separa os logs de uma execução específica do cliente; use legacy para registros antigos }
       responses: { "200": { description: Página de logs }, "410": { description: Arquivo expirado } }
   /api/v1/senders/{sender}/logs/stream:
     get:
       summary: Transmite novos logs via SSE
       security: [{ AdminApiKey: [] }]
-      parameters: [{ $ref: "#/components/parameters/Sender" }]
+      parameters: [{ $ref: "#/components/parameters/Sender" }, { name: instance_id, in: query, schema: { type: string } }]
       responses: { "200": { description: Stream SSE, content: { text/event-stream: { schema: { type: string } } } } }
   /api/v1/senders/{sender}/logs/download:
     get:
@@ -230,7 +272,7 @@ paths:
       parameters:
         - { name: search, in: query, schema: { type: string } }
         - { name: enabled, in: query, schema: { type: boolean } }
-        - { name: sender_id, in: query, schema: { type: string } }
+        - { name: sender_name, in: query, schema: { type: string }, description: Filtra pelo nome legível do sender. }
         - { name: action_type, in: query, schema: { $ref: "#/components/schemas/EventActionType" } }
         - { name: page, in: query, schema: { type: integer, minimum: 1 } }
         - { name: page_size, in: query, schema: { type: integer, minimum: 1, maximum: 1000 } }
@@ -282,7 +324,7 @@ paths:
       security: [{ AdminApiKey: [] }]
       parameters: [{ $ref: "#/components/parameters/EventID" }]
       requestBody: { required: true, content: { application/json: { schema: { type: object, required: [enabled], properties: { enabled: { type: boolean } } } } } }
-      responses: { "200": { description: Estado atualizado, content: { application/json: { schema: { $ref: "#/components/schemas/EventDefinition" } } } }, "409": { description: Outlook não configurado } }
+      responses: { "200": { description: Estado atualizado, content: { application/json: { schema: { $ref: "#/components/schemas/EventDefinition" } } } }, "409": { description: E-mail não configurado } }
   /api/v1/events/{eventID}/test:
     post:
       summary: Enfileira um teste com dados fictícios
@@ -312,6 +354,90 @@ paths:
       security: [{ AdminApiKey: [] }]
       requestBody: { required: true, content: { application/json: { schema: { type: object, required: [recipient], properties: { recipient: { type: string, format: email } } } } } }
       responses: { "200": { description: E-mail enviado } }
+  /api/v1/monitoring/rules:
+    get:
+      summary: Lista regras de monitoramento
+      security: [{ AdminApiKey: [] }]
+      parameters:
+        - { name: search, in: query, schema: { type: string } }
+        - { name: enabled, in: query, schema: { type: boolean } }
+        - { name: sender_name, in: query, schema: { type: string }, description: Filtra pelo nome legível do sender. }
+        - { name: condition_type, in: query, schema: { $ref: "#/components/schemas/MonitoringConditionType" } }
+        - { name: action_type, in: query, schema: { $ref: "#/components/schemas/MonitoringActionType" } }
+        - { name: page, in: query, schema: { type: integer, minimum: 1 } }
+        - { name: page_size, in: query, schema: { type: integer, minimum: 1, maximum: 100 } }
+      responses: { "200": { description: Página de regras de monitoramento } }
+    post:
+      summary: Cria uma regra de monitoramento
+      security: [{ AdminApiKey: [] }]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/MonitoringRuleInput" } } } }
+      responses: { "201": { description: Regra criada }, "422": { $ref: "#/components/responses/ValidationError" } }
+  /api/v1/monitoring/rules/validate:
+    post:
+      summary: Valida uma regra sem persistir
+      security: [{ AdminApiKey: [] }]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/MonitoringRuleInput" } } } }
+      responses: { "200": { description: Regra válida }, "422": { $ref: "#/components/responses/ValidationError" } }
+  /api/v1/monitoring/rules/{ruleID}:
+    parameters: [{ name: ruleID, in: path, required: true, schema: { type: string } }]
+    get: { summary: Obtém uma regra de monitoramento, security: [{ AdminApiKey: [] }], responses: { "200": { description: Regra encontrada }, "404": { description: Regra não encontrada } } }
+    put: { summary: Atualiza uma regra, security: [{ AdminApiKey: [] }], requestBody: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/MonitoringRuleInput" } } } }, responses: { "200": { description: Regra atualizada }, "422": { $ref: "#/components/responses/ValidationError" } } }
+    delete: { summary: Exclui uma regra, security: [{ AdminApiKey: [] }], responses: { "204": { description: Regra excluída } } }
+  /api/v1/monitoring/rules/{ruleID}/status:
+    patch: { summary: Ativa ou desativa uma regra, security: [{ AdminApiKey: [] }], responses: { "200": { description: Estado alterado } } }
+  /api/v1/monitoring/rules/{ruleID}/duplicate:
+    post: { summary: Duplica uma regra como inativa, security: [{ AdminApiKey: [] }], responses: { "201": { description: Cópia criada } } }
+  /api/v1/monitoring/rules/{ruleID}/test:
+    post:
+      summary: Testa a regra com contexto fictício
+      description: Não executa ações por padrão. Para execute_actions=true, exige X-Monitoring-Execute-Actions igual a confirm.
+      security: [{ AdminApiKey: [] }]
+      responses: { "200": { description: Resultado detalhado da avaliação }, "403": { description: Confirmação de execução ausente } }
+  /api/v1/monitoring/rules/{ruleID}/executions:
+    get: { summary: Lista o histórico de uma regra, security: [{ AdminApiKey: [] }], responses: { "200": { description: Execuções mais recentes } } }
+  /api/v1/monitoring/executions/{executionID}:
+    get: { summary: Obtém uma execução, security: [{ AdminApiKey: [] }], responses: { "200": { description: Execução encontrada }, "404": { description: Execução não encontrada } } }
+  /api/v1/executions:
+    get:
+      summary: Lista o histórico unificado de execuções
+      security: [{ AdminApiKey: [] }]
+      parameters:
+        - { name: source_type, in: query, schema: { $ref: "#/components/schemas/ExecutionSourceType" } }
+        - { name: source_id, in: query, schema: { type: string } }
+        - { name: sender_id, in: query, schema: { type: string } }
+        - { name: status, in: query, schema: { type: string } }
+        - { name: severity, in: query, schema: { type: string } }
+        - { name: trigger_type, in: query, schema: { type: string } }
+        - { name: action_type, in: query, schema: { type: string } }
+        - { name: started_from, in: query, schema: { type: string, format: date-time } }
+        - { name: started_to, in: query, schema: { type: string, format: date-time } }
+        - { name: recent, in: query, schema: { type: boolean } }
+        - { name: search, in: query, schema: { type: string } }
+        - { name: page, in: query, schema: { type: integer, minimum: 1 } }
+        - { name: page_size, in: query, schema: { type: integer, minimum: 1, maximum: 1000 } }
+        - { name: order, in: query, schema: { type: string, enum: [asc, desc] } }
+      responses:
+        "200": { description: Página de execuções, content: { application/json: { schema: { $ref: "#/components/schemas/ExecutionPage" } } } }
+        "422": { $ref: "#/components/responses/ValidationError" }
+  /api/v1/executions/{executionID}:
+    get:
+      summary: Consulta todos os detalhes de uma execução
+      security: [{ AdminApiKey: [] }]
+      parameters:
+        - { name: executionID, in: path, required: true, schema: { type: string } }
+      responses:
+        "200": { description: Execução, content: { application/json: { schema: { $ref: "#/components/schemas/ExecutionRecord" } } } }
+        "404": { description: Execução não encontrada }
+  /api/v1/dashboard/recent-executions:
+    get:
+      summary: Lista as execuções mais recentes para o Dashboard
+      security: [{ AdminApiKey: [] }]
+      parameters:
+        - { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 100, default: 10 } }
+        - { name: source_type, in: query, schema: { $ref: "#/components/schemas/ExecutionSourceType" } }
+        - { name: status, in: query, schema: { type: string } }
+      responses:
+        "200": { description: Execuções recentes, content: { application/json: { schema: { $ref: "#/components/schemas/ExecutionPage" } } } }
 components:
   securitySchemes:
     SenderKey: { type: apiKey, in: header, name: X-Sender-Key, description: Chave secreta específica do sender }
@@ -320,7 +446,98 @@ components:
     Sender: { name: sender, in: path, required: true, schema: { type: string, pattern: "^[a-z0-9][a-z0-9_-]{0,62}$" } }
     AlertID: { name: alertID, in: path, required: true, schema: { type: string, pattern: "^alert-[a-f0-9]{16}$" } }
     EventID: { name: eventID, in: path, required: true, schema: { type: string, pattern: "^evt_[a-f0-9]{12}$" } }
+    SenderInstanceHeader: { name: X-Sender-Instance-ID, in: header, required: false, schema: { type: string, pattern: "^ins_[a-f0-9]{32}$" }, description: ID retornado pelo handshake de inicialização do processo cliente }
   schemas:
+    ExecutionSourceType: { type: string, enum: [alert, event, monitoring] }
+    ExecutionStatus: { type: string, enum: [pending, processing, success, partial, failed, cancelled, skipped] }
+    ExecutionActionResult:
+      type: object
+      required: [id, type, status, attempt_count]
+      properties:
+        id: { type: string }
+        type: { type: string }
+        status: { $ref: "#/components/schemas/ExecutionStatus" }
+        started_at: { type: string, format: date-time }
+        finished_at: { type: string, format: date-time }
+        duration_ms: { type: integer, format: int64 }
+        attempt_count: { type: integer }
+        error_code: { type: string }
+        error_message: { type: string }
+    ExecutionRecord:
+      type: object
+      required: [id, source_type, source_id, source_name, sender_id, trigger_type, status, started_at, attempt_count, actions]
+      properties:
+        id: { type: string }
+        source_type: { $ref: "#/components/schemas/ExecutionSourceType" }
+        source_id: { type: string }
+        source_name: { type: string }
+        sender_id: { type: string }
+        sender_name: { type: string }
+        trigger_type: { type: string }
+        trigger_id: { type: string }
+        trigger_name: { type: string }
+        trigger_message: { type: string }
+        severity: { type: string }
+        status: { $ref: "#/components/schemas/ExecutionStatus" }
+        correlation_id: { type: string }
+        causation_id: { type: string }
+        started_at: { type: string, format: date-time }
+        finished_at: { type: string, format: date-time }
+        duration_ms: { type: integer, format: int64 }
+        attempt_count: { type: integer }
+        actions: { type: array, items: { $ref: "#/components/schemas/ExecutionActionResult" } }
+        conditions: { type: array, items: { type: object } }
+        error_code: { type: string }
+        error_message: { type: string }
+        metadata: { type: object, additionalProperties: true }
+    ExecutionPage:
+      type: object
+      properties:
+        items: { type: array, items: { $ref: "#/components/schemas/ExecutionRecord" } }
+        pagination: { $ref: "#/components/schemas/Pagination" }
+    MonitoringConditionType:
+      type: string
+      enum: [event_triggered, alert_triggered, sender_status, message, severity, metadata, time, weekday, date]
+    MonitoringActionType:
+      type: string
+      enum: [trigger_event, send_email]
+    MonitoringCondition:
+      type: object
+      required: [type, operator, value, negated]
+      properties:
+        id: { type: string }
+        type: { $ref: "#/components/schemas/MonitoringConditionType" }
+        operator: { type: string }
+        value: { type: object, additionalProperties: true }
+        negated: { type: boolean }
+    MonitoringExpressionGroup:
+      type: object
+      description: Grupo evolutivo limitado a cinco níveis; cada nó contém uma condição ou outro grupo.
+      required: [operator, negated, nodes]
+      properties:
+        id: { type: string }
+        operator: { type: string, enum: [and, or] }
+        negated: { type: boolean }
+        nodes: { type: array, minItems: 1, maxItems: 50, items: { type: object, additionalProperties: true } }
+    MonitoringAction:
+      type: object
+      required: [type, config]
+      properties:
+        id: { type: string }
+        type: { $ref: "#/components/schemas/MonitoringActionType" }
+        config: { type: object, additionalProperties: true }
+    MonitoringRuleInput:
+      type: object
+      required: [name, sender_ids, enabled, expression, actions]
+      properties:
+        name: { type: string, minLength: 3, maxLength: 100 }
+        description: { type: string, maxLength: 500 }
+        sender_ids: { type: array, minItems: 0, uniqueItems: true, items: { type: string }, description: Obrigatório e limitado a 100 itens quando include_new_senders for falso. }
+        include_new_senders: { type: boolean, default: false, description: Associa automaticamente à regra todos os senders registrados futuramente. }
+        enabled: { type: boolean }
+        status: { type: string, enum: [active, draft], default: active, description: Rascunhos não são avaliados e podem conter blocos incompletos. }
+        expression: { $ref: "#/components/schemas/MonitoringExpressionGroup" }
+        actions: { type: array, minItems: 1, maxItems: 10, items: { $ref: "#/components/schemas/MonitoringAction" } }
     SenderStatus: { type: string, enum: [never_connected, online, inactive, archived, expired, revoked] }
     Severity: { type: string, enum: [TRACE, DEBUG, INFO, WARN, ERROR, FATAL] }
     LogInput:
@@ -335,6 +552,32 @@ components:
         event: { type: string, minLength: 3, maxLength: 80, pattern: "^[a-z0-9][a-z0-9_-]{2,79}$", description: Chave opcional que dispara eventos associados ao sender }
         event_occurrence_id: { type: string, maxLength: 200, description: Identificador opcional reservado para idempotência; no MVP requisições repetidas ainda podem gerar novos envios }
         metadata: { type: object, additionalProperties: true }
+    SenderInstance:
+      type: object
+      required: [id, created_at, log_line_count]
+      properties:
+        id: { type: string, pattern: "^(ins_[a-f0-9]{32}|legacy)$" }
+        created_at: { type: string, format: date-time }
+        last_activity_at: { type: string, format: date-time, nullable: true }
+        last_healthcheck_at: { type: string, format: date-time, nullable: true }
+        log_line_count: { type: integer, format: int64 }
+        log_file_size: { type: integer, format: int64 }
+        legacy: { type: boolean }
+        status: { type: string, enum: [online, inactive] }
+    SenderInstanceInitResponse:
+      type: object
+      required: [sender, instance_id, initialized_at]
+      properties:
+        sender: { type: string }
+        instance_id: { type: string, pattern: "^ins_[a-f0-9]{32}$" }
+        initialized_at: { type: string, format: date-time }
+    SenderInstancePage:
+      type: object
+      required: [sender, items, pagination]
+      properties:
+        sender: { type: string }
+        items: { type: array, items: { $ref: "#/components/schemas/SenderInstance" } }
+        pagination: { $ref: "#/components/schemas/Pagination" }
     CreateSenderInput:
       type: object
       additionalProperties: false
@@ -358,6 +601,7 @@ components:
         last_healthcheck_at: { type: string, format: date-time, nullable: true }
         log_line_count: { type: integer, format: int64 }
         log_file_size: { type: integer, format: int64 }
+        instance_count: { type: integer, minimum: 0, description: Quantidade de inicializações internas conhecidas para separar os logs }
     SenderCredentials:
       type: object
       required: [sender_key, displayed_once]
@@ -386,7 +630,7 @@ components:
         sender_ids: { type: array, minItems: 1, uniqueItems: true, items: { type: string } }
         severities: { type: array, minItems: 1, uniqueItems: true, items: { $ref: "#/components/schemas/Severity" } }
         recipients: { type: array, minItems: 1, maxItems: 20, uniqueItems: true, items: { type: string, format: email } }
-        provider: { type: string, enum: [outlook] }
+        provider: { type: string, enum: [outlook, gmail] }
         enabled: { type: boolean }
     EmailAlert:
       allOf:
@@ -412,19 +656,19 @@ components:
         pagination: { type: object }
         summary: { type: object }
         email_provider: { type: object }
-    EventActionType: { type: string, enum: [email] }
+    EventActionType: { type: string, enum: [none, email] }
     EventInput:
       type: object
       additionalProperties: false
-      required: [name, key, sender_ids, action_type, recipients, subject_template, message_template, enabled]
+      required: [name, key, sender_ids, action_type, enabled]
       properties:
         name: { type: string, minLength: 3, maxLength: 100 }
         key: { type: string, minLength: 3, maxLength: 80, pattern: "^[a-z0-9][a-z0-9_-]{2,79}$", description: Única e imutável após a criação }
         sender_ids: { type: array, minItems: 1, maxItems: 100, uniqueItems: true, items: { type: string } }
         action_type: { $ref: "#/components/schemas/EventActionType" }
-        recipients: { type: array, minItems: 1, maxItems: 20, uniqueItems: true, items: { type: string, format: email } }
-        subject_template: { type: string, minLength: 1, maxLength: 200, description: Sem CR ou LF; aceita variáveis suportadas }
-        message_template: { type: string, minLength: 1, maxLength: 10000, description: Texto puro com placeholders; HTML livre não é aceito }
+        recipients: { type: array, maxItems: 20, uniqueItems: true, items: { type: string, format: email }, description: Obrigatório somente quando action_type for email. }
+        subject_template: { type: string, maxLength: 200, description: Obrigatório para e-mail; sem CR ou LF e aceita variáveis suportadas. }
+        message_template: { type: string, maxLength: 10000, description: Obrigatório para e-mail; texto puro com placeholders. }
         enabled: { type: boolean }
     EventDefinition:
       allOf:
@@ -463,16 +707,28 @@ components:
     EmailSettingsInput:
       type: object
       additionalProperties: false
-      required: [provider, enabled, outlook]
+      required: [provider, enabled, outlook, gmail]
       properties:
-        provider: { type: string, enum: [outlook] }
+        provider: { type: string, enum: [outlook, gmail] }
         enabled: { type: boolean }
         outlook: { $ref: "#/components/schemas/OutlookSettingsInput" }
+        gmail: { $ref: "#/components/schemas/GmailSettingsInput" }
+    GmailSettingsInput:
+      type: object
+      additionalProperties: false
+      required: [host, port, username, from, sender_name]
+      properties:
+        host: { type: string, example: smtp.gmail.com }
+        port: { type: integer, minimum: 1, maximum: 65535, example: 587 }
+        username: { type: string, format: email }
+        password: { type: string, format: password, writeOnly: true }
+        from: { type: string, format: email }
+        sender_name: { type: string, maxLength: 100 }
     EmailSettings:
       type: object
       description: Representação segura que nunca inclui client_secret ou tokens.
       properties:
-        provider: { type: string, enum: [outlook] }
+        provider: { type: string, enum: [outlook, gmail] }
         enabled: { type: boolean }
         configured: { type: boolean }
         outlook:
@@ -482,6 +738,16 @@ components:
             client_id: { type: string }
             client_secret_configured: { type: boolean }
             sender_email: { type: string, format: email }
+            sender_name: { type: string }
+            managed_by_environment: { type: boolean }
+        gmail:
+          type: object
+          properties:
+            host: { type: string }
+            port: { type: integer }
+            username: { type: string }
+            password_configured: { type: boolean }
+            from: { type: string, format: email }
             sender_name: { type: string }
             managed_by_environment: { type: boolean }
         updated_at: { type: string, format: date-time }
@@ -494,10 +760,12 @@ components:
       properties: { value: { type: integer, minimum: 0 }, unit: { $ref: "#/components/schemas/StorageUnit" } }
     SettingsInput:
       type: object
-      required: [log_limit, inactive_preservation]
+      required: [log_limit, inactive_preservation, inactive_after_seconds, delete_inactive_after_days]
       properties:
         log_limit: { $ref: "#/components/schemas/NumberUnitValue" }
         inactive_preservation: { $ref: "#/components/schemas/NumberUnitValue" }
+        inactive_after_seconds: { type: integer, minimum: 1, maximum: 86400, description: Tempo sem atividade para considerar o sender inativo. }
+        delete_inactive_after_days: { type: integer, minimum: 1, maximum: 3650, description: Prazo desde a inativação para excluir os logs. }
     Settings:
       allOf:
         - { $ref: "#/components/schemas/SettingsInput" }

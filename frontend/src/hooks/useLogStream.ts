@@ -13,7 +13,7 @@ export interface DisplayLogEntry extends LogEntry {
 }
 
 export function logSignature(entry: LogEntry) {
-  return `${entry.timestamp}|${entry.severity}|${entry.event ?? ""}|${entry.event_occurrence_id ?? ""}|${entry.message}|${JSON.stringify(entry.metadata ?? {})}`;
+  return `${entry.timestamp}|${entry.instance_id ?? ""}|${entry.severity}|${entry.event ?? ""}|${entry.event_occurrence_id ?? ""}|${entry.message}|${JSON.stringify(entry.metadata ?? {})}`;
 }
 
 export function prepareLogEntries(
@@ -39,6 +39,7 @@ export function useLogStream(
   sender: string,
   severities: LogSeverity[],
   paused: boolean,
+  instanceID = "",
   max = 1_000,
 ) {
   const [entries, setEntries] = useState<DisplayLogEntry[]>([]);
@@ -71,7 +72,15 @@ export function useLogStream(
     setEntries([]);
     setPendingCount(0);
     setReceivedCount(0);
-    const query = severityKey ? `?severity=${severityKey}` : "";
+    if (!sender) {
+      connectedRef.current = false;
+      setState(pausedRef.current ? "paused" : "disconnected");
+      return;
+    }
+    const params = new URLSearchParams();
+    if (severityKey) params.set("severity", severityKey);
+    if (instanceID) params.set("instance_id", instanceID);
+    const query = params.size ? `?${params}` : "";
     const source = new EventSource(
       `/api/v1/senders/${encodeURIComponent(sender)}/logs/stream${query}`,
     );
@@ -124,7 +133,7 @@ export function useLogStream(
       source.close();
       connectedRef.current = false;
     };
-  }, [max, sender, severityKey]);
+  }, [instanceID, max, sender, severityKey]);
 
   const clear = useCallback(() => {
     queue.current = [];

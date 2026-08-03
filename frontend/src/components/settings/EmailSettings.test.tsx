@@ -3,16 +3,16 @@ import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { EmailSettings } from "./EmailSettings";
 
-const settings = { provider: "outlook", enabled: true, configured: true, outlook: { tenant_id: "tenant", client_id: "client", client_secret_configured: true, sender_email: "logs@example.com", sender_name: "LogHill", managed_by_environment: false }, providers: [{ id: "outlook", enabled: true, available: true }, { id: "gmail", enabled: false, available: false }], updated_at: "2026-07-31T10:00:00Z", last_test_at: null };
+const settings = { provider: "outlook", enabled: true, configured: true, outlook: { tenant_id: "tenant", client_id: "client", client_secret_configured: true, sender_email: "logs@example.com", sender_name: "LogHill", managed_by_environment: false }, gmail: { host: "smtp.gmail.com", port: 587, username: "", password_configured: false, from: "", sender_name: "LogHill", managed_by_environment: false }, providers: [{ id: "outlook", enabled: true, available: true }, { id: "gmail", enabled: false, available: true }], updated_at: "2026-07-31T10:00:00Z", last_test_at: null };
 
 describe("EmailSettings", () => {
   beforeEach(() => vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify(settings), { status: 200 }))));
   afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
 
-  it("shows Outlook, disabled Gmail and never fills the stored secret", async () => {
+  it("shows Outlook and Gmail without exposing the stored secret", async () => {
     render(<EmailSettings />);
     expect(await screen.findByText("Microsoft 365 / O365")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /Gmail/ })).toBeDisabled();
+    expect(screen.getByRole("button", { name: /Gmail/ })).toBeEnabled();
     const secret = screen.getByPlaceholderText("Credencial configurada — digite apenas para substituir");
     expect(secret).toHaveValue("");
     expect(screen.getByText(/O valor salvo nunca é exibido/)).toBeInTheDocument();
@@ -25,6 +25,15 @@ describe("EmailSettings", () => {
     await userEvent.click(await screen.findByRole("button", { name: "Testar conexão" }));
     expect(await screen.findByText("Conexão validada.")).toBeInTheDocument();
     expect(screen.getAllByDisplayValue("tenant")).toHaveLength(1);
+  });
+
+  it("allows selecting Gmail and shows the SMTP defaults", async () => {
+    render(<EmailSettings />);
+    await userEvent.click(await screen.findByRole("button", { name: /Gmail/ }));
+    expect(screen.getByDisplayValue("smtp.gmail.com")).toBeInTheDocument();
+    expect(screen.getByDisplayValue("587")).toBeInTheDocument();
+    expect(screen.getAllByPlaceholderText("seuemail@gmail.com")).toHaveLength(2);
+    expect(screen.getByPlaceholderText("Senha de aplicativo do Google")).toHaveValue("");
   });
 
   it("explains how to fix a forbidden Outlook send", async () => {

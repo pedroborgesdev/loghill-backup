@@ -1,6 +1,6 @@
 # Cliente de logs do LogHill
 
-O cliente não cria senders. Antes do deploy, um administrador deve abrir o dashboard ou `/senders`, selecionar **Novo sender** e copiar o ID e a chave exibida uma única vez.
+O cliente não cria senders. Antes do deploy, um administrador deve abrir o dashboard ou `/senders`, selecionar **Novo sender** e copiar a chave exibida uma única vez. O backend identifica o sender pela própria chave durante o handshake.
 
 Guarde a chave em um cofre de secrets. Não a coloque em código-fonte, URL, query string, logs, `localStorage` ou arquivos versionados.
 
@@ -8,13 +8,29 @@ Guarde a chave em um cofre de secrets. Não a coloque em código-fonte, URL, que
 
 ```env
 LOG_API_URL=http://localhost:8080
-LOG_SENDER_ID=automacao-financeira
 LOG_SENDER_KEY=snd_chave_copiada_na_interface
 ```
 
 ## Requisições
 
-Logs usam `POST /api/v1/logs`; healthchecks usam `POST /api/v1/senders/{sender}/health`. Ambos exigem a mesma chave em `X-Sender-Key`.
+Cada processo cliente deve começar chamando `POST /api/v1/instances/init`. A resposta contém o sender identificado pela chave e um `instance_id` único para aquela execução. Logs e healthchecks enviam esse valor em `X-Sender-Instance-ID`, além da chave normal em `X-Sender-Key`.
+
+O ID da instância existe exclusivamente para separar os consoles de logs de processos simultâneos. Alertas, eventos e regras de monitoramento continuam associados ao sender e não à instância.
+
+```bash
+curl -X POST "$LOG_API_URL/api/v1/instances/init" \
+  -H "Content-Type: application/json" \
+  -H "X-Sender-Key: $LOG_SENDER_KEY" \
+  -d '{}'
+```
+
+Resposta:
+
+```json
+{"sender":"automacao-financeira","instance_id":"ins_0123456789abcdef0123456789abcdef","initialized_at":"2026-08-03T12:00:00Z"}
+```
+
+Clientes antigos sem handshake continuam aceitos, mas somente inicializações com handshake possuem isolamento físico por processo.
 
 O campo opcional `event` chama uma configuração explícita de **Eventos**. Consulte [events.md](events.md) para matching, templates e limites.
 
@@ -22,6 +38,7 @@ O campo opcional `event` chama uma configuração explícita de **Eventos**. Con
 curl -X POST "$LOG_API_URL/api/v1/logs" \
   -H "Content-Type: application/json" \
   -H "X-Sender-Key: $LOG_SENDER_KEY" \
+  -H "X-Sender-Instance-ID: $LOG_INSTANCE_ID" \
   -d '{"sender":"automacao-financeira","severity":"ERROR","message":"Falha ao processar boleto"}'
 ```
 
@@ -32,7 +49,24 @@ type LogClient struct {
     BaseURL   string
     SenderID  string
     SenderKey string
+    InstanceID string
     Client    *http.Client
+}
+
+func (client *LogClient) Init(ctx context.Context) error {
+    req, err := http.NewRequestWithContext(ctx, http.MethodPost,
+        client.BaseURL+"/api/v1/instances/init", bytes.NewReader([]byte(`{}`)))
+    if err != nil { return err }
+    req.Header.Set("Content-Type", "application/json")
+    req.Header.Set("X-Sender-Key", client.SenderKey)
+    response, err := client.Client.Do(req)
+    if err != nil { return err }
+    defer response.Body.Close()
+    var result struct { Sender string `json:"sender"`; InstanceID string `json:"instance_id"` }
+    if err = json.NewDecoder(response.Body).Decode(&result); err != nil { return err }
+    client.InstanceID = result.InstanceID
+    client.SenderID = result.Sender
+    return nil
 }
 
 func (client *LogClient) Send(ctx context.Context, severity, message string) error {
@@ -48,6 +82,7 @@ func (client *LogClient) Send(ctx context.Context, severity, message string) err
     if err != nil { return err }
     req.Header.Set("Content-Type", "application/json")
     req.Header.Set("X-Sender-Key", client.SenderKey)
+    req.Header.Set("X-Sender-Instance-ID", client.InstanceID)
     response, err := client.Client.Do(req)
     if err != nil { return err }
     defer response.Body.Close()
@@ -58,7 +93,7 @@ func (client *LogClient) Send(ctx context.Context, severity, message string) err
 
 ## Python
 
-O arquivo [`examples/python_log_client.py`](../examples/python_log_client.py) fornece `LogHillHandler`, integrado ao módulo `logging`, e um fluxo com `log.info("teste 1")`. Ele lê as três variáveis acima e também mantém o sender online com healthchecks autenticados.
+O arquivo [`examples/python_log_client.py`](../examples/python_log_client.py) fornece `LogHillHandler`, integrado ao módulo `logging`, e um fluxo com `log.info("teste 1")`. Ele recebe URL e chave, descobre o sender no handshake e mantém a instância online com healthchecks autenticados.
 
 O mesmo cliente aceita evento e metadata diretamente:
 

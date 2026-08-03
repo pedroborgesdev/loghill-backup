@@ -4,11 +4,12 @@ import { LogViewer } from "./LogViewer";
 
 afterEach(() => {
   cleanup();
+  localStorage.removeItem("log-newest-at-bottom");
   vi.restoreAllMocks();
 });
 
 describe("LogViewer Follow", () => {
-  it("desliga no scroll e so volta a seguir com um novo clique", () => {
+  it("desliga ao arrastar a scrollbar e volta ao recente quando solicitado", () => {
     const onAutoScrollChange = vi.fn();
     Object.defineProperty(HTMLElement.prototype, "scrollTo", {
       configurable: true,
@@ -37,7 +38,9 @@ describe("LogViewer Follow", () => {
       />,
     );
 
-    fireEvent.wheel(screen.getByRole("log", { name: "Logs" }));
+    const logWindow = screen.getByRole("log", { name: "Logs" });
+    fireEvent.pointerDown(logWindow);
+    fireEvent.scroll(logWindow, { target: { scrollTop: 10 } });
     expect(onAutoScrollChange).toHaveBeenLastCalledWith(false);
 
     view.rerender(
@@ -63,7 +66,7 @@ describe("LogViewer Follow", () => {
     });
     expect(onAutoScrollChange).toHaveBeenCalledTimes(1);
 
-    fireEvent.click(screen.getByRole("button", { name: "Follow" }));
+    fireEvent.click(screen.getByRole("button", { name: "Ir para os logs mais recentes" }));
     expect(onAutoScrollChange).toHaveBeenLastCalledWith(true);
   });
 
@@ -152,6 +155,7 @@ describe("LogViewer Follow", () => {
         onAutoScrollChange={vi.fn()}
       />,
     );
+    fireEvent.click(screen.getByRole("button", { name: /Recentes embaixo/i }));
     const logWindow = screen.getByRole("log", { name: "Logs" });
     logWindow.scrollTop = 29;
     fireEvent.scroll(logWindow);

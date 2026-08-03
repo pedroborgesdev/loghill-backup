@@ -9,14 +9,15 @@ import {
   RefreshCw,
   ShieldOff,
   Trash2,
-  X,
 } from "lucide-react";
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { api } from "../../api";
+import { queryClient } from "../../api/queryClient";
 import { APIError, type Sender, type SenderCredentials, type SenderDependencies } from "../../types/api";
 import { normalizeSenderID } from "../../utils/senderID";
-import { Button, Input } from "../ui";
+import { CONTROL_SURFACE } from "../controlStyles";
+import { Button, Input, ModalCloseButton } from "../ui";
 
 export function CreateSenderButton({ onClick, compact = false }: { onClick: () => void; compact?: boolean }) {
   return (
@@ -66,7 +67,7 @@ function ModalFrame({ title, description, children, footer, onClose, closeDisabl
       <div ref={dialog} role="dialog" aria-modal="true" aria-labelledby={titleID} tabIndex={-1} className={`relative flex max-h-[94dvh] w-full ${width} flex-col overflow-hidden rounded-xl border border-zinc-700 bg-[#111113] shadow-2xl shadow-black/70 outline-none`}>
         <header className="flex shrink-0 items-start justify-between gap-4 border-b border-zinc-800 px-5 py-4">
           <div><h2 id={titleID} className="text-base font-semibold text-zinc-100">{title}</h2>{description && <p className="mt-1 text-xs leading-5 text-zinc-500">{description}</p>}</div>
-          <button type="button" aria-label="Fechar" disabled={closeDisabled} onClick={onClose} className="grid size-8 shrink-0 place-items-center rounded-lg text-zinc-500 hover:bg-zinc-800 hover:text-zinc-100 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-white/50 disabled:opacity-40"><X className="size-4" /></button>
+          <ModalCloseButton label={`Fechar ${title.toLocaleLowerCase("pt-BR")}`} disabled={closeDisabled} onClick={onClose} />
         </header>
         <div className="min-h-0 flex-1 overflow-y-auto p-5">{children}</div>
         {footer && <footer className="flex shrink-0 flex-wrap justify-end gap-2 border-t border-zinc-800 bg-zinc-950 px-5 py-3">{footer}</footer>}
@@ -158,10 +159,10 @@ export function CreateSenderDialog({ open, onClose, onCreated }: { open: boolean
   return (
     <ModalFrame title="Novo sender" description="Cadastre a origem antes de configurar o cliente que enviará os logs." onClose={close} closeDisabled={saving} footer={<><Button onClick={close} disabled={saving}>Cancelar</Button><Button onClick={() => void create()} disabled={saving || availability === "unavailable" || name.trim().length < 3 || name.trim().length > 80} className="border-zinc-500 bg-zinc-800 text-zinc-100 hover:border-zinc-400 hover:bg-zinc-700"><Plus className="size-4" />{saving ? "Criando..." : "Criar sender"}</Button></>}>
       <div className="space-y-4">
-        <label className="block text-xs font-medium text-zinc-300">Nome do sender<Input autoFocus value={name} disabled={saving} maxLength={80} onChange={(event) => { setName(event.target.value); setError(""); }} placeholder="Automação Financeira" className="mt-2 w-full" /></label>
+        <label className="block text-xs font-medium text-zinc-300">Nome do sender<Input autoFocus value={name} disabled={saving} minLength={3} maxLength={80} onChange={(event) => { setName(event.target.value); setError(""); }} placeholder="Automação Financeira" className="mt-2 w-full" /><span className="mt-1.5 block text-[10px] text-zinc-600">Mínimo de 3 caracteres.</span></label>
         <SenderIDPreview id={id} />
         <SenderAvailabilityIndicator state={availability} />
-        <label className="block text-xs font-medium text-zinc-300">Descrição <span className="font-normal text-zinc-600">(opcional)</span><textarea value={description} disabled={saving} maxLength={250} onChange={(event) => setDescription(event.target.value)} placeholder="Processamento de boletos e acordos" className="mt-2 h-24 w-full resize-none rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm text-zinc-100 outline-none placeholder:text-zinc-600 focus:ring-1 focus:ring-white/50" /><span className="mt-1 block text-right text-[10px] text-zinc-600">{description.length}/250</span></label>
+        <label className="block text-xs font-medium text-zinc-300">Descrição <span className="font-normal text-zinc-600">(opcional)</span><textarea value={description} disabled={saving} maxLength={250} onChange={(event) => setDescription(event.target.value)} placeholder="Processamento de boletos e acordos" className={`mt-2 h-24 w-full resize-none rounded-lg border px-3 py-2 text-sm text-zinc-100 placeholder:text-zinc-600 ${CONTROL_SURFACE}`} /><span className="mt-1 block text-right text-[10px] text-zinc-600">{description.length}/250</span></label>
         {error && <p role="alert" className="rounded-lg border border-red-950 bg-red-950/20 px-3 py-2 text-xs text-red-300">{error}</p>}
       </div>
     </ModalFrame>
@@ -177,8 +178,19 @@ export function SenderActionDialogs({ sender, action, onClose, onChanged, onDele
   const [error, setError] = useState("");
   const [dependencies, setDependencies] = useState<SenderDependencies>();
   const [credentials, setCredentials] = useState<CredentialsState>();
-  useEffect(() => { setName(sender?.name ?? ""); setDescription(sender?.description ?? ""); setError(""); setDependencies(undefined); }, [action, sender]);
-  useEffect(() => { if (sender && action === "delete") void api.senderDependencies(sender.id).then(setDependencies).catch(() => setDependencies({ sender_id: sender.id, alert_rules: 0, events: 0 })); }, [action, sender]);
+  useEffect(() => { setName(sender?.name ?? ""); setDescription(sender?.description ?? ""); setError(""); if (action !== "delete") setDependencies(undefined); }, [action, sender]);
+  useEffect(() => {
+    if (!sender || action !== "delete") return;
+    const key = ["modal", "sender-dependencies", sender.id] as const;
+    const cached = queryClient.getQueryData<SenderDependencies>(key);
+    if (cached) { setDependencies(cached); return; }
+    let active = true;
+    setDependencies(undefined);
+    void api.senderDependencies(sender.id)
+      .then((value) => { if (active) { queryClient.setQueryData(key, value); setDependencies(value); } })
+      .catch(() => { if (active) setDependencies({ sender_id: sender.id, alert_rules: 0, events: 0, monitoring_rules: 0 }); });
+    return () => { active = false; };
+  }, [action, sender]);
   if (credentials) return <SenderCredentialsDialog value={credentials} onClose={() => { setCredentials(undefined); onClose(); }} />;
   if (!sender || !action) return null;
 
@@ -189,7 +201,7 @@ export function SenderActionDialogs({ sender, action, onClose, onChanged, onDele
       if (action === "rotate") { const response = await api.rotateSenderKey(sender.id); setCredentials({ sender, credentials: response.credentials }); }
       if (action === "revoke") onChanged(await api.revokeSender(sender.id));
       if (action === "reactivate") { const response = await api.reactivateSender(sender.id); onChanged(response.sender); setCredentials(response); }
-      if (action === "delete") { await api.deleteSender(sender.id, Boolean(dependencies?.alert_rules), Boolean(dependencies?.events)); onDeleted(sender.id); }
+      if (action === "delete") { await api.deleteSender(sender.id, Boolean(dependencies?.alert_rules), Boolean(dependencies?.events), Boolean(dependencies?.monitoring_rules)); onDeleted(sender.id); }
       if (action !== "rotate" && action !== "reactivate") onClose();
     } catch (requestError) { setError(requestError instanceof Error ? requestError.message : "Não foi possível concluir a operação."); }
     finally { setBusy(false); }
@@ -198,7 +210,7 @@ export function SenderActionDialogs({ sender, action, onClose, onChanged, onDele
   const labels = { edit: "Salvar alterações", rotate: "Gerar nova chave", revoke: "Revogar acesso", reactivate: "Reativar e gerar chave", delete: "Excluir sender" };
   return (
     <ModalFrame title={titles[action]} description={action === "edit" ? "O identificador não pode ser alterado após a criação." : undefined} onClose={onClose} closeDisabled={busy} width="max-w-lg" footer={<><Button onClick={onClose} disabled={busy}>Cancelar</Button><Button onClick={() => void execute()} disabled={busy || (action === "edit" && name.trim().length < 3)} className={action === "delete" || action === "revoke" ? "border-red-900 text-red-300 hover:bg-red-950" : "border-zinc-500 bg-zinc-800 text-zinc-100 hover:border-zinc-400 hover:bg-zinc-700"}>{action === "rotate" && <KeyRound className="size-4" />}{action === "revoke" && <ShieldOff className="size-4" />}{action === "delete" && <Trash2 className="size-4" />}{busy ? "Processando..." : labels[action]}</Button></>}>
-      {action === "edit" ? <div className="space-y-4"><label className="block text-xs text-zinc-300">Identificador<Input value={sender.id} readOnly aria-readonly className="mt-2 w-full cursor-not-allowed text-zinc-500" /></label><label className="block text-xs text-zinc-300">Nome de exibição<Input value={name} maxLength={80} onChange={(event) => setName(event.target.value)} className="mt-2 w-full" /></label><label className="block text-xs text-zinc-300">Descrição<textarea value={description} maxLength={250} onChange={(event) => setDescription(event.target.value)} className="mt-2 h-24 w-full resize-none rounded-lg border border-zinc-700 bg-zinc-950 p-3 text-sm text-zinc-100 outline-none focus:ring-1 focus:ring-white/50" /></label></div> : <div className="space-y-3 text-sm leading-6 text-zinc-400"><p>{action === "rotate" && "A chave atual deixará de funcionar imediatamente. Atualize todas as aplicações que utilizam este sender."}{action === "revoke" && "A chave atual será invalidada. Logs e healthchecks serão recusados, mas os dados e regras existentes serão preservados."}{action === "reactivate" && "Uma nova chave será gerada e exibida uma única vez. A chave anterior não será restaurada."}{action === "delete" && dependencies && (dependencies.alert_rules || dependencies.events) ? `Este sender está associado a ${dependencies.alert_rules} regra(s) de alerta e ${dependencies.events} evento(s). Ao continuar, ele será removido dessas configurações; as que ficarem sem senders serão desativadas.` : action === "delete" ? "Os logs e os dados deste sender serão excluídos permanentemente." : ""}</p><code className="block rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-2 text-xs text-zinc-300">{sender.id}</code></div>}
+      {action === "edit" ? <div className="space-y-4"><label className="block text-xs text-zinc-300">Identificador<Input value={sender.id} readOnly aria-readonly className="mt-2 w-full cursor-not-allowed text-zinc-500" /></label><label className="block text-xs text-zinc-300">Nome de exibição<Input value={name} minLength={3} maxLength={80} onChange={(event) => setName(event.target.value)} className="mt-2 w-full" /><span className="mt-1.5 block text-[10px] text-zinc-600">Mínimo de 3 caracteres.</span></label><label className="block text-xs text-zinc-300">Descrição<textarea value={description} maxLength={250} onChange={(event) => setDescription(event.target.value)} className={`mt-2 h-24 w-full resize-none rounded-lg border p-3 text-sm text-zinc-100 ${CONTROL_SURFACE}`} /></label></div> : <div className="space-y-3 text-sm leading-6 text-zinc-400"><p>{action === "rotate" && "A chave atual deixará de funcionar imediatamente. Atualize todas as aplicações que utilizam este sender."}{action === "revoke" && "A chave atual será invalidada. Logs e healthchecks serão recusados, mas os dados e regras existentes serão preservados."}{action === "reactivate" && "Uma nova chave será gerada e exibida uma única vez. A chave anterior não será restaurada."}{action === "delete" && dependencies && (dependencies.alert_rules || dependencies.events || dependencies.monitoring_rules) ? `Este sender está associado a ${dependencies.alert_rules} regra(s) de alerta, ${dependencies.events} evento(s) e ${dependencies.monitoring_rules} regra(s) de monitoramento. Ao continuar, ele será removido dessas configurações; as que ficarem sem senders serão desativadas.` : action === "delete" ? "Os logs e os dados deste sender serão excluídos permanentemente." : ""}</p><code className="block rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-2 text-xs text-zinc-300">{sender.id}</code></div>}
       {error && <p role="alert" className="mt-4 rounded-lg border border-red-950 bg-red-950/20 px-3 py-2 text-xs text-red-300">{error}</p>}
     </ModalFrame>
   );

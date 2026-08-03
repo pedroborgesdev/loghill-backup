@@ -107,6 +107,50 @@ func TestAppendAppliesMBLimitWithoutSplittingJSONLines(t *testing.T) {
 	}
 }
 
+func TestInstanceLogLimitsAreIndependent(t *testing.T) {
+	repository, sender := createRepositorySender(t)
+	now := time.Now()
+	instances := []string{"ins_11111111111111111111111111111111", "ins_22222222222222222222222222222222"}
+	for _, id := range instances {
+		if err := repository.RegisterInstance(context.Background(), sender.ID, domain.SenderInstance{ID: id, CreatedAt: now}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	limit := domain.NumberUnitValue{Value: 1, Unit: domain.StorageMB}
+	for round := 0; round < 5; round++ {
+		for index, id := range instances {
+			message := strings.Repeat(string(rune('a'+index)), 300_000)
+			count, size, err := repository.Append(context.Background(), sender.ID, domain.LogEntry{Timestamp: now.Add(time.Duration(round) * time.Second), InstanceID: id, Severity: domain.Info, Message: message}, limit)
+			if err != nil {
+				t.Fatal(err)
+			}
+			sender.LogLineCount, sender.LogFileSize = count, size
+			if err = repository.Update(context.Background(), sender); err != nil {
+				t.Fatal(err)
+			}
+		}
+	}
+	dir, _ := repository.dir(sender.ID)
+	for _, id := range instances {
+		info, err := os.Stat(filepath.Join(dir, "instances", id, "logs.txt"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if info.Size() > 1024*1024 {
+			t.Fatalf("instance %s exceeded its own limit: %d", id, info.Size())
+		}
+		page, err := repository.ListLogs(context.Background(), sender.ID, domain.LogFilters{InstanceID: id, Page: 1, PageSize: 10, Order: "asc"})
+		if err != nil || len(page.Items) == 0 {
+			t.Fatalf("instance %s logs unavailable: items=%d err=%v", id, len(page.Items), err)
+		}
+		for _, entry := range page.Items {
+			if entry.InstanceID != id {
+				t.Fatalf("instance %s received log from %s", id, entry.InstanceID)
+			}
+		}
+	}
+}
+
 func TestCompactByLimitPreservesNewestEntries(t *testing.T) {
 	repository, sender := createRepositorySender(t)
 	for _, message := range []string{"one", "two", "three", "four"} {

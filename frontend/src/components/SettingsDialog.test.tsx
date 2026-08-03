@@ -16,6 +16,8 @@ vi.mock("../api", () => ({
 const currentSettings: Settings = {
   log_limit: { value: 10_000, unit: "lines" },
   inactive_preservation: { value: 2_000, unit: "lines" },
+  inactive_after_seconds: 300,
+  delete_inactive_after_days: 7,
   updated_at: "2026-07-31T10:00:00-03:00",
 };
 
@@ -36,6 +38,8 @@ beforeEach(() => {
     settings: {
       log_limit: { value: 9_000, unit: "lines" },
       inactive_preservation: { value: 2_000, unit: "lines" },
+      inactive_after_seconds: 300,
+      delete_inactive_after_days: 7,
     },
     updated_at: "2026-07-31T10:05:00-03:00",
   });
@@ -203,6 +207,8 @@ describe("configurações do sistema", () => {
     expect(updateMock).toHaveBeenCalledWith({
       log_limit: { value: 9_000, unit: "lines" },
       inactive_preservation: { value: 2_000, unit: "lines" },
+      inactive_after_seconds: 300,
+      delete_inactive_after_days: 7,
     });
     expect(maximum).toBeInTheDocument();
     expect(await screen.findByText("Configurações salvas com sucesso.")).toBeInTheDocument();

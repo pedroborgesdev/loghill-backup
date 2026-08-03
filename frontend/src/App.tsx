@@ -6,6 +6,7 @@ import { SenderDetailsPage } from "./pages/SenderDetailsPage";
 import { SystemStatusPage } from "./pages/SystemStatusPage";
 import { AlertsPage } from "./pages/AlertsPage";
 import { EventsPage } from "./pages/EventsPage";
+import { MonitoringPage } from "./pages/MonitoringPage";
 
 export default function App() {
   return (
@@ -17,6 +18,7 @@ export default function App() {
           <Route path="senders/:sender" element={<SenderDetailsPage />} />
           <Route path="alerts" element={<AlertsPage />} />
           <Route path="events" element={<EventsPage />} />
+          <Route path="monitoring" element={<MonitoringPage />} />
           <Route path="status" element={<SystemStatusPage />} />
           <Route path="*" element={<NotFoundPage />} />
         </Route>

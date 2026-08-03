@@ -47,6 +47,17 @@ func validInput(key string, senders ...string) domain.EventInput {
 	return domain.EventInput{Name: "Processamento finalizado", Key: key, SenderIDs: senders, ActionType: domain.EventActionEmail, Recipients: []string{"dev@example.com"}, SubjectTemplate: "Finalizado — {{sender.name}}", MessageTemplate: "Protocolo: {{metadata.protocolo}}\n{{log.message}}", Enabled: true}
 }
 
+func TestEventWithoutEmailCanBeActive(t *testing.T) {
+	service, _, sender, _ := eventFixture(t)
+	event, err := service.Create(context.Background(), domain.EventInput{Name: "Somente monitoramento", Key: "somente_monitoramento", SenderIDs: []string{sender}, ActionType: domain.EventActionNone, Enabled: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if event.ActionType != domain.EventActionNone || len(event.Recipients) != 0 || event.SubjectTemplate != "" || !event.Enabled {
+		t.Fatalf("evento sem e-mail inválido: %#v", event)
+	}
+}
+
 func TestEventCRUDMatchingAndKeyRules(t *testing.T) {
 	service, _, senderA, senderB := eventFixture(t)
 	ctx := context.Background()

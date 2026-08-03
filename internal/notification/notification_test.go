@@ -146,7 +146,7 @@ func TestTemplateEscapesHTMLAndKeepsFullBody(t *testing.T) {
 
 func TestTemplateRendersBeautifulProviderTestWithoutBracketedSubject(t *testing.T) {
 	renderer := NewTemplate("https://logs.example.com")
-	message, err := renderer.RenderProviderTest("dev@example.com")
+	message, err := renderer.RenderProviderTest("dev@example.com", domain.EmailProviderOutlook)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -163,6 +163,22 @@ func TestTemplateRendersBeautifulProviderTestWithoutBracketedSubject(t *testing.
 	}
 	if !strings.Contains(message.Text, "A integração do LogHill com o Outlook está funcionando") {
 		t.Fatal("provider test plain-text fallback is incomplete")
+	}
+}
+
+func TestTemplateRendersGmailProviderTestWithoutOutlookReferences(t *testing.T) {
+	renderer := NewTemplate("https://logs.example.com")
+	message, err := renderer.RenderProviderTest("dev@example.com", domain.EmailProviderGmail)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, expected := range []string{"Gmail", "SMTP com STARTTLS", "Gmail via SMTP"} {
+		if !strings.Contains(message.HTML, expected) && !strings.Contains(message.Text, expected) {
+			t.Fatalf("gmail provider test email is missing %q", expected)
+		}
+	}
+	if strings.Contains(message.HTML, "Outlook") || strings.Contains(message.HTML, "Microsoft 365") || strings.Contains(message.HTML, "Microsoft Graph") || strings.Contains(message.Text, "Outlook") || strings.Contains(message.Text, "Microsoft 365") {
+		t.Fatal("gmail provider test email contains an Outlook reference")
 	}
 }
 

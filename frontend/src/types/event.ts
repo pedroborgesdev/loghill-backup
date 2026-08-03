@@ -2,7 +2,7 @@ import type { DeliveryStatus } from "./alert";
 import type { Pagination } from "./api";
 import type { EmailSettings } from "./email";
 
-export type EventActionType = "email";
+export type EventActionType = "none" | "email";
 
 export interface EventDefinition {
   id: string;

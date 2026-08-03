@@ -22,7 +22,7 @@ describe("controles temáticos", () => {
     expect(container.querySelector("select")).toBeNull();
     await userEvent.click(screen.getByRole("button", { name: "Intervalo" }));
     expect(screen.getByRole("listbox", { name: "Intervalo" })).toHaveClass(
-      "z-[190]",
+      "z-[350]",
     );
     await userEvent.click(screen.getByRole("option", { name: "1 minuto" }));
     expect(onChange).toHaveBeenCalledWith(60);

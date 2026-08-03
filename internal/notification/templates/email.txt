@@ -1,0 +1,21 @@
+LOGHILL — {{.Kicker}}
+
+{{.Headline}}
+{{.Description}}
+
+MENSAGEM
+{{.Message}}
+
+{{if .ProviderTest}}Provedor{{else}}Sender{{end}}: {{.SenderName}}
+{{if .ProviderTest}}Integração{{else}}Identificador{{end}}: {{.SenderID}}
+Status: {{.SenderStatus}}
+{{if not .ProviderTest}}Severidade: {{.Severity}}
+Horário do log: {{.Timestamp}}
+{{end}}Enviado em: {{.SentAt}}
+
+{{if .HasMetadata}}METADADOS
+{{.Metadata}}
+
+{{end}}{{.ButtonLabel}}: {{.Link}}
+
+Enviado automaticamente pelo LogHill.

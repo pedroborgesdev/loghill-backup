@@ -27,8 +27,8 @@ describe("AlertsPage", () => {
     expect(await screen.findByText("Nenhum alerta configurado")).toBeInTheDocument();
     await userEvent.click(screen.getAllByRole("button", { name: "Novo alerta" })[0]);
     expect(screen.getByRole("dialog", { name: "Novo alerta de e-mail" })).toBeInTheDocument();
-    expect(screen.getByText("O Outlook ainda não está configurado e habilitado.")).toBeInTheDocument();
-    await userEvent.click(screen.getAllByRole("button", { name: "Configurar Outlook" }).at(-1)!);
+    expect(screen.getByText("Nenhum e-mail está configurado e habilitado.")).toBeInTheDocument();
+    await userEvent.click(screen.getAllByRole("button", { name: "Configurar e-mail" }).at(-1)!);
     expect(openEmailSettings).toHaveBeenCalled();
   });
 

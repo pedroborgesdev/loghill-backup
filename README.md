@@ -20,13 +20,13 @@ O projeto separa responsabilidades em camadas:
 - `frontend`: React, TypeScript, Vite e Tailwind.
 - `web/dist`: build incorporado com `go:embed`.
 
-Cada sender é armazenado em `data/senders/{sender}/`, com `sender.json` e `logs.txt`.
+Cada sender é armazenado em `data/senders/{sender}/`. Seus metadados ficam em `sender.json`, enquanto os logs são separados fisicamente em `instances/{instance-id}/logs.txt`; o `logs.txt` da raiz é mantido apenas para dados legados sem instância.
 
 ## Decisões técnicas
 
-- **Limite de armazenamento:** o limite por sender é configurável entre 0 e 10.000 em linhas ou MB. A escrita continua append-only e só compacta após ultrapassar o limite, usando uma margem interna de 5% para evitar reescrita a cada entrada.
+- **Limite de armazenamento:** o limite é configurável entre 0 e 10.000 em linhas ou MB e vale integralmente para cada instância. A escrita continua append-only e só compacta após ultrapassar o limite, usando uma margem interna de 5% para evitar reescrita a cada entrada.
 - **Inatividade:** log ou healthcheck contam como atividade por padrão. Após cinco minutos, o sender fica `inactive` e preserva o volume configurado em linhas ou MB.
-- **Expiração:** depois de sete dias inativo, `logs.txt` é removido e `sender.json` permanece com status `expired`. Um sender expirado não pode ser reativado.
+- **Expiração:** depois de sete dias inativo, os arquivos de logs das instâncias são removidos e `sender.json` permanece com status `expired`. Um sender expirado não pode ser reativado.
 - **Concorrência:** cada sender possui um `sync.RWMutex`; senders distintos nunca disputam um lock global de escrita.
 - **Persistência segura:** metadados e compactações usam arquivo temporário, `Sync`, fechamento e rename.
 - **Configuração dinâmica:** `data/config.json` usa o mesmo fluxo atômico e um `RWMutex`. Alterações passam a valer no próximo log ou ciclo de manutenção, sem reinício.
@@ -162,7 +162,7 @@ curl "http://localhost:8080/api/v1/senders/automacao-teste/logs?severity=ERROR,W
 
 ## Configuração
 
-A infraestrutura é configurada por variáveis de ambiente e não depende de arquivo `.env`. Os limites editáveis da interface são persistidos em `data/config.json`; esse arquivo é criado automaticamente com 10.000 linhas de limite máximo e preservação de 2.000 linhas após inatividade.
+A infraestrutura é configurada por variáveis de ambiente e não depende de arquivo `.env`. Os valores editáveis da interface são persistidos em `data/config.json`; esse arquivo é criado automaticamente com 10.000 linhas de limite máximo, preservação de 2.000 linhas, inatividade após 300 segundos e exclusão após 7 dias.
 
 As unidades internas aceitas são `lines` e `mb`, considerando `1 MB = 1024 × 1024 bytes`. O valor `0` desativa o limite máximo; para preservação, `0` esvazia o arquivo quando o sender se torna inativo. Em MB, a leitura ocorre a partir do fim e somente entradas JSON Lines completas são mantidas. Quando ambas as opções usam a mesma unidade, a preservação não pode superar o limite máximo, exceto quando o máximo é `0`.
 

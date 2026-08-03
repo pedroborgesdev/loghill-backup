@@ -3,7 +3,6 @@
 Crie o sender pela interface, copie ID e chave e configure:
 
     LOG_API_URL=http://localhost:8080
-    LOG_SENDER_ID=simulador-python
     LOG_SENDER_KEY=snd_...
 
 Depois execute ``python examples/python_log_client.py``.
@@ -67,22 +66,26 @@ class LogHillHandler(logging.Handler):
 
     def __init__(
         self,
-        sender_id: str,
         sender_key: str,
         base_url: str = "http://localhost:8080",
         healthcheck_interval: float = 60.0,
         timeout: float = 10.0,
     ) -> None:
         super().__init__()
-        if not sender_id.strip():
-            raise ValueError("sender_id é obrigatório")
         if not sender_key.startswith("snd_"):
             raise ValueError("sender_key deve ser a chave exibida pelo LogHill")
         self.base_url = base_url.rstrip("/")
-        self.sender_id = sender_id.strip()
+        self.sender_id = ""
         self._sender_key = sender_key
         self.healthcheck_interval = healthcheck_interval
         self.timeout = timeout
+        self.instance_id = ""
+        initialized = self._post(
+            "/api/v1/instances/init",
+            {},
+        )
+        self.instance_id = str(initialized["instance_id"])
+        self.sender_id = str(initialized["sender"])
         self._stop_event = threading.Event()
         self._health_thread = threading.Thread(
             target=self._healthcheck_loop,
@@ -147,14 +150,17 @@ class LogHillHandler(logging.Handler):
                 print(f"Falha no healthcheck do LogHill: {error}")
 
     def _post(self, path: str, payload: dict[str, Any]) -> dict[str, Any]:
+        headers = {
+            "Accept": "application/json",
+            "Content-Type": "application/json",
+            "X-Sender-Key": self._sender_key,
+        }
+        if self.instance_id:
+            headers["X-Sender-Instance-ID"] = self.instance_id
         request = urllib.request.Request(
             f"{self.base_url}{path}",
             data=json.dumps(payload, ensure_ascii=False).encode("utf-8"),
-            headers={
-                "Accept": "application/json",
-                "Content-Type": "application/json",
-                "X-Sender-Key": self._sender_key,
-            },
+            headers=headers,
             method="POST",
         )
         try:
@@ -182,11 +188,11 @@ class LogHillHandler(logging.Handler):
         return "TRACE"
 
 
-def create_logger(sender_id: str, sender_key: str, base_url: str = "http://localhost:8080") -> LogHillLogger:
-    log = LogHillLogger(sender_id)
+def create_logger(sender_key: str, base_url: str = "http://localhost:8080") -> LogHillLogger:
+    log = LogHillLogger("loghill")
     log.setLevel(logging.DEBUG)
     log.propagate = False
-    log.addHandler(LogHillHandler(sender_id, sender_key, base_url))
+    log.addHandler(LogHillHandler(sender_key, base_url))
     return log
 
 
@@ -200,7 +206,7 @@ def simulate_flow(log: LogHillLogger) -> None:
         time.sleep(1)
         log.debug("teste 2 - detalhes do processamento")
         time.sleep(1)
-        log.warning("teste 3 - processamento mais lento que o esperado")
+        log.warning("teste 3 - processamento mais lento que o esperado, ECONNRESET")
         time.sleep(1)
         log.error("teste 4 - falha simulada")
         time.sleep(1)
@@ -208,12 +214,11 @@ def simulate_flow(log: LogHillLogger) -> None:
 
 
 if __name__ == "__main__":
-    sender_id = "automacao"
-    sender_key = "snd_WBZOs1rtsHIRPkaEkD9AHmNC1WjdMFHM"
-    logger = create_logger(sender_id, sender_key, os.getenv("LOG_API_URL", "http://localhost:8080"))
+    sender_key = "snd_ah_3x-SRvCMBhuvFHKdN175yQJ5tfIwL"
+    logger = create_logger(sender_key, os.getenv("LOG_API_URL", "http://localhost:8080"))
     try:
         simulate_flow(logger)
-        print(f"Logs enviados pelo sender {sender_id}.")
+        print("Logs enviados pelo sender identificado pela chave.")
     finally:
         for log_handler in logger.handlers[:]:
             log_handler.close()

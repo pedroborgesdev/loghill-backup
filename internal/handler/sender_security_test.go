@@ -109,3 +109,56 @@ func TestRotateRevokeAndReactivateSenderEndpoints(t *testing.T) {
 		t.Fatalf("reactivate status=%d body=%s", reactivate.Code, reactivate.Body.String())
 	}
 }
+
+func TestSenderInstancesSeparateLogsWithoutCreatingNewSenders(t *testing.T) {
+	router := settingsRouter(t, false)
+	createdResponse := senderRequest(router, http.MethodPost, "/api/v1/senders", `{"name":"Worker Paralelo"}`, "", "")
+	var created struct {
+		Credentials service.SenderCredentials `json:"credentials"`
+	}
+	if err := json.Unmarshal(createdResponse.Body.Bytes(), &created); err != nil {
+		t.Fatal(err)
+	}
+	initInstance := func() string {
+		response := senderRequest(router, http.MethodPost, "/api/v1/senders/worker-paralelo/instances/init", `{}`, "", created.Credentials.SenderKey)
+		if response.Code != http.StatusCreated {
+			t.Fatalf("instance init status=%d body=%s", response.Code, response.Body.String())
+		}
+		var value struct {
+			InstanceID string `json:"instance_id"`
+		}
+		if err := json.Unmarshal(response.Body.Bytes(), &value); err != nil {
+			t.Fatal(err)
+		}
+		return value.InstanceID
+	}
+	first, second := initInstance(), initInstance()
+	if first == second || !strings.HasPrefix(first, "ins_") || !strings.HasPrefix(second, "ins_") {
+		t.Fatalf("instance IDs are not unique: %q %q", first, second)
+	}
+	keyOnly := senderRequest(router, http.MethodPost, "/api/v1/instances/init", `{}`, "", created.Credentials.SenderKey)
+	if keyOnly.Code != http.StatusCreated || !strings.Contains(keyOnly.Body.String(), `"sender":"worker-paralelo"`) || !strings.Contains(keyOnly.Body.String(), `"instance_id":"ins_`) {
+		t.Fatalf("key-only init status=%d body=%s", keyOnly.Code, keyOnly.Body.String())
+	}
+	postLog := func(instanceID, message string) {
+		request := httptest.NewRequest(http.MethodPost, "/api/v1/logs", bytes.NewBufferString(`{"sender":"worker-paralelo","severity":"INFO","message":"`+message+`"}`))
+		request.Header.Set("Content-Type", "application/json")
+		request.Header.Set("X-Sender-Key", created.Credentials.SenderKey)
+		request.Header.Set("X-Sender-Instance-ID", instanceID)
+		response := httptest.NewRecorder()
+		router.ServeHTTP(response, request)
+		if response.Code != http.StatusAccepted {
+			t.Fatalf("log status=%d body=%s", response.Code, response.Body.String())
+		}
+	}
+	postLog(first, "primeira")
+	postLog(second, "segunda")
+	firstLogs := senderRequest(router, http.MethodGet, "/api/v1/senders/worker-paralelo/logs?instance_id="+first, "", "", "")
+	if !strings.Contains(firstLogs.Body.String(), "primeira") || strings.Contains(firstLogs.Body.String(), "segunda") {
+		t.Fatalf("first instance mixed logs: %s", firstLogs.Body.String())
+	}
+	instances := senderRequest(router, http.MethodGet, "/api/v1/senders/worker-paralelo/instances", "", "", "")
+	if instances.Code != http.StatusOK || !strings.Contains(instances.Body.String(), first) || !strings.Contains(instances.Body.String(), second) {
+		t.Fatalf("instances status=%d body=%s", instances.Code, instances.Body.String())
+	}
+}

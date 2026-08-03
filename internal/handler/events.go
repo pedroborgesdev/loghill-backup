@@ -24,11 +24,11 @@ func (a *API) listEvents(c *gin.Context) {
 		enabled = &value
 	}
 	action := domain.EventActionType(c.Query("action_type"))
-	if action != "" && action != domain.EventActionEmail {
+	if action != "" && action != domain.EventActionEmail && action != domain.EventActionNone {
 		c.JSON(http.StatusUnprocessableEntity, eventErrorBody(c, "INVALID_EVENT_FILTER", "O filtro action_type é inválido.", "action_type"))
 		return
 	}
-	page := a.events.List(domain.EventFilters{Search: c.Query("search"), SenderID: c.Query("sender_id"), ActionType: action, Enabled: enabled, Page: positive(c, "page", 1, 1_000_000), PageSize: positive(c, "page_size", 20, a.cfg.MaxPageSize)})
+	page := a.events.List(domain.EventFilters{Search: c.Query("search"), SenderName: c.Query("sender_name"), ActionType: action, Enabled: enabled, Page: positive(c, "page", 1, 1_000_000), PageSize: positive(c, "page_size", 20, a.cfg.MaxPageSize)})
 	settings, _ := a.emailConfig.Safe()
 	c.JSON(http.StatusOK, gin.H{"items": page.Items, "pagination": page.Pagination, "summary": a.events.Summary(), "email_provider": settings})
 }
@@ -97,6 +97,14 @@ func (a *API) updateEventStatus(c *gin.Context) {
 
 func (a *API) deleteEvent(c *gin.Context) {
 	id := c.Param("eventID")
+	if a.monitoring != nil {
+		if usage := a.monitoring.EventUsageCount(id); usage > 0 {
+			body := errBody(c, "EVENT_USED_BY_MONITORING", "O evento está associado a regras de monitoramento.")
+			body["monitoring_rules"] = usage
+			c.JSON(http.StatusConflict, body)
+			return
+		}
+	}
 	if err := a.events.Delete(id); err != nil {
 		a.failEvent(c, err)
 		return
@@ -153,7 +161,7 @@ func (a *API) failEvent(c *gin.Context, err error) {
 	case errors.Is(err, events.ErrAlreadyExists):
 		c.JSON(http.StatusConflict, eventErrorBody(c, "EVENT_ALREADY_EXISTS", "Já existe um evento com esta chave.", "key"))
 	case errors.Is(err, events.ErrEmailNotConfigured):
-		c.JSON(http.StatusConflict, eventErrorBody(c, "OUTLOOK_NOT_CONFIGURED", "Configure e habilite o Outlook antes de ativar o evento.", "provider"))
+		c.JSON(http.StatusConflict, eventErrorBody(c, "EMAIL_NOT_CONFIGURED", "Configure e habilite um e-mail antes de ativar o evento.", "provider"))
 	case errors.As(err, &validationError):
 		status := http.StatusUnprocessableEntity
 		if validationError.Code == "EVENT_KEY_IMMUTABLE" {

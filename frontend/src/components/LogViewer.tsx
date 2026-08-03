@@ -1,5 +1,7 @@
 import {
+  ArrowDown,
   ArrowUp,
+  ArrowUpDown,
   Braces,
   ChevronDown,
   ChevronUp,
@@ -17,9 +19,10 @@ import {
   useRef,
   useState,
 } from "react";
+import { useVirtualizer } from "@tanstack/react-virtual";
 import type { DisplayLogEntry, StreamState } from "../hooks/useLogStream";
 import { formatDate, formatLogTime } from "../utils/format";
-import { isLogScrollKey, shouldFreezeLogViewport } from "../utils/logScroll";
+import { isLogScrollKey } from "../utils/logScroll";
 import { severityStyles } from "../utils/severity";
 import { Button, EmptyState, IconButton, StatusIndicator } from "./ui";
 import { EventBadge } from "./events/EventBadge";
@@ -185,6 +188,7 @@ export function LogViewer({
   const [metadataExpanded, setMetadataExpanded] = useState<Set<string>>(new Set());
   const [messagesExpanded, setMessagesExpanded] = useState<Set<string>>(new Set());
   const [unseenLogCount, setUnseenLogCount] = useState(0);
+  const [newestAtBottom, setNewestAtBottom] = useState(true);
   const previousLiveCount = useRef(liveCount);
   const userInteracting = useRef(false);
   const manualScrollIntent = useRef(false);
@@ -193,6 +197,28 @@ export function LogViewer({
   const interactionTimer = useRef<number | null>(null);
   const compactView = density === "compact";
   following.current = autoScroll;
+  const displayedEntries = useMemo(
+    () => newestAtBottom ? [...entries].reverse() : entries,
+    [entries, newestAtBottom],
+  );
+  const rowVirtualizer = useVirtualizer({
+    count: displayedEntries.length,
+    getScrollElement: () => scrollElement.current,
+    estimateSize: () => compactView ? 25 : 34,
+    getItemKey: (index) => displayedEntries[index]?.ui_id ?? index,
+    overscan: 12,
+    initialRect: { width: 800, height: 600 },
+  });
+  const virtualRows = import.meta.env.MODE === "test"
+    ? displayedEntries.map((_, index) => ({ index, start: index * (compactView ? 25 : 34) }))
+    : rowVirtualizer.getVirtualItems();
+  const virtualSize = rowVirtualizer.getTotalSize();
+
+  const latestScrollTop = useCallback(() => {
+    const container = scrollElement.current;
+    if (!container) return 0;
+    return newestAtBottom ? container.scrollHeight - container.clientHeight : 0;
+  }, [newestAtBottom]);
 
   const captureViewportAnchor = useCallback(() => {
     const container = scrollElement.current;
@@ -202,33 +228,24 @@ export function LogViewer({
       return;
     }
 
-    const scrollTop = container.scrollTop;
-    let low = 0;
-    let high = rows.length - 1;
-    let candidate = 0;
-
-    while (low <= high) {
-      const middle = Math.floor((low + high) / 2);
-      const row = rows.item(middle) as HTMLElement;
-      if (row.offsetTop <= scrollTop) {
-        candidate = middle;
-        low = middle + 1;
-      } else {
-        high = middle - 1;
+    const containerRect = container.getBoundingClientRect();
+    const hasLayout = containerRect.height > 0 || (rows.item(0) as HTMLElement).getBoundingClientRect().height > 0;
+    let row = rows.item(0) as HTMLElement;
+    if (hasLayout) {
+      for (let index = 0; index < rows.length; index += 1) {
+        const candidate = rows.item(index) as HTMLElement;
+        if (candidate.getBoundingClientRect().bottom > containerRect.top) { row = candidate; break; }
       }
-    }
-
-    let row = rows.item(candidate) as HTMLElement;
-    if (
-      row.offsetTop + row.offsetHeight <= scrollTop &&
-      candidate + 1 < rows.length
-    ) {
-      row = rows.item(candidate + 1) as HTMLElement;
+    } else {
+      for (let index = 0; index < rows.length; index += 1) {
+        const candidate = rows.item(index) as HTMLElement;
+        if (candidate.offsetTop + candidate.offsetHeight > container.scrollTop) { row = candidate; break; }
+      }
     }
 
     const key = row.dataset.logKey;
     viewportAnchor.current = key
-      ? { key, offset: row.offsetTop - scrollTop }
+      ? { key, offset: hasLayout ? row.getBoundingClientRect().top - containerRect.top : row.offsetTop - container.scrollTop }
       : null;
   }, []);
 
@@ -248,7 +265,12 @@ export function LogViewer({
       }
 
       if (anchorRow) {
-        const nextScrollTop = Math.max(0, anchorRow.offsetTop - anchor.offset);
+        const containerRect = container.getBoundingClientRect();
+        const anchorRect = anchorRow.getBoundingClientRect();
+        const hasLayout = containerRect.height > 0 || anchorRect.height > 0;
+        const nextScrollTop = Math.max(0, hasLayout
+          ? container.scrollTop + anchorRect.top - containerRect.top - anchor.offset
+          : anchorRow.offsetTop - anchor.offset);
         if (Math.abs(container.scrollTop - nextScrollTop) > 0.5) {
           container.scrollTop = nextScrollTop;
         }
@@ -260,7 +282,7 @@ export function LogViewer({
     autoScroll,
     captureViewportAnchor,
     density,
-    entries,
+    displayedEntries,
     messagesExpanded,
     metadataExpanded,
   ]);
@@ -285,30 +307,46 @@ export function LogViewer({
     }
 
     if (delta > 0) {
-      const shouldFreeze = shouldFreezeLogViewport({
-        autoScroll: following.current,
-        pinnedToLatest: pinnedToLatest.current,
-        userInteracting: userInteracting.current,
-      });
+      const shouldFreeze = !following.current;
       if (shouldFreeze) {
         setUnseenLogCount((current) => current + delta);
       } else {
         setUnseenLogCount(0);
+        window.requestAnimationFrame(() => {
+          const container = scrollElement.current;
+          if (container) container.scrollTop = latestScrollTop();
+        });
       }
       return;
     }
-  }, [autoScroll, entries, liveCount, streamState]);
+  }, [autoScroll, displayedEntries, latestScrollTop, liveCount, streamState]);
 
   const goToLatest = (smooth: boolean) => {
+    if (!following.current) {
+      following.current = true;
+      onAutoScrollChange(true);
+    }
     pinnedToLatest.current = true;
     setUnseenLogCount(0);
     window.requestAnimationFrame(() => {
       scrollElement.current?.scrollTo({
-        top: 0,
+        top: latestScrollTop(),
         behavior: smooth ? "smooth" : "auto",
       });
     });
   };
+
+  useLayoutEffect(() => {
+    if (!autoScroll) return;
+    pinnedToLatest.current = true;
+    setUnseenLogCount(0);
+    window.requestAnimationFrame(() => {
+      window.requestAnimationFrame(() => {
+        const container = scrollElement.current;
+        if (container) container.scrollTop = latestScrollTop();
+      });
+    });
+  }, [autoScroll, displayedEntries.length, latestScrollTop, virtualSize]);
 
   const beginUserInteraction = (scrollIntent = false) => {
     userInteracting.current = true;
@@ -333,9 +371,25 @@ export function LogViewer({
     interactionTimer.current = window.setTimeout(() => {
       userInteracting.current = false;
       manualScrollIntent.current = false;
-      pinnedToLatest.current = (scrollElement.current?.scrollTop ?? 0) <= 2;
+      const container = scrollElement.current;
+      pinnedToLatest.current = container ? (newestAtBottom
+        ? container.scrollHeight - container.clientHeight - container.scrollTop <= 2
+        : container.scrollTop <= 2) : false;
     }, 180);
   };
+
+  const toggleDirection = () => {
+    const next = !newestAtBottom;
+    setNewestAtBottom(next);
+    localStorage.setItem("log-newest-at-bottom", String(next));
+    pinnedToLatest.current = true;
+    setUnseenLogCount(0);
+  };
+
+  useLayoutEffect(() => {
+    const container = scrollElement.current;
+    if (container) container.scrollTop = latestScrollTop();
+  }, [latestScrollTop]);
 
   const toggleFollow = () => {
     if (following.current) {
@@ -374,14 +428,22 @@ export function LogViewer({
       <span className="text-[10px] uppercase tracking-wider text-zinc-600">
         Console
       </span>
-      <div className="flex items-center gap-4">
+      <div className="flex items-center gap-2">
         <StatusIndicator {...connection} />
+        <Button
+          onClick={toggleDirection}
+          className="h-8 rounded-md px-3 text-xs"
+          title={newestAtBottom ? "Os logs mais recentes aparecem embaixo" : "Os logs mais recentes aparecem no topo"}
+        >
+          <ArrowUpDown className="size-3.5" />
+          {newestAtBottom ? "Recentes embaixo" : "Recentes no topo"}
+        </Button>
         <Button
           aria-pressed={autoScroll}
           onClick={toggleFollow}
           className={`h-8 rounded-md px-3 text-xs ${
             autoScroll
-              ? "border-cyan-800 bg-cyan-950/70 text-cyan-300 hover:border-cyan-700 hover:bg-cyan-950"
+              ? "border-zinc-700 bg-zinc-900 !text-emerald-400 hover:border-zinc-600 hover:bg-zinc-800"
               : "border-zinc-700 bg-zinc-900 text-zinc-400"
           }`}
         >
@@ -433,30 +495,36 @@ export function LogViewer({
         onTouchEnd={finishUserInteraction}
         onTouchMove={() => {
           beginUserInteraction(true);
-          disableFollow();
         }}
         onWheel={() => {
           beginUserInteraction(true);
-          disableFollow();
           finishUserInteraction();
         }}
         onKeyDown={(event) => {
           if (!isLogScrollKey(event.key)) return;
           beginUserInteraction(true);
-          disableFollow();
           finishUserInteraction();
         }}
         onScroll={(event) => {
-          pinnedToLatest.current = event.currentTarget.scrollTop <= 2;
-          if (manualScrollIntent.current) {
-            disableFollow();
-          }
+          pinnedToLatest.current = newestAtBottom
+            ? event.currentTarget.scrollHeight - event.currentTarget.clientHeight - event.currentTarget.scrollTop <= 2
+            : event.currentTarget.scrollTop <= 2;
+          if (manualScrollIntent.current) disableFollow();
           captureViewportAnchor();
         }}
       >
-        <div ref={rowsElement} className="relative w-full">
-          {entries.map((entry) => (
-            <div key={entry.ui_id} data-log-key={entry.ui_id}>
+        <div ref={rowsElement} className="relative w-full" style={{ height: virtualSize }}>
+          {virtualRows.map((virtualRow) => {
+            const entry = displayedEntries[virtualRow.index];
+            if (!entry) return null;
+            return <div
+              key={entry.ui_id}
+              ref={import.meta.env.MODE === "test" ? undefined : rowVirtualizer.measureElement}
+              data-index={virtualRow.index}
+              data-log-key={entry.ui_id}
+              className="absolute left-0 top-0 w-full"
+              style={{ transform: `translateY(${virtualRow.start}px)` }}
+            >
               <LogRow
                 entry={entry}
                 density={density}
@@ -465,8 +533,8 @@ export function LogViewer({
                 onToggleMetadata={() => toggle(setMetadataExpanded, entry.ui_id)}
                 onToggleMessage={() => toggle(setMessagesExpanded, entry.ui_id)}
               />
-            </div>
-          ))}
+            </div>;
+          })}
         </div>
       </div>
       <div className="pointer-events-none absolute bottom-3 right-4 flex flex-col items-end gap-2">
@@ -476,7 +544,7 @@ export function LogViewer({
             className="pointer-events-auto inline-flex h-8 items-center gap-2 rounded-lg border border-zinc-700 bg-zinc-900 px-3 text-xs text-zinc-200 shadow-lg shadow-black/30 hover:bg-zinc-800 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-white/50"
             onClick={() => goToLatest(true)}
           >
-            <ArrowUp className="size-3.5" />
+            {newestAtBottom ? <ArrowDown className="size-3.5" /> : <ArrowUp className="size-3.5" />}
             {unseenLogCount} novos logs
           </button>
         )}
@@ -485,7 +553,7 @@ export function LogViewer({
           className="pointer-events-auto border-zinc-700 bg-zinc-900 shadow-lg shadow-black/30"
           onClick={() => goToLatest(true)}
         >
-          <ArrowUp className="size-4" />
+          {newestAtBottom ? <ArrowDown className="size-4" /> : <ArrowUp className="size-4" />}
         </IconButton>
       </div>
     </div>

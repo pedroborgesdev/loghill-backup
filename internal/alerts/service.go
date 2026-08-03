@@ -56,7 +56,7 @@ func (s *Service) List(filters domain.AlertFilters) domain.AlertPage {
 		if filters.Severity != "" && !containsSeverity(alert.Severities, filters.Severity) {
 			continue
 		}
-		if query != "" && !strings.Contains(strings.ToLower(alert.Name+" "+strings.Join(alert.SenderNames, " ")+" "+strings.Join(alert.SenderIDs, " ")+" "+strings.Join(alert.Recipients, " ")), query) {
+		if query != "" && !strings.Contains(strings.ToLower(alert.Name+" "+strings.Join(alert.SenderNames, " ")+" "+strings.Join(alert.Recipients, " ")), query) {
 			continue
 		}
 		filtered = append(filtered, alert)
@@ -212,9 +212,6 @@ func (s *Service) validate(ctx context.Context, input domain.AlertInput) (domain
 	if len([]rune(input.Name)) < 3 || len([]rune(input.Name)) > 100 {
 		return input, nil, invalid("name", "O nome deve possuir entre 3 e 100 caracteres.")
 	}
-	if len(input.SenderIDs) == 0 {
-		return input, nil, invalid("sender_ids", "Selecione pelo menos um sender.")
-	}
 	uniqueSenderIDs := make(map[string]bool)
 	senders := make([]domain.Sender, 0, len(input.SenderIDs))
 	rawSenderIDs := append([]string(nil), input.SenderIDs...)
@@ -234,9 +231,6 @@ func (s *Service) validate(ctx context.Context, input domain.AlertInput) (domain
 		}
 		input.SenderIDs = append(input.SenderIDs, id)
 		senders = append(senders, sender)
-	}
-	if len(senders) == 0 {
-		return input, nil, invalid("sender_ids", "Selecione pelo menos um sender.")
 	}
 	if len(input.Severities) == 0 {
 		return input, senders, invalid("severities", "Selecione ao menos uma severidade.")
@@ -268,11 +262,8 @@ func (s *Service) validate(ctx context.Context, input domain.AlertInput) (domain
 			recipients = append(recipients, recipient)
 		}
 	}
-	if input.Provider == "" {
-		input.Provider = domain.EmailProviderOutlook
-	}
-	if input.Provider != domain.EmailProviderOutlook {
-		return input, senders, &ValidationError{Code: "EMAIL_PROVIDER_NOT_AVAILABLE", Field: "provider", Message: "Somente o provedor Outlook está disponível."}
+	if runtime, err := s.emailConfig.Runtime(); err == nil {
+		input.Provider = runtime.Provider
 	}
 	if input.Enabled && !s.emailConfig.IsReady() {
 		return input, senders, ErrEmailNotConfigured

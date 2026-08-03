@@ -26,6 +26,11 @@ type DeliveryRecorder interface {
 	RecordDelivery(id string, test bool, status domain.DeliveryStatus, message string) error
 }
 
+type executionDeliveryRecorder interface {
+	MarkExecutionProcessing(domain.Notification)
+	RecordExecutionDelivery(domain.Notification, domain.DeliveryStatus, string, int)
+}
+
 type Renderer interface {
 	Render(domain.Notification) (domain.EmailMessage, error)
 }
@@ -129,7 +134,11 @@ func (d *Dispatcher) Shutdown(ctx context.Context) error {
 func (d *Dispatcher) rejectionWorker() {
 	defer d.workerWG.Done()
 	for value := range d.rejections {
-		_ = d.recorder.RecordDelivery(notificationID(value), value.Test, domain.DeliveryFailed, "A fila de notificações está cheia; o log foi preservado, mas o e-mail não foi enfileirado.")
+		message := "A fila de notificações está cheia; o log foi preservado, mas o e-mail não foi enfileirado."
+		_ = d.recorder.RecordDelivery(notificationID(value), value.Test, domain.DeliveryFailed, message)
+		if recorder, ok := d.recorder.(executionDeliveryRecorder); ok {
+			recorder.RecordExecutionDelivery(value, domain.DeliveryFailed, message, 0)
+		}
 	}
 }
 
@@ -145,15 +154,24 @@ func (d *Dispatcher) deliverSafely(value domain.Notification) {
 		if recovered := recover(); recovered != nil {
 			message := "Falha interna ao preparar a notificação."
 			_ = d.recorder.RecordDelivery(notificationID(value), value.Test, domain.DeliveryFailed, message)
+			if recorder, ok := d.recorder.(executionDeliveryRecorder); ok {
+				recorder.RecordExecutionDelivery(value, domain.DeliveryFailed, message, 1)
+			}
 			slog.Error("email notification worker recovered", "source_type", notificationSource(value), "source_id", notificationID(value))
 		}
 	}()
 	if err := d.recorder.MarkPending(notificationID(value), value.Test); err != nil {
 		slog.Error("could not mark email notification pending", "source_type", notificationSource(value), "source_id", notificationID(value), "error", err)
 	}
+	if recorder, ok := d.recorder.(executionDeliveryRecorder); ok {
+		recorder.MarkExecutionProcessing(value)
+	}
 	message, err := d.renderer.Render(value)
 	if err != nil {
 		_ = d.recorder.RecordDelivery(notificationID(value), value.Test, domain.DeliveryFailed, "Não foi possível renderizar o e-mail.")
+		if recorder, ok := d.recorder.(executionDeliveryRecorder); ok {
+			recorder.RecordExecutionDelivery(value, domain.DeliveryFailed, "Não foi possível renderizar o e-mail.", 1)
+		}
 		return
 	}
 	for attempt := 0; attempt <= d.maxRetries; attempt++ {
@@ -162,6 +180,9 @@ func (d *Dispatcher) deliverSafely(value domain.Notification) {
 		cancel()
 		if err == nil {
 			_ = d.recorder.RecordDelivery(notificationID(value), value.Test, domain.DeliverySent, "")
+			if recorder, ok := d.recorder.(executionDeliveryRecorder); ok {
+				recorder.RecordExecutionDelivery(value, domain.DeliverySent, "", attempt+1)
+			}
 			slog.Info("email notification delivered", "source_type", notificationSource(value), "source_id", notificationID(value), "sender_id", value.Sender.ID, "severity", value.Entry.Severity, "test", value.Test, "attempt", attempt+1)
 			return
 		}
@@ -178,6 +199,9 @@ func (d *Dispatcher) deliverSafely(value domain.Notification) {
 	}
 	safe := safeDeliveryError(err)
 	_ = d.recorder.RecordDelivery(notificationID(value), value.Test, domain.DeliveryFailed, safe)
+	if recorder, ok := d.recorder.(executionDeliveryRecorder); ok {
+		recorder.RecordExecutionDelivery(value, domain.DeliveryFailed, safe, d.maxRetries+1)
+	}
 	slog.Error("email notification delivery failed", "source_type", notificationSource(value), "source_id", notificationID(value), "sender_id", value.Sender.ID, "severity", value.Entry.Severity, "test", value.Test, "attempts", d.maxRetries+1, "error", safe)
 }
 

@@ -37,6 +37,7 @@ type Sender struct {
 	LogLineCount      int64        `json:"log_line_count"`
 	LogFileSize       int64        `json:"log_file_size"`
 	RecentErrorCount  int64        `json:"recent_error_count,omitempty"`
+	InstanceCount     int          `json:"instance_count"`
 }
 
 type LogSeverity string
@@ -62,6 +63,7 @@ func ParseSeverity(v string) (LogSeverity, error) {
 type LogEntry struct {
 	Timestamp         time.Time      `json:"timestamp"`
 	SenderID          string         `json:"sender,omitempty"`
+	InstanceID        string         `json:"instance_id,omitempty"`
 	Severity          LogSeverity    `json:"severity"`
 	Message           string         `json:"message"`
 	Event             string         `json:"event,omitempty"`
@@ -87,11 +89,29 @@ type SenderPage struct {
 type LogFilters struct {
 	Severities     map[LogSeverity]bool
 	Search         string
+	InstanceID     string
 	EventMode      string
 	EventKey       string
 	Start, End     *time.Time
 	Page, PageSize int
 	Order          string
+}
+
+type SenderInstance struct {
+	ID                string       `json:"id"`
+	CreatedAt         time.Time    `json:"created_at"`
+	LastActivityAt    *time.Time   `json:"last_activity_at,omitempty"`
+	LastHealthcheckAt *time.Time   `json:"last_healthcheck_at,omitempty"`
+	LogLineCount      int64        `json:"log_line_count"`
+	LogFileSize       int64        `json:"log_file_size"`
+	Legacy            bool         `json:"legacy,omitempty"`
+	Status            SenderStatus `json:"status"`
+}
+
+type SenderInstancePage struct {
+	Sender     string           `json:"sender"`
+	Items      []SenderInstance `json:"items"`
+	Pagination Pagination       `json:"pagination"`
 }
 type SenderFilters struct {
 	Status                    SenderStatus
@@ -116,6 +136,8 @@ type NumberUnitValue struct {
 type Settings struct {
 	LogLimit             NumberUnitValue `json:"log_limit"`
 	InactivePreservation NumberUnitValue `json:"inactive_preservation"`
+	InactiveAfterSeconds int             `json:"inactive_after_seconds"`
+	DeleteInactiveDays   int             `json:"delete_inactive_after_days"`
 	UpdatedAt            time.Time       `json:"updated_at"`
 }
 
@@ -130,6 +152,8 @@ func DefaultSettings(now time.Time) Settings {
 	return Settings{
 		LogLimit:             NumberUnitValue{Value: 10_000, Unit: StorageLines},
 		InactivePreservation: NumberUnitValue{Value: 2_000, Unit: StorageLines},
+		InactiveAfterSeconds: 300,
+		DeleteInactiveDays:   7,
 		UpdatedAt:            now,
 	}
 }
@@ -148,6 +172,12 @@ func ValidateSettings(value Settings) error {
 			Field:   "inactive_preservation.value",
 			Message: "A quantidade preservada não pode ser maior que o limite máximo.",
 		}
+	}
+	if value.InactiveAfterSeconds < 1 || value.InactiveAfterSeconds > 86_400 {
+		return &SettingsValidationError{Field: "inactive_after_seconds", Message: "Informe um tempo entre 1 e 86.400 segundos."}
+	}
+	if value.DeleteInactiveDays < 1 || value.DeleteInactiveDays > 3_650 {
+		return &SettingsValidationError{Field: "delete_inactive_after_days", Message: "Informe um prazo entre 1 e 3.650 dias."}
 	}
 	return nil
 }

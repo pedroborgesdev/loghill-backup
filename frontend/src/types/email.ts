@@ -9,11 +9,22 @@ export interface OutlookSettings {
   managed_by_environment: boolean;
 }
 
+export interface GmailSettings {
+  host: string;
+  port: number;
+  username: string;
+  password_configured: boolean;
+  from: string;
+  sender_name: string;
+  managed_by_environment: boolean;
+}
+
 export interface EmailSettings {
   provider: EmailProviderType;
   enabled: boolean;
   configured: boolean;
   outlook: OutlookSettings;
+  gmail: GmailSettings;
   providers: Array<{ id: EmailProviderType; enabled: boolean; available: boolean }>;
   updated_at: string;
   last_test_at: string | null;
@@ -31,5 +42,12 @@ export interface EmailSettingsInput {
     sender_email: string;
     sender_name: string;
   };
+  gmail: {
+    host: string;
+    port: number;
+    username: string;
+    password?: string;
+    from: string;
+    sender_name: string;
+  };
 }
-

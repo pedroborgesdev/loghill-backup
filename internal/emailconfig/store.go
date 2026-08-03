@@ -28,10 +28,20 @@ type OutlookStored struct {
 	SenderName            string `json:"sender_name"`
 }
 
+type GmailStored struct {
+	Host              string `json:"host"`
+	Port              int    `json:"port"`
+	Username          string `json:"username"`
+	PasswordEncrypted string `json:"password_encrypted,omitempty"`
+	From              string `json:"from"`
+	SenderName        string `json:"sender_name"`
+}
+
 type Stored struct {
 	Provider       domain.EmailProviderType `json:"provider"`
 	Enabled        bool                     `json:"enabled"`
 	Outlook        OutlookStored            `json:"outlook"`
+	Gmail          GmailStored              `json:"gmail"`
 	UpdatedAt      time.Time                `json:"updated_at"`
 	LastTestAt     *time.Time               `json:"last_test_at"`
 	LastTestStatus string                   `json:"last_test_status,omitempty"`
@@ -46,10 +56,20 @@ type OutlookInput struct {
 	SenderName   string `json:"sender_name"`
 }
 
+type GmailInput struct {
+	Host       string `json:"host"`
+	Port       int    `json:"port"`
+	Username   string `json:"username"`
+	Password   string `json:"password,omitempty"`
+	From       string `json:"from"`
+	SenderName string `json:"sender_name"`
+}
+
 type Input struct {
 	Provider domain.EmailProviderType `json:"provider"`
 	Enabled  bool                     `json:"enabled"`
 	Outlook  OutlookInput             `json:"outlook"`
+	Gmail    GmailInput               `json:"gmail"`
 }
 
 type OutlookSafe struct {
@@ -59,6 +79,16 @@ type OutlookSafe struct {
 	SenderEmail            string `json:"sender_email"`
 	SenderName             string `json:"sender_name"`
 	ManagedByEnvironment   bool   `json:"managed_by_environment"`
+}
+
+type GmailSafe struct {
+	Host                 string `json:"host"`
+	Port                 int    `json:"port"`
+	Username             string `json:"username"`
+	PasswordConfigured   bool   `json:"password_configured"`
+	From                 string `json:"from"`
+	SenderName           string `json:"sender_name"`
+	ManagedByEnvironment bool   `json:"managed_by_environment"`
 }
 
 type ProviderStatus struct {
@@ -72,6 +102,7 @@ type Safe struct {
 	Enabled        bool                     `json:"enabled"`
 	Configured     bool                     `json:"configured"`
 	Outlook        OutlookSafe              `json:"outlook"`
+	Gmail          GmailSafe                `json:"gmail"`
 	Providers      []ProviderStatus         `json:"providers"`
 	UpdatedAt      time.Time                `json:"updated_at"`
 	LastTestAt     *time.Time               `json:"last_test_at"`
@@ -80,12 +111,17 @@ type Safe struct {
 }
 
 type Runtime struct {
+	Provider     domain.EmailProviderType
 	Enabled      bool
 	TenantID     string
 	ClientID     string
 	ClientSecret string
 	SenderEmail  string
 	SenderName   string
+	SMTPHost     string
+	SMTPPort     int
+	SMTPUsername string
+	SMTPPassword string
 }
 
 type ValidationError struct {
@@ -116,9 +152,14 @@ func Open(dataDir string, cfg config.Config, now time.Time) (*Store, error) {
 	}
 	data, err := os.ReadFile(store.path)
 	if errors.Is(err, os.ErrNotExist) {
+		provider := domain.EmailProviderOutlook
+		if cfg.EmailProvider == "gmail" {
+			provider = domain.EmailProviderGmail
+		}
 		store.stored = Stored{
-			Provider:  domain.EmailProviderOutlook,
+			Provider:  provider,
 			Outlook:   OutlookStored{SenderName: "LogHill"},
+			Gmail:     GmailStored{Host: "smtp.gmail.com", Port: 587, SenderName: "LogHill"},
 			UpdatedAt: now,
 		}
 		if err = store.writeAtomic(store.stored); err != nil {
@@ -132,13 +173,27 @@ func Open(dataDir string, cfg config.Config, now time.Time) (*Store, error) {
 	if err = json.Unmarshal(data, &store.stored); err != nil {
 		return nil, fmt.Errorf("decode email settings: %w", err)
 	}
-	if store.stored.Provider != domain.EmailProviderOutlook {
+	if store.stored.Provider != domain.EmailProviderOutlook && store.stored.Provider != domain.EmailProviderGmail {
 		return nil, fmt.Errorf("stored email provider is not available")
 	}
 	if store.stored.Outlook.ClientSecretEncrypted != "" {
 		if _, err = store.decrypt(store.stored.Outlook.ClientSecretEncrypted); err != nil {
 			return nil, fmt.Errorf("decrypt stored email credential: %w", err)
 		}
+	}
+	if store.stored.Gmail.PasswordEncrypted != "" {
+		if _, err = store.decrypt(store.stored.Gmail.PasswordEncrypted); err != nil {
+			return nil, fmt.Errorf("decrypt stored SMTP credential: %w", err)
+		}
+	}
+	if store.stored.Gmail.Host == "" {
+		store.stored.Gmail.Host = "smtp.gmail.com"
+	}
+	if store.stored.Gmail.Port == 0 {
+		store.stored.Gmail.Port = 587
+	}
+	if store.stored.Gmail.SenderName == "" {
+		store.stored.Gmail.SenderName = "LogHill"
 	}
 	return store, nil
 }
@@ -150,6 +205,39 @@ func (s *Store) Runtime() (Runtime, error) {
 }
 
 func (s *Store) runtimeUnlocked() (Runtime, error) {
+	if s.stored.Provider == domain.EmailProviderGmail || s.cfg.EmailProvider == "gmail" && s.cfg.SMTPManagedByEnvironment {
+		password := s.cfg.SMTPPassword
+		if password == "" && s.stored.Gmail.PasswordEncrypted != "" {
+			var err error
+			password, err = s.decrypt(s.stored.Gmail.PasswordEncrypted)
+			if err != nil {
+				return Runtime{}, err
+			}
+		}
+		value := Runtime{Provider: domain.EmailProviderGmail, Enabled: s.stored.Enabled, SMTPHost: s.stored.Gmail.Host, SMTPPort: s.stored.Gmail.Port, SMTPUsername: s.stored.Gmail.Username, SMTPPassword: password, SenderEmail: s.stored.Gmail.From, SenderName: s.stored.Gmail.SenderName}
+		if s.cfg.SMTPManagedByEnvironment {
+			value.Enabled = s.cfg.SMTPEnabled
+			if s.cfg.SMTPHost != "" {
+				value.SMTPHost = s.cfg.SMTPHost
+			}
+			if s.cfg.SMTPPort > 0 {
+				value.SMTPPort = s.cfg.SMTPPort
+			}
+			if s.cfg.SMTPUsername != "" {
+				value.SMTPUsername = s.cfg.SMTPUsername
+			}
+			if s.cfg.SMTPPassword != "" {
+				value.SMTPPassword = s.cfg.SMTPPassword
+			}
+			if s.cfg.SMTPFrom != "" {
+				value.SenderEmail = s.cfg.SMTPFrom
+			}
+			if s.cfg.SMTPSenderName != "" {
+				value.SenderName = s.cfg.SMTPSenderName
+			}
+		}
+		return value, nil
+	}
 	secret := s.cfg.OutlookClientSecret
 	if secret == "" && s.stored.Outlook.ClientSecretEncrypted != "" {
 		var err error
@@ -159,6 +247,7 @@ func (s *Store) runtimeUnlocked() (Runtime, error) {
 		}
 	}
 	value := Runtime{
+		Provider:     domain.EmailProviderOutlook,
 		Enabled:      s.stored.Enabled,
 		TenantID:     s.stored.Outlook.TenantID,
 		ClientID:     s.stored.Outlook.ClientID,
@@ -192,37 +281,17 @@ func (s *Store) runtimeUnlocked() (Runtime, error) {
 func (s *Store) Safe() (Safe, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
-	runtime, err := s.runtimeUnlocked()
-	if err != nil {
-		return Safe{}, err
-	}
-	configured := runtime.TenantID != "" && runtime.ClientID != "" && runtime.ClientSecret != "" && runtime.SenderEmail != ""
-	return Safe{
-		Provider:   domain.EmailProviderOutlook,
-		Enabled:    runtime.Enabled,
-		Configured: configured,
-		Outlook: OutlookSafe{
-			TenantID: runtime.TenantID, ClientID: runtime.ClientID,
-			ClientSecretConfigured: runtime.ClientSecret != "", SenderEmail: runtime.SenderEmail,
-			SenderName: runtime.SenderName, ManagedByEnvironment: s.cfg.EmailManagedByEnvironment,
-		},
-		Providers: []ProviderStatus{
-			{ID: domain.EmailProviderOutlook, Enabled: runtime.Enabled, Available: true},
-			{ID: domain.EmailProviderGmail, Enabled: false, Available: false},
-		},
-		UpdatedAt: s.stored.UpdatedAt, LastTestAt: s.stored.LastTestAt,
-		LastTestStatus: s.stored.LastTestStatus, LastTestError: s.stored.LastTestError,
-	}, nil
+	return s.safeUnlocked()
 }
 
 func (s *Store) IsReady() bool {
 	runtime, err := s.Runtime()
-	return err == nil && runtime.Enabled && runtime.TenantID != "" && runtime.ClientID != "" && runtime.ClientSecret != "" && runtime.SenderEmail != ""
+	return err == nil && runtime.Enabled && runtimeConfigured(runtime)
 }
 
 func (s *Store) Update(input Input, now time.Time) (Safe, error) {
 	if input.Provider == domain.EmailProviderGmail {
-		return Safe{}, &ValidationError{Code: "EMAIL_PROVIDER_NOT_AVAILABLE", Field: "provider", Message: "O provedor Gmail ainda não está disponível."}
+		return s.updateGmail(input, now)
 	}
 	if input.Provider != domain.EmailProviderOutlook {
 		return Safe{}, &ValidationError{Code: "INVALID_EMAIL_SETTINGS", Field: "provider", Message: "Provedor de e-mail inválido."}
@@ -275,6 +344,57 @@ func (s *Store) Update(input Input, now time.Time) (Safe, error) {
 	return s.safeUnlocked()
 }
 
+func (s *Store) updateGmail(input Input, now time.Time) (Safe, error) {
+	if s.cfg.SMTPManagedByEnvironment {
+		return Safe{}, &ValidationError{Code: "EMAIL_SETTINGS_MANAGED", Field: "gmail", Message: "A configuração SMTP é gerenciada por variáveis de ambiente."}
+	}
+	input.Gmail.Host = strings.TrimSpace(input.Gmail.Host)
+	input.Gmail.Username = strings.TrimSpace(input.Gmail.Username)
+	input.Gmail.SenderName = strings.TrimSpace(input.Gmail.SenderName)
+	if input.Gmail.Host == "" {
+		input.Gmail.Host = "smtp.gmail.com"
+	}
+	if input.Gmail.Port == 0 {
+		input.Gmail.Port = 587
+	}
+	if input.Gmail.Port < 1 || input.Gmail.Port > 65535 {
+		return Safe{}, &ValidationError{Code: "INVALID_EMAIL_SETTINGS", Field: "gmail.port", Message: "Informe uma porta SMTP válida."}
+	}
+	if strings.ContainsAny(input.Gmail.Host+input.Gmail.Username+input.Gmail.SenderName, "\r\n") || len(input.Gmail.SenderName) > 100 {
+		return Safe{}, &ValidationError{Code: "INVALID_EMAIL_SETTINGS", Field: "gmail", Message: "A configuração SMTP contém caracteres inválidos."}
+	}
+	from, valid := validation.EmailAddress(input.Gmail.From)
+	if input.Gmail.From != "" && !valid {
+		return Safe{}, &ValidationError{Code: "INVALID_EMAIL_SETTINGS", Field: "gmail.from", Message: "Informe um e-mail remetente válido."}
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	next := s.stored
+	next.Provider = domain.EmailProviderGmail
+	next.Enabled = input.Enabled
+	next.Gmail = GmailStored{Host: input.Gmail.Host, Port: input.Gmail.Port, Username: input.Gmail.Username, PasswordEncrypted: next.Gmail.PasswordEncrypted, From: from, SenderName: input.Gmail.SenderName}
+	if input.Gmail.Password != "" {
+		if len(s.key) == 0 {
+			return Safe{}, &ValidationError{Code: "EMAIL_ENCRYPTION_KEY_REQUIRED", Field: "gmail.password", Message: "Configure EMAIL_SETTINGS_ENCRYPTION_KEY para salvar a senha pela interface."}
+		}
+		encrypted, err := s.encrypt(input.Gmail.Password)
+		if err != nil {
+			return Safe{}, err
+		}
+		next.Gmail.PasswordEncrypted = encrypted
+	}
+	passwordAvailable := next.Gmail.PasswordEncrypted != "" || s.cfg.SMTPPassword != ""
+	if input.Enabled && (next.Gmail.Username == "" || !passwordAvailable || next.Gmail.From == "") {
+		return Safe{}, &ValidationError{Code: "GMAIL_NOT_CONFIGURED", Field: "gmail", Message: "Complete o servidor, usuário, senha de aplicativo e remetente antes de habilitar o Gmail."}
+	}
+	next.UpdatedAt = now
+	if err := s.writeAtomic(next); err != nil {
+		return Safe{}, err
+	}
+	s.stored = next
+	return s.safeUnlocked()
+}
+
 func (s *Store) RecordTest(success bool, message string, now time.Time) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -299,13 +419,41 @@ func (s *Store) safeUnlocked() (Safe, error) {
 	if err != nil {
 		return Safe{}, err
 	}
-	configured := runtime.TenantID != "" && runtime.ClientID != "" && runtime.ClientSecret != "" && runtime.SenderEmail != ""
+	configured := runtimeConfigured(runtime)
+	outlookSecret := s.stored.Outlook.ClientSecretEncrypted != "" || s.cfg.OutlookClientSecret != ""
+	gmailPassword := s.stored.Gmail.PasswordEncrypted != "" || s.cfg.SMTPPassword != ""
+	outlook := OutlookSafe{TenantID: s.stored.Outlook.TenantID, ClientID: s.stored.Outlook.ClientID, ClientSecretConfigured: outlookSecret, SenderEmail: s.stored.Outlook.SenderEmail, SenderName: s.stored.Outlook.SenderName, ManagedByEnvironment: s.cfg.EmailManagedByEnvironment}
+	if s.cfg.EmailManagedByEnvironment {
+		if s.cfg.OutlookTenantID != "" {
+			outlook.TenantID = s.cfg.OutlookTenantID
+		}
+		if s.cfg.OutlookClientID != "" {
+			outlook.ClientID = s.cfg.OutlookClientID
+		}
+		if s.cfg.OutlookSenderEmail != "" {
+			outlook.SenderEmail = s.cfg.OutlookSenderEmail
+		}
+		if s.cfg.OutlookSenderName != "" {
+			outlook.SenderName = s.cfg.OutlookSenderName
+		}
+	}
+	gmail := GmailSafe{Host: s.stored.Gmail.Host, Port: s.stored.Gmail.Port, Username: s.stored.Gmail.Username, PasswordConfigured: gmailPassword, From: s.stored.Gmail.From, SenderName: s.stored.Gmail.SenderName, ManagedByEnvironment: s.cfg.SMTPManagedByEnvironment}
+	if s.cfg.SMTPManagedByEnvironment {
+		gmail.Host, gmail.Port, gmail.Username, gmail.From, gmail.SenderName = s.cfg.SMTPHost, s.cfg.SMTPPort, s.cfg.SMTPUsername, s.cfg.SMTPFrom, s.cfg.SMTPSenderName
+	}
 	return Safe{
-		Provider: domain.EmailProviderOutlook, Enabled: runtime.Enabled, Configured: configured,
-		Outlook:   OutlookSafe{TenantID: runtime.TenantID, ClientID: runtime.ClientID, ClientSecretConfigured: runtime.ClientSecret != "", SenderEmail: runtime.SenderEmail, SenderName: runtime.SenderName, ManagedByEnvironment: s.cfg.EmailManagedByEnvironment},
-		Providers: []ProviderStatus{{ID: domain.EmailProviderOutlook, Enabled: runtime.Enabled, Available: true}, {ID: domain.EmailProviderGmail, Available: false}},
+		Provider: runtime.Provider, Enabled: runtime.Enabled, Configured: configured,
+		Outlook: outlook, Gmail: gmail,
+		Providers: []ProviderStatus{{ID: domain.EmailProviderOutlook, Enabled: runtime.Provider == domain.EmailProviderOutlook && runtime.Enabled, Available: true}, {ID: domain.EmailProviderGmail, Enabled: runtime.Provider == domain.EmailProviderGmail && runtime.Enabled, Available: true}},
 		UpdatedAt: s.stored.UpdatedAt, LastTestAt: s.stored.LastTestAt, LastTestStatus: s.stored.LastTestStatus, LastTestError: s.stored.LastTestError,
 	}, nil
+}
+
+func runtimeConfigured(value Runtime) bool {
+	if value.Provider == domain.EmailProviderGmail {
+		return value.SMTPHost != "" && value.SMTPPort > 0 && value.SMTPUsername != "" && value.SMTPPassword != "" && value.SenderEmail != ""
+	}
+	return value.TenantID != "" && value.ClientID != "" && value.ClientSecret != "" && value.SenderEmail != ""
 }
 
 func (s *Store) encrypt(value string) (string, error) {

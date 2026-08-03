@@ -1,6 +1,8 @@
 import {
   ChevronLeft,
   ChevronRight,
+  ChevronDown,
+  ChevronUp,
   Search,
   X,
 } from "lucide-react";
@@ -20,7 +22,9 @@ import {
 } from "react";
 import { createPortal } from "react-dom";
 import type { SenderStatus } from "../types/api";
+import { tooltipDismissDetail, tooltipOpenEvent } from "../utils/tooltipFocus";
 import { Listbox } from "./controls";
+import { CONTROL_OUTLINE, CONTROL_SURFACE } from "./controlStyles";
 
 export function Panel({
   children,
@@ -45,7 +49,7 @@ export function Button({
   return (
     <button
       type={type}
-      className={`inline-flex h-9 shrink-0 items-center justify-center gap-2 rounded-lg border border-zinc-700 bg-zinc-900 px-3 text-sm font-medium text-zinc-200 transition-colors duration-150 ease-out hover:border-zinc-600 hover:bg-zinc-800 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-white/50 disabled:cursor-not-allowed disabled:opacity-50 disabled:text-zinc-500 ${className}`}
+      className={`inline-flex h-9 shrink-0 items-center justify-center gap-2 rounded-lg border bg-zinc-900 px-3 text-sm font-medium text-zinc-200 ease-out hover:bg-zinc-800 disabled:cursor-not-allowed disabled:opacity-50 disabled:text-zinc-500 ${CONTROL_OUTLINE} ${className}`}
       {...props}
     />
   );
@@ -74,12 +78,107 @@ export function IconButton({
   );
 }
 
-export function Input({ className = "", ...props }: InputHTMLAttributes<HTMLInputElement>) {
+export function ModalCloseButton({
+  label,
+  className = "",
+  ...props
+}: Omit<ButtonHTMLAttributes<HTMLButtonElement>, "children" | "aria-label"> & {
+  label: string;
+}) {
+  return (
+    <IconButton label={label} className={`size-8 ${className}`} {...props}>
+      <X className="size-4" />
+    </IconButton>
+  );
+}
+
+export function Input({ className = "", minLength, onBlur, onChange, value, "aria-invalid": ariaInvalid, ...props }: InputHTMLAttributes<HTMLInputElement>) {
+  const effectiveMinLength = minLength ?? (props.autoFocus && props.maxLength === 100 ? 3 : undefined);
+  const [minimumTouched, setMinimumTouched] = useState(false);
+  const [minimumDirty, setMinimumDirty] = useState(false);
+  const minimumInvalid = Boolean(minimumTouched && minimumDirty && effectiveMinLength && typeof value === "string" && value.trim().length < effectiveMinLength);
+  const invalid = Boolean(ariaInvalid || minimumInvalid);
   return (
     <input
-      className={`h-9 rounded-lg border border-zinc-700 bg-zinc-950 px-3 text-sm text-zinc-100 outline-none placeholder:text-zinc-600 focus:ring-1 focus:ring-white/50 ${className}`}
+      value={value}
+      minLength={effectiveMinLength}
+      aria-invalid={invalid || undefined}
+      onBlur={(event) => {
+        if (effectiveMinLength && minimumDirty) setMinimumTouched(true);
+        onBlur?.(event);
+      }}
+      onChange={(event) => {
+        if (effectiveMinLength) setMinimumDirty(true);
+        onChange?.(event);
+      }}
+      className={`h-9 rounded-lg border px-3 text-sm text-zinc-100 placeholder:text-zinc-600 aria-[invalid=true]:!border-red-700 ${CONTROL_SURFACE} ${className}`}
       {...props}
     />
+  );
+}
+
+export function NumberInput({
+  value,
+  onValueChange,
+  min = Number.MIN_SAFE_INTEGER,
+  max = Number.MAX_SAFE_INTEGER,
+  step = 1,
+  className = "",
+  disabled = false,
+  label = "valor",
+  ...props
+}: Omit<InputHTMLAttributes<HTMLInputElement>, "type" | "value" | "onChange" | "min" | "max" | "step"> & {
+  value: number;
+  onValueChange: (value: number) => void;
+  min?: number;
+  max?: number;
+  step?: number;
+  label?: string;
+}) {
+  const id = useId();
+  const adjust = (direction: 1 | -1) => {
+    onValueChange(Math.min(max, Math.max(min, value + step * direction)));
+  };
+
+  return (
+    <div className={`relative ${className}`}>
+      <input
+        {...props}
+        id={props.id ?? id}
+        type="number"
+        inputMode="numeric"
+        min={min}
+        max={max}
+        step={step}
+        value={value}
+        disabled={disabled}
+        onChange={(event) => {
+          const next = event.currentTarget.valueAsNumber;
+          if (!Number.isNaN(next)) onValueChange(next);
+        }}
+        className={`themed-number-input h-9 w-full rounded-lg border px-3 pr-10 font-mono text-xs text-zinc-100 disabled:cursor-not-allowed disabled:opacity-60 ${CONTROL_SURFACE}`}
+      />
+      <div className="absolute bottom-px right-px top-px flex w-8 flex-col overflow-hidden rounded-r-[7px] border-l border-zinc-700 bg-zinc-900">
+        <button
+          type="button"
+          aria-label={`Aumentar ${label}`}
+          disabled={disabled || value >= max}
+          onClick={() => adjust(1)}
+          className="grid min-h-0 flex-1 place-items-center border-b border-zinc-700 text-zinc-500 hover:bg-zinc-800 hover:text-zinc-100 disabled:cursor-not-allowed disabled:text-zinc-700"
+        >
+          <ChevronUp className="size-3" />
+        </button>
+        <button
+          type="button"
+          aria-label={`Diminuir ${label}`}
+          disabled={disabled || value <= min}
+          onClick={() => adjust(-1)}
+          className="grid min-h-0 flex-1 place-items-center text-zinc-500 hover:bg-zinc-800 hover:text-zinc-100 disabled:cursor-not-allowed disabled:text-zinc-700"
+        >
+          <ChevronDown className="size-3" />
+        </button>
+      </div>
+    </div>
   );
 }
 
@@ -157,7 +256,7 @@ const statusLabel: Record<SenderStatus, string> = {
 export function StatusBadge({ status }: { status: SenderStatus }) {
   return (
     <span
-      className={`inline-flex h-6 items-center gap-1.5 rounded-full border px-2 text-xs font-medium ${statusStyle[status]}`}
+      className={`inline-flex h-6 items-center gap-1.5 whitespace-nowrap rounded-full border px-2 text-xs font-medium ${statusStyle[status]}`}
     >
       <span className="size-1.5 rounded-full bg-current" aria-hidden="true" />
       {statusLabel[status]}
@@ -263,14 +362,7 @@ export function ConfirmDialog({
               {description}
             </p>
           </div>
-          <button
-            type="button"
-            aria-label="Fechar"
-            onClick={onClose}
-            className="grid size-8 shrink-0 place-items-center rounded-lg text-zinc-500 hover:bg-zinc-800 hover:text-zinc-200 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-white/50"
-          >
-            <X className="size-4" />
-          </button>
+          <ModalCloseButton label="Fechar confirmação" onClick={onClose} />
         </div>
         <div className="mt-5 flex justify-end gap-2">
           <Button onClick={onClose} className="border-transparent bg-transparent">
@@ -317,8 +409,6 @@ export function Skeleton({ className = "" }: { className?: string }) {
   );
 }
 
-const tooltipOpenEvent = "loghill:tooltip-open";
-
 export function Tooltip({
   label,
   children,
@@ -327,6 +417,7 @@ export function Tooltip({
   const id = useId();
   const anchor = useRef<HTMLSpanElement>(null);
   const tooltip = useRef<HTMLSpanElement>(null);
+  const suppressShowUntil = useRef(0);
   const [open, setOpen] = useState(false);
   const [position, setPosition] = useState({
     left: 0,
@@ -336,7 +427,7 @@ export function Tooltip({
 
   const hide = useCallback(() => setOpen(false), []);
   const show = useCallback(() => {
-    if (!label || typeof window === "undefined") return;
+    if (!label || typeof window === "undefined" || Date.now() < suppressShowUntil.current) return;
     window.dispatchEvent(
       new CustomEvent(tooltipOpenEvent, { detail: id }),
     );
@@ -384,7 +475,11 @@ export function Tooltip({
   useEffect(() => {
     if (typeof window === "undefined") return;
     const closeOtherTooltip = (event: Event) => {
-      if ((event as CustomEvent<string>).detail !== id) hide();
+      const detail = (event as CustomEvent<string>).detail;
+      if (detail === tooltipDismissDetail) {
+        suppressShowUntil.current = Date.now() + 500;
+        hide();
+      } else if (detail !== id) hide();
     };
     window.addEventListener(tooltipOpenEvent, closeOtherTooltip);
     return () => window.removeEventListener(tooltipOpenEvent, closeOtherTooltip);
@@ -408,7 +503,14 @@ export function Tooltip({
       onMouseLeave={hide}
       onFocusCapture={show}
       onBlurCapture={hide}
-      onClickCapture={hide}
+      onPointerDownCapture={() => {
+        suppressShowUntil.current = Date.now() + 500;
+        hide();
+      }}
+      onClickCapture={() => {
+        suppressShowUntil.current = Date.now() + 500;
+        hide();
+      }}
       onKeyDownCapture={(event) => {
         if (event.key === "Escape") hide();
       }}
@@ -426,7 +528,7 @@ export function Tooltip({
               top: position.top,
               visibility: position.ready ? "visible" : "hidden",
             }}
-            className="pointer-events-none fixed z-[200] max-w-[calc(100vw-16px)] whitespace-normal break-words rounded-md border border-zinc-700 bg-zinc-900 px-2 py-1 text-center text-[11px] leading-4 text-zinc-200 shadow-lg shadow-black/30 [overflow-wrap:anywhere]"
+            className="pointer-events-none fixed z-[300] max-w-[calc(100vw-16px)] whitespace-normal break-words rounded-md border border-zinc-700 bg-zinc-900 px-2 py-1 text-center text-[11px] leading-4 text-zinc-200 shadow-lg shadow-black/30 [overflow-wrap:anywhere]"
           >
             {label}
           </span>,
@@ -442,30 +544,32 @@ export function MetricCard({
   hint,
   icon,
   loading = false,
+  compact = false,
 }: {
   label: string;
   value: string;
   hint: string;
   icon: ReactNode;
   loading?: boolean;
+  compact?: boolean;
 }) {
   return (
-    <Panel className="min-h-[108px] p-4">
+    <Panel className={compact ? "min-h-[78px] p-3" : "min-h-[108px] p-4"}>
       <div className="flex items-start justify-between gap-3">
         <p className="text-xs font-medium text-zinc-500">{label}</p>
         <span className="text-zinc-600">{icon}</span>
       </div>
       {loading ? (
         <>
-          <Skeleton className="mt-3 h-7 w-20" />
-          <Skeleton className="mt-2 h-3 w-28" />
+          <Skeleton className={`${compact ? "mt-2 h-5" : "mt-3 h-7"} w-20`} />
+          {!compact && <Skeleton className="mt-2 h-3 w-28" />}
         </>
       ) : (
         <>
-          <p className="mt-2 min-h-7 font-mono text-2xl font-semibold tabular-nums text-zinc-100">
+          <p className={`${compact ? "mt-1 min-h-5 text-lg" : "mt-2 min-h-7 text-2xl"} font-mono font-semibold tabular-nums text-zinc-100`}>
             {value}
           </p>
-          <p className="mt-1 truncate text-xs text-zinc-600">{hint}</p>
+          <p className={`${compact ? "text-[10px]" : "mt-1 text-xs"} truncate text-zinc-600`}>{hint}</p>
         </>
       )}
     </Panel>
@@ -492,7 +596,7 @@ export function Pagination({
   return (
     <nav
       aria-label="Paginação"
-      className="flex min-h-14 flex-wrap items-center justify-between gap-3 border-t border-zinc-800 px-3 py-2 text-xs text-zinc-500"
+      className="flex min-h-14 shrink-0 flex-wrap items-center justify-between gap-3 border-t border-zinc-800 px-3 py-2 text-xs text-zinc-500"
     >
       <span className="min-w-32">
         {typeof total === "number" ? `${total.toLocaleString("pt-BR")} registros` : ""}

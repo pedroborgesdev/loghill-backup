@@ -16,6 +16,7 @@ import {
   useState,
 } from "react";
 import { createPortal } from "react-dom";
+import { CONTROL_SURFACE } from "./controlStyles";
 
 type ControlValue = string | number;
 
@@ -151,7 +152,7 @@ export function Listbox<T extends ControlValue>({
         disabled={disabled}
         onClick={() => setOpen((current) => !current)}
         onKeyDown={onKeyDown}
-        className={`inline-flex items-center justify-between gap-2 rounded-lg border border-zinc-700 bg-zinc-950 text-left text-zinc-300 transition-colors duration-150 hover:border-zinc-600 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-white/50 disabled:cursor-not-allowed disabled:opacity-50 ${
+        className={`inline-flex items-center justify-between gap-2 rounded-lg border text-left text-zinc-300 disabled:cursor-not-allowed disabled:opacity-50 ${CONTROL_SURFACE} ${
           size === "compact" ? "h-8 px-2 text-xs" : "h-9 px-3 text-sm"
         } ${className}`}
       >
@@ -172,7 +173,7 @@ export function Listbox<T extends ControlValue>({
             aria-activedescendant={`${id}-option-${highlighted}`}
             tabIndex={-1}
             onKeyDown={onKeyDown}
-            className="fixed z-[190] max-h-72 overflow-auto rounded-lg border border-zinc-700 bg-[#1c1c1f] p-1 shadow-2xl shadow-black/50"
+            className="fixed z-[350] max-h-72 overflow-auto rounded-lg border border-zinc-700 bg-[#1c1c1f] p-1 shadow-2xl shadow-black/50"
             style={position}
           >
             {options.map((option, index) => (
@@ -190,7 +191,7 @@ export function Listbox<T extends ControlValue>({
               >
                 <Check
                   className={`size-3.5 shrink-0 ${
-                    option.value === value ? "text-cyan-500" : "opacity-0"
+                    option.value === value ? "text-sky-400" : "opacity-0"
                   }`}
                 />
                 <span className="min-w-0">
@@ -323,7 +324,7 @@ export function DateTimePicker({
           aria-haspopup="dialog"
           aria-expanded={open}
           onClick={() => setOpen((current) => !current)}
-          className="flex h-9 w-full items-center gap-2 rounded-lg border border-zinc-700 bg-zinc-950 px-3 pr-9 text-left text-xs transition-colors hover:border-zinc-600 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-white/50"
+          className={`flex h-9 w-full items-center gap-2 rounded-lg border px-3 pr-9 text-left text-xs ${CONTROL_SURFACE}`}
         >
           <CalendarDays className="size-4 shrink-0 text-zinc-600" />
           <span className={`min-w-0 flex-1 truncate ${displayValue ? "text-zinc-300" : "text-zinc-600"}`}>
@@ -351,7 +352,7 @@ export function DateTimePicker({
             ref={popup}
             role="dialog"
             aria-label={label}
-            className="fixed z-[190] rounded-xl border border-zinc-700 bg-[#161618] p-3 shadow-2xl shadow-black/60"
+            className="fixed z-[350] rounded-xl border border-zinc-700 bg-[#161618] p-3 shadow-2xl shadow-black/60"
             style={position}
           >
             <div className="flex items-center justify-between">
@@ -420,7 +421,7 @@ export function DateTimePicker({
                 onChange={(event) =>
                   setHour(event.target.value.replace(/\D/g, "").slice(0, 2))
                 }
-                className="h-8 w-12 rounded-lg border border-zinc-700 bg-zinc-950 text-center font-mono text-xs text-zinc-200 outline-none focus:ring-1 focus:ring-white/50"
+                className={`h-8 w-12 rounded-lg border text-center font-mono text-xs text-zinc-200 ${CONTROL_SURFACE}`}
               />
               <span className="text-zinc-600">:</span>
               <input
@@ -431,7 +432,7 @@ export function DateTimePicker({
                 onChange={(event) =>
                   setMinute(event.target.value.replace(/\D/g, "").slice(0, 2))
                 }
-                className="h-8 w-12 rounded-lg border border-zinc-700 bg-zinc-950 text-center font-mono text-xs text-zinc-200 outline-none focus:ring-1 focus:ring-white/50"
+                className={`h-8 w-12 rounded-lg border text-center font-mono text-xs text-zinc-200 ${CONTROL_SURFACE}`}
               />
               <button
                 type="button"

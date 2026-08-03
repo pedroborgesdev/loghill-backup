@@ -29,7 +29,7 @@ describe("alertas com múltiplos senders", () => {
     expect(screen.getByText("2 selecionados")).toBeInTheDocument();
     expect(screen.getByRole("checkbox", { name: "Remover Financeiro" })).toHaveAttribute("aria-checked", "true");
     expect(screen.getByText("Senders inativos podem ser monitorados, mas talvez não enviem novos logs.")).toBeInTheDocument();
-    await userEvent.type(screen.getByPlaceholderText("Buscar por nome ou identificador"), "financeiro");
+    await userEvent.type(screen.getByPlaceholderText("Buscar sender pelo nome"), "financeiro");
     expect(screen.getByText("2 selecionados")).toBeInTheDocument();
   });
 

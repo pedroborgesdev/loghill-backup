@@ -4,7 +4,7 @@ import type { Pagination } from "../types/api";
 import { request } from "./client";
 
 interface RawEvent {
-  id: string; name: string; key: string; sender_ids: string[]; action_type: "email";
+  id: string; name: string; key: string; sender_ids: string[]; action_type: "none" | "email";
   recipients: string[]; subject_template: string; message_template: string; enabled: boolean;
   created_at: string; updated_at: string; last_triggered_at?: string | null;
   last_delivery_at?: string | null; last_delivery_status?: "pending" | "sent" | "failed" | null;

@@ -37,6 +37,13 @@ func Open(dataDir string, now time.Time) (*Store, error) {
 	if err = json.Unmarshal(data, &store.current); err != nil {
 		return nil, fmt.Errorf("decode settings: %w", err)
 	}
+	// Configurações criadas antes destes campos usam os padrões históricos.
+	if store.current.InactiveAfterSeconds == 0 {
+		store.current.InactiveAfterSeconds = 300
+	}
+	if store.current.DeleteInactiveDays == 0 {
+		store.current.DeleteInactiveDays = 7
+	}
 	if err = domain.ValidateStoredSettings(store.current); err != nil {
 		return nil, fmt.Errorf("validate stored settings: %w", err)
 	}

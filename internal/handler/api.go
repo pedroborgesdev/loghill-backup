@@ -22,7 +22,9 @@ import (
 	"logtheater/internal/emailconfig"
 	"logtheater/internal/emailprovider"
 	"logtheater/internal/events"
+	"logtheater/internal/executions"
 	"logtheater/internal/middleware"
+	"logtheater/internal/monitoring"
 	"logtheater/internal/notification"
 	"logtheater/internal/scheduler"
 	"logtheater/internal/service"
@@ -38,10 +40,19 @@ type API struct {
 	emailProvider emailprovider.Provider
 	dispatcher    *notification.Dispatcher
 	events        *events.Service
+	monitoring    *monitoring.Service
+	executions    *executions.Store
 }
+
+func (a *API) ConfigureExecutions(store *executions.Store) *API { a.executions = store; return a }
 
 func (a *API) ConfigureEvents(eventService *events.Service) *API {
 	a.events = eventService
+	return a
+}
+
+func (a *API) ConfigureMonitoring(service *monitoring.Service) *API {
+	a.monitoring = service
 	return a
 }
 
@@ -76,6 +87,8 @@ func (a *API) Router() *gin.Engine {
 	read.POST("/senders", a.createSender)
 	read.GET("/senders/check-id", a.checkSenderID)
 	read.GET("/senders/:sender", a.getSender)
+	read.GET("/senders/:sender/instances", a.listSenderInstances)
+	read.DELETE("/senders/:sender/instances/:instance", a.deleteSenderInstance)
 	read.PUT("/senders/:sender", a.updateSender)
 	read.GET("/senders/:sender/dependencies", a.senderDependencies)
 	read.POST("/senders/:sender/rotate-key", a.rotateSenderKey)
@@ -86,6 +99,11 @@ func (a *API) Router() *gin.Engine {
 	read.GET("/senders/:sender/logs/download", a.download)
 	read.GET("/senders/:sender/logs/stream", a.stream)
 	read.GET("/dashboard/summary", a.summary)
+	if a.executions != nil {
+		read.GET("/executions", a.listExecutions)
+		read.GET("/executions/:executionID", a.getExecution)
+		read.GET("/dashboard/recent-executions", a.recentExecutions)
+	}
 	read.GET("/settings", a.getSettings)
 	read.PUT("/settings", a.updateSettings)
 	if a.alerts != nil && a.emailConfig != nil && a.emailProvider != nil && a.dispatcher != nil {
@@ -111,7 +129,22 @@ func (a *API) Router() *gin.Engine {
 		read.DELETE("/events/:eventID", a.deleteEvent)
 		read.POST("/events/:eventID/test", a.testEvent)
 	}
+	if a.monitoring != nil {
+		read.GET("/monitoring/rules", a.listMonitoringRules)
+		read.GET("/monitoring/rules/:ruleID", a.getMonitoringRule)
+		read.POST("/monitoring/rules", a.createMonitoringRule)
+		read.PUT("/monitoring/rules/:ruleID", a.updateMonitoringRule)
+		read.PATCH("/monitoring/rules/:ruleID/status", a.updateMonitoringRuleStatus)
+		read.DELETE("/monitoring/rules/:ruleID", a.deleteMonitoringRule)
+		read.POST("/monitoring/rules/:ruleID/duplicate", a.duplicateMonitoringRule)
+		read.POST("/monitoring/rules/:ruleID/test", a.testMonitoringRule)
+		read.POST("/monitoring/rules/validate", a.validateMonitoringRule)
+		read.GET("/monitoring/rules/:ruleID/executions", a.listMonitoringExecutions)
+		read.GET("/monitoring/executions/:executionID", a.getMonitoringExecution)
+	}
 	v1.POST("/senders/:sender/health", a.senderHealth)
+	v1.POST("/senders/:sender/instances/init", a.initSenderInstance)
+	v1.POST("/instances/init", a.initInstanceByKey)
 	v1.POST("/logs", a.receiveLog)
 	r.NoRoute(a.spa)
 	return r
@@ -249,27 +282,34 @@ func (a *API) reactivateSender(c *gin.Context) {
 }
 
 func (a *API) senderDependencies(c *gin.Context) {
-	count, eventCount := 0, 0
+	count, eventCount, monitoringCount := 0, 0, 0
 	if a.alerts != nil {
 		count = a.alerts.SenderUsageCount(c.Param("sender"))
 	}
 	if a.events != nil {
 		eventCount = a.events.SenderUsageCount(c.Param("sender"))
 	}
-	c.JSON(http.StatusOK, gin.H{"sender_id": c.Param("sender"), "alert_rules": count, "events": eventCount})
+	if a.monitoring != nil {
+		monitoringCount = a.monitoring.SenderUsageCount(c.Param("sender"))
+	}
+	c.JSON(http.StatusOK, gin.H{"sender_id": c.Param("sender"), "alert_rules": count, "events": eventCount, "monitoring_rules": monitoringCount})
 }
 
 func (a *API) deleteSender(c *gin.Context) {
 	id := c.Param("sender")
 	usage := 0
 	eventUsage := 0
+	monitoringUsage := 0
 	if a.alerts != nil {
 		usage = a.alerts.SenderUsageCount(id)
 	}
 	if a.events != nil {
 		eventUsage = a.events.SenderUsageCount(id)
 	}
-	if (usage > 0 && c.Query("remove_from_alerts") != "true") || (eventUsage > 0 && c.Query("remove_from_events") != "true") {
+	if a.monitoring != nil {
+		monitoringUsage = a.monitoring.SenderUsageCount(id)
+	}
+	if (usage > 0 && c.Query("remove_from_alerts") != "true") || (eventUsage > 0 && c.Query("remove_from_events") != "true") || (monitoringUsage > 0 && c.Query("remove_from_monitoring") != "true") {
 		code := "SENDER_HAS_DEPENDENCIES"
 		message := fmt.Sprintf("Este sender está associado a %d regras de alerta e %d eventos.", usage, eventUsage)
 		if eventUsage == 0 {
@@ -282,6 +322,7 @@ func (a *API) deleteSender(c *gin.Context) {
 		body := errorBodyWithField(c, code, message, "")
 		body["alert_rules"] = usage
 		body["events"] = eventUsage
+		body["monitoring_rules"] = monitoringUsage
 		c.JSON(http.StatusConflict, body)
 		return
 	}
@@ -294,6 +335,12 @@ func (a *API) deleteSender(c *gin.Context) {
 	if eventUsage > 0 {
 		if _, err := a.events.RemoveSender(id); err != nil {
 			a.failEvent(c, err)
+			return
+		}
+	}
+	if monitoringUsage > 0 {
+		if err := a.monitoring.RemoveSender(id); err != nil {
+			a.monitoringError(c, err)
 			return
 		}
 	}
@@ -317,12 +364,65 @@ func (a *API) receiveLog(c *gin.Context) {
 		c.JSON(400, errBody(c, "INVALID_REQUEST", "Body inválido"))
 		return
 	}
-	_, at, err := a.svc.ReceiveLogWithEvent(c.Request.Context(), in.Sender, c.GetHeader("X-Sender-Key"), in.Severity, in.Message, in.Event, in.EventOccurrenceID, in.Timestamp, in.Metadata)
+	instanceID := strings.TrimSpace(c.GetHeader("X-Sender-Instance-ID"))
+	if instanceID == "" {
+		instanceID = strings.TrimSpace(c.Query("instance_id"))
+	}
+	_, at, err := a.svc.ReceiveLogWithInstanceAndEvent(c.Request.Context(), in.Sender, c.GetHeader("X-Sender-Key"), instanceID, in.Severity, in.Message, in.Event, in.EventOccurrenceID, in.Timestamp, in.Metadata)
 	if err != nil {
 		a.fail(c, err)
 		return
 	}
-	c.JSON(202, gin.H{"accepted": true, "sender": in.Sender, "received_at": at})
+	c.JSON(202, gin.H{"accepted": true, "sender": in.Sender, "instance_id": instanceID, "received_at": at})
+}
+
+func (a *API) initSenderInstance(c *gin.Context) {
+	instance, err := a.svc.InitInstance(c.Request.Context(), c.Param("sender"), c.GetHeader("X-Sender-Key"))
+	if err != nil {
+		a.fail(c, err)
+		return
+	}
+	c.JSON(http.StatusCreated, gin.H{"sender": c.Param("sender"), "instance_id": instance.ID, "initialized_at": instance.CreatedAt})
+}
+
+func (a *API) initInstanceByKey(c *gin.Context) {
+	sender, instance, err := a.svc.InitInstanceByKey(c.Request.Context(), c.GetHeader("X-Sender-Key"))
+	if err != nil {
+		a.fail(c, err)
+		return
+	}
+	c.JSON(http.StatusCreated, gin.H{"sender": sender.ID, "instance_id": instance.ID, "initialized_at": instance.CreatedAt})
+}
+
+func (a *API) listSenderInstances(c *gin.Context) {
+	items, err := a.svc.Instances(c.Request.Context(), c.Param("sender"))
+	if err != nil {
+		a.fail(c, err)
+		return
+	}
+	page, pageSize := positive(c, "page", 1, 1_000_000), positive(c, "page_size", 20, a.cfg.MaxPageSize)
+	total := len(items)
+	start := (page - 1) * pageSize
+	if start > total {
+		start = total
+	}
+	end := start + pageSize
+	if end > total {
+		end = total
+	}
+	totalPages := (total + pageSize - 1) / pageSize
+	if totalPages < 1 {
+		totalPages = 1
+	}
+	c.JSON(http.StatusOK, domain.SenderInstancePage{Sender: c.Param("sender"), Items: items[start:end], Pagination: domain.Pagination{Page: page, PageSize: pageSize, Returned: end - start, Total: int64(total), TotalPages: totalPages}})
+}
+
+func (a *API) deleteSenderInstance(c *gin.Context) {
+	if err := a.svc.DeleteInstance(c.Request.Context(), c.Param("sender"), c.Param("instance")); err != nil {
+		a.fail(c, err)
+		return
+	}
+	c.Status(http.StatusNoContent)
 }
 func (a *API) senderHealth(c *gin.Context) {
 	var body map[string]any
@@ -330,7 +430,7 @@ func (a *API) senderHealth(c *gin.Context) {
 		c.JSON(400, errBody(c, "INVALID_REQUEST", "Body inválido"))
 		return
 	}
-	s, at, err := a.svc.Health(c.Request.Context(), c.Param("sender"), c.GetHeader("X-Sender-Key"))
+	s, at, err := a.svc.HealthWithInstance(c.Request.Context(), c.Param("sender"), c.GetHeader("X-Sender-Key"), strings.TrimSpace(c.GetHeader("X-Sender-Instance-ID")))
 	if err != nil {
 		a.fail(c, err)
 		return
@@ -365,7 +465,7 @@ func (a *API) getSender(c *gin.Context) {
 	c.JSON(200, s)
 }
 func parseLogFilters(c *gin.Context, max int) domain.LogFilters {
-	f := domain.LogFilters{Severities: map[domain.LogSeverity]bool{}, Search: c.Query("search"), EventMode: c.Query("event"), EventKey: c.Query("event_key"), Page: positive(c, "page", 1, 1_000_000), PageSize: positive(c, "page_size", 100, max), Order: c.DefaultQuery("order", "desc")}
+	f := domain.LogFilters{Severities: map[domain.LogSeverity]bool{}, Search: c.Query("search"), InstanceID: c.Query("instance_id"), EventMode: c.Query("event"), EventKey: c.Query("event_key"), Page: positive(c, "page", 1, 1_000_000), PageSize: positive(c, "page_size", 100, max), Order: c.DefaultQuery("order", "desc")}
 	for _, raw := range strings.Split(c.Query("severity"), ",") {
 		if sev, e := domain.ParseSeverity(raw); e == nil {
 			f.Severities[sev] = true
@@ -449,6 +549,9 @@ func (a *API) stream(c *gin.Context) {
 			if len(allowed) > 0 && !allowed[e.Severity] {
 				continue
 			}
+			if filters.InstanceID == "legacy" && e.InstanceID != "" || filters.InstanceID != "" && filters.InstanceID != "legacy" && e.InstanceID != filters.InstanceID {
+				continue
+			}
 			if filters.EventMode == "with" && e.Event == "" || filters.EventMode == "without" && e.Event != "" || filters.EventKey != "" && e.Event != filters.EventKey {
 				continue
 			}
@@ -470,6 +573,9 @@ func (a *API) summary(c *gin.Context) {
 		a.fail(c, err)
 		return
 	}
+	if a.executions != nil {
+		v["executions"] = a.executions.Summary()
+	}
 	c.JSON(200, v)
 }
 
@@ -481,6 +587,8 @@ func (a *API) updateSettings(c *gin.Context) {
 	var input struct {
 		LogLimit             *domain.NumberUnitValue `json:"log_limit"`
 		InactivePreservation *domain.NumberUnitValue `json:"inactive_preservation"`
+		InactiveAfterSeconds *int                    `json:"inactive_after_seconds"`
+		DeleteInactiveDays   *int                    `json:"delete_inactive_after_days"`
 	}
 	decoder := json.NewDecoder(c.Request.Body)
 	decoder.DisallowUnknownFields()
@@ -496,9 +604,18 @@ func (a *API) updateSettings(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, settingsErrorBody(c, "Configurações inválidas ou incompletas.", ""))
 		return
 	}
+	current := a.svc.Settings()
+	if input.InactiveAfterSeconds != nil {
+		current.InactiveAfterSeconds = *input.InactiveAfterSeconds
+	}
+	if input.DeleteInactiveDays != nil {
+		current.DeleteInactiveDays = *input.DeleteInactiveDays
+	}
 	updated, err := a.svc.UpdateSettings(domain.Settings{
 		LogLimit:             *input.LogLimit,
 		InactivePreservation: *input.InactivePreservation,
+		InactiveAfterSeconds: current.InactiveAfterSeconds,
+		DeleteInactiveDays:   current.DeleteInactiveDays,
 	})
 	if err != nil {
 		var validation *domain.SettingsValidationError
@@ -512,8 +629,10 @@ func (a *API) updateSettings(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
 		"settings": gin.H{
-			"log_limit":             updated.LogLimit,
-			"inactive_preservation": updated.InactivePreservation,
+			"log_limit":                  updated.LogLimit,
+			"inactive_preservation":      updated.InactivePreservation,
+			"inactive_after_seconds":     updated.InactiveAfterSeconds,
+			"delete_inactive_after_days": updated.DeleteInactiveDays,
 		},
 		"updated_at": updated.UpdatedAt,
 	})

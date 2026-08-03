@@ -92,19 +92,21 @@ type EmailMessage struct {
 }
 
 type Notification struct {
-	SourceType NotificationSourceType
-	SourceID   string
-	Alert      EmailAlert
-	Event      EventDefinition
-	Sender     Sender
-	Entry      LogEntry
-	Recipients []string
-	Test       bool
+	ExecutionID string
+	SourceType  NotificationSourceType
+	SourceID    string
+	Alert       EmailAlert
+	Event       EventDefinition
+	Sender      Sender
+	Entry       LogEntry
+	Recipients  []string
+	Test        bool
 }
 
 type NotificationSourceType string
 
 const (
-	NotificationSourceAlert NotificationSourceType = "alert"
-	NotificationSourceEvent NotificationSourceType = "event"
+	NotificationSourceAlert      NotificationSourceType = "alert"
+	NotificationSourceEvent      NotificationSourceType = "event"
+	NotificationSourceMonitoring NotificationSourceType = "monitoring"
 )

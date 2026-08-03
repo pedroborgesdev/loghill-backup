@@ -42,6 +42,8 @@ func TestUpdatePersistsAtomicallyAndIsConcurrentSafe(t *testing.T) {
 	value := domain.Settings{
 		LogLimit:             domain.NumberUnitValue{Value: 8, Unit: domain.StorageLines},
 		InactivePreservation: domain.NumberUnitValue{Value: 1, Unit: domain.StorageMB},
+		InactiveAfterSeconds: 300,
+		DeleteInactiveDays:   7,
 	}
 	var wait sync.WaitGroup
 	for index := 0; index < 20; index++ {

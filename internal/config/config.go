@@ -10,28 +10,33 @@ import (
 )
 
 type Config struct {
-	Host, Port, DataDir                                          string
-	PublicURL                                                    string
-	MaxLogLines, CompactTarget, CompactKeep, MaxPageSize         int
-	MaxBodySize, MaxMessageSize, MaxMetadataSize                 int64
-	InactiveAfter, DeleteAfter, CleanupInterval                  time.Duration
-	HealthcheckInterval, SSEHeartbeat                            time.Duration
-	LogCountsAsActivity, CORS, RateLimit                         bool
-	AllowedOrigins                                               []string
-	RateRequests                                                 int
-	RateWindow                                                   time.Duration
-	APIKeyEnabled, AdminAuthEnabled                              bool
-	APIKey, AdminAPIKey                                          string
-	SSEBuffer, SSEMaxClients                                     int
-	ShutdownTimeout                                              time.Duration
-	EmailProvider                                                string
-	OutlookTenantID, OutlookClientID, OutlookClientSecret        string
-	OutlookSenderEmail, OutlookSenderName                        string
-	OutlookEnabled, EmailManagedByEnvironment                    bool
-	OutlookEnabledManaged                                        bool
-	EmailSettingsEncryptionKey                                   string
-	EmailAlertQueueSize, EmailAlertWorkers, EmailAlertMaxRetries int
-	EmailAlertSendTimeout, EmailAlertRetryInterval               time.Duration
+	Host, Port, DataDir                                            string
+	PublicURL                                                      string
+	MaxLogLines, CompactTarget, CompactKeep, MaxPageSize           int
+	MaxBodySize, MaxMessageSize, MaxMetadataSize                   int64
+	InactiveAfter, DeleteAfter, CleanupInterval                    time.Duration
+	HealthcheckInterval, SSEHeartbeat                              time.Duration
+	LogCountsAsActivity, CORS, RateLimit                           bool
+	AllowedOrigins                                                 []string
+	RateRequests                                                   int
+	RateWindow                                                     time.Duration
+	APIKeyEnabled, AdminAuthEnabled                                bool
+	APIKey, AdminAPIKey                                            string
+	SSEBuffer, SSEMaxClients                                       int
+	ShutdownTimeout                                                time.Duration
+	EmailProvider                                                  string
+	OutlookTenantID, OutlookClientID, OutlookClientSecret          string
+	OutlookSenderEmail, OutlookSenderName                          string
+	OutlookEnabled, EmailManagedByEnvironment                      bool
+	OutlookEnabledManaged                                          bool
+	SMTPHost, SMTPUsername, SMTPPassword, SMTPFrom, SMTPSenderName string
+	SMTPPort                                                       int
+	SMTPEnabled, SMTPManagedByEnvironment                          bool
+	EmailSettingsEncryptionKey                                     string
+	EmailAlertQueueSize, EmailAlertWorkers, EmailAlertMaxRetries   int
+	EmailAlertSendTimeout, EmailAlertRetryInterval                 time.Duration
+	ExecutionHistoryRetentionDays, ExecutionHistoryMaxRecords      int
+	ExecutionHistoryCleanupInterval                                time.Duration
 }
 
 func Load() (Config, error) {
@@ -50,6 +55,15 @@ func Load() (Config, error) {
 	_, outlookEnabledManaged := os.LookupEnv("OUTLOOK_ENABLED")
 	if !outlookEnabledManaged && emailProvider == "outlook" {
 		outlookEnabled = outlookTenantID != "" && outlookClientID != "" && outlookClientSecret != "" && outlookSenderEmail != ""
+	}
+	smtpHost := strings.TrimSpace(env("SMTP_HOST", "smtp.gmail.com"))
+	smtpPort := envInt("SMTP_PORT", 587)
+	smtpUsername := strings.TrimSpace(os.Getenv("SMTP_USERNAME"))
+	smtpPassword := os.Getenv("SMTP_PASSWORD")
+	smtpFrom := strings.TrimSpace(os.Getenv("SMTP_FROM"))
+	smtpEnabled := envBool("SMTP_ENABLED", false)
+	if _, managed := os.LookupEnv("SMTP_ENABLED"); !managed && emailProvider == "gmail" {
+		smtpEnabled = smtpHost != "" && smtpPort > 0 && smtpUsername != "" && smtpPassword != "" && smtpFrom != ""
 	}
 	c := Config{
 		Host: env("APP_HOST", "0.0.0.0"), Port: env("APP_PORT", "8080"), DataDir: env("DATA_DIR", "./data"),
@@ -70,15 +84,20 @@ func Load() (Config, error) {
 		OutlookTenantID: outlookTenantID, OutlookClientID: outlookClientID,
 		OutlookClientSecret: outlookClientSecret, OutlookSenderEmail: outlookSenderEmail,
 		OutlookSenderName: env("OUTLOOK_SENDER_NAME", "LogHill"), EmailSettingsEncryptionKey: env("EMAIL_SETTINGS_ENCRYPTION_KEY", "NHYVqkvuHied51HKZjaREtdzdbGsKsOkU+62pzs+Q7Q="),
+		SMTPHost: smtpHost, SMTPPort: smtpPort, SMTPUsername: smtpUsername, SMTPPassword: smtpPassword,
+		SMTPFrom: smtpFrom, SMTPSenderName: env("SMTP_SENDER_NAME", "LogHill"), SMTPEnabled: smtpEnabled,
 		EmailAlertQueueSize: envInt("EMAIL_ALERT_QUEUE_SIZE", 1000), EmailAlertWorkers: envInt("EMAIL_ALERT_WORKERS", 2),
 		EmailAlertMaxRetries: envInt("EMAIL_ALERT_MAX_RETRIES", 3), EmailAlertSendTimeout: envDuration("EMAIL_ALERT_SEND_TIMEOUT", 30*time.Second),
-		EmailAlertRetryInterval: envDuration("EMAIL_ALERT_RETRY_INTERVAL", 5*time.Second),
+		EmailAlertRetryInterval:       envDuration("EMAIL_ALERT_RETRY_INTERVAL", 5*time.Second),
+		ExecutionHistoryRetentionDays: envInt("EXECUTION_HISTORY_RETENTION_DAYS", 90), ExecutionHistoryMaxRecords: envInt("EXECUTION_HISTORY_MAX_RECORDS", 100000),
+		ExecutionHistoryCleanupInterval: envDuration("EXECUTION_HISTORY_CLEANUP_INTERVAL", time.Hour),
 	}
 	c.EmailManagedByEnvironment = anyEnvironmentSet(
 		"OUTLOOK_ENABLED", "OUTLOOK_TENANT_ID", "OUTLOOK_CLIENT_ID",
 		"OUTLOOK_CLIENT_SECRET", "OUTLOOK_SENDER_EMAIL", "OUTLOOK_SENDER_NAME", "EMAIL_FROM_ADDR", "EMAIL_USER",
 		"O365_TENANT_ID", "O365_CLIENT_ID", "O365_CLIENT_SECRET",
 	)
+	c.SMTPManagedByEnvironment = anyEnvironmentSet("SMTP_ENABLED", "SMTP_HOST", "SMTP_PORT", "SMTP_USERNAME", "SMTP_PASSWORD", "SMTP_FROM", "SMTP_SENDER_NAME")
 	if v := strings.TrimSpace(os.Getenv("CORS_ALLOWED_ORIGINS")); v != "" {
 		for _, item := range strings.Split(v, ",") {
 			c.AllowedOrigins = append(c.AllowedOrigins, strings.TrimSpace(item))
@@ -93,8 +112,11 @@ func Load() (Config, error) {
 	if c.AdminAuthEnabled && c.AdminAPIKey == "" {
 		return c, fmt.Errorf("ADMIN_API_KEY is required when ADMIN_AUTH_ENABLED=true")
 	}
-	if c.EmailProvider != "outlook" {
-		return c, fmt.Errorf("EMAIL_PROVIDER must be outlook")
+	if c.EmailProvider != "outlook" && c.EmailProvider != "gmail" {
+		return c, fmt.Errorf("EMAIL_PROVIDER must be outlook or gmail")
+	}
+	if c.SMTPPort < 1 || c.SMTPPort > 65535 {
+		return c, fmt.Errorf("SMTP_PORT must be between 1 and 65535")
 	}
 	publicURL, publicURLError := url.ParseRequestURI(c.PublicURL)
 	if publicURLError != nil || (publicURL.Scheme != "http" && publicURL.Scheme != "https") || publicURL.Host == "" {
@@ -102,6 +124,9 @@ func Load() (Config, error) {
 	}
 	if c.EmailAlertQueueSize < 1 || c.EmailAlertWorkers < 1 || c.EmailAlertMaxRetries < 0 || c.EmailAlertSendTimeout <= 0 || c.EmailAlertRetryInterval < 0 {
 		return c, fmt.Errorf("invalid email alert queue configuration")
+	}
+	if c.ExecutionHistoryRetentionDays < 1 || c.ExecutionHistoryMaxRecords < 1 || c.ExecutionHistoryCleanupInterval <= 0 {
+		return c, fmt.Errorf("invalid execution history configuration")
 	}
 	return c, nil
 }

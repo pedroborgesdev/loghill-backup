@@ -177,7 +177,6 @@ func TestAlertValidation(t *testing.T) {
 				input.Recipients[i] = "x" + string(rune('a'+i)) + "@example.com"
 			}
 		}, nil},
-		{"gmail", func(input *domain.AlertInput) { input.Provider = domain.EmailProviderGmail }, nil},
 		{"missing sender", func(input *domain.AlertInput) { input.SenderIDs = []string{"missing-1234abcd"} }, nil},
 	}
 	for _, test := range tests {

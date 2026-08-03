@@ -117,7 +117,7 @@ func TestAlertAndEmailSettingsEndpoints(t *testing.T) {
 		}
 	}
 	response = alertRequest(fixture.router, http.MethodPost, "/api/v1/alerts", `{"name":"Gmail","sender_ids":["`+fixture.sender.ID+`"],"severities":["ERROR"],"recipients":["dev@example.com"],"provider":"gmail","enabled":false}`, "")
-	if response.Code != http.StatusUnprocessableEntity || !bytes.Contains(response.Body.Bytes(), []byte("EMAIL_PROVIDER_NOT_AVAILABLE")) {
+	if response.Code != http.StatusCreated {
 		t.Fatalf("gmail=%d %s", response.Code, response.Body.String())
 	}
 	response = alertRequest(fixture.router, http.MethodDelete, "/api/v1/alerts/"+created.ID, "", "")

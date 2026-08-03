@@ -85,6 +85,14 @@ func (a *API) updateAlert(c *gin.Context) {
 
 func (a *API) deleteAlert(c *gin.Context) {
 	id := c.Param("alertID")
+	if a.monitoring != nil {
+		if usage := a.monitoring.AlertUsageCount(id); usage > 0 {
+			body := errBody(c, "ALERT_USED_BY_MONITORING", "O alerta está associado a regras de monitoramento.")
+			body["monitoring_rules"] = usage
+			c.JSON(http.StatusConflict, body)
+			return
+		}
+	}
 	if err := a.alerts.Delete(id); err != nil {
 		a.failAlert(c, err)
 		return
@@ -184,10 +192,10 @@ func (a *API) testEmailConnection(c *gin.Context) {
 	_ = a.emailConfig.RecordTest(err == nil, message, time.Now())
 	slog.Info("email provider connection tested", "provider", a.emailProvider.Provider(), "success", err == nil)
 	if err != nil {
-		c.JSON(http.StatusBadGateway, alertErrorBody(c, emailProviderErrorCode(err, "OUTLOOK_CONNECTION_FAILED"), message, ""))
+		c.JSON(http.StatusBadGateway, alertErrorBody(c, emailProviderErrorCode(err, "EMAIL_CONNECTION_FAILED"), message, ""))
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{"success": true, "message": "Conexão com o Outlook validada com sucesso."})
+	c.JSON(http.StatusOK, gin.H{"success": true, "message": "Conexão com o provedor de e-mail validada com sucesso."})
 }
 
 func (a *API) sendTestEmail(c *gin.Context) {
@@ -204,13 +212,13 @@ func (a *API) sendTestEmail(c *gin.Context) {
 	}
 	ctx, cancel := context.WithTimeout(c.Request.Context(), a.cfg.EmailAlertSendTimeout)
 	defer cancel()
-	message, err := notification.NewTemplate(a.cfg.PublicURL).RenderProviderTest(recipient)
+	message, err := notification.NewTemplate(a.cfg.PublicURL).RenderProviderTest(recipient, a.emailProvider.Provider())
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, alertErrorBody(c, "EMAIL_TEMPLATE_FAILED", "Não foi possível preparar o e-mail de teste.", ""))
 		return
 	}
 	if err := a.emailProvider.Send(ctx, message); err != nil {
-		c.JSON(http.StatusBadGateway, alertErrorBody(c, emailProviderErrorCode(err, "OUTLOOK_SEND_FAILED"), friendlyEmailError(err), ""))
+		c.JSON(http.StatusBadGateway, alertErrorBody(c, emailProviderErrorCode(err, "EMAIL_SEND_FAILED"), friendlyEmailError(err), ""))
 		return
 	}
 	slog.Info("email provider test message sent", "provider", a.emailProvider.Provider(), "recipient", recipient)
@@ -224,7 +232,7 @@ func (a *API) failAlert(c *gin.Context, err error) {
 	case errors.Is(err, alerts.ErrNotFound):
 		c.JSON(http.StatusNotFound, alertErrorBody(c, "ALERT_NOT_FOUND", "Alerta não encontrado.", ""))
 	case errors.Is(err, alerts.ErrEmailNotConfigured), errors.Is(err, emailprovider.ErrNotConfigured):
-		c.JSON(http.StatusConflict, alertErrorBody(c, "OUTLOOK_NOT_CONFIGURED", "Configure e habilite o Outlook antes de ativar o alerta.", "provider"))
+		c.JSON(http.StatusConflict, alertErrorBody(c, "EMAIL_NOT_CONFIGURED", "Configure e habilite um e-mail antes de ativar o alerta.", "provider"))
 	case errors.As(err, &alertValidation):
 		c.JSON(http.StatusUnprocessableEntity, alertErrorBody(c, alertValidation.Code, alertValidation.Message, alertValidation.Field))
 	case errors.As(err, &settingsValidation):
@@ -262,12 +270,12 @@ func friendlyEmailError(err error) string {
 		return providerError.Message
 	}
 	if errors.Is(err, emailprovider.ErrNotConfigured) {
-		return "O Outlook não está configurado."
+		return "O provedor de e-mail não está configurado."
 	}
 	if errors.Is(err, context.DeadlineExceeded) {
 		return "O serviço de e-mail não respondeu dentro do tempo esperado."
 	}
-	return "Não foi possível concluir a operação com o Outlook."
+	return "Não foi possível concluir a operação com o provedor de e-mail."
 }
 
 func emailProviderErrorCode(err error, fallback string) string {

@@ -101,6 +101,8 @@ func TestLifecycleAndCompaction(t *testing.T) {
 	if _, err = svc.UpdateSettings(domain.Settings{
 		LogLimit:             domain.NumberUnitValue{Value: 10, Unit: domain.StorageLines},
 		InactivePreservation: domain.NumberUnitValue{Value: 2, Unit: domain.StorageLines},
+		InactiveAfterSeconds: 300,
+		DeleteInactiveDays:   7,
 	}); err != nil {
 		t.Fatal(err)
 	}
@@ -199,6 +201,8 @@ func TestSettingsAreAppliedWithoutRestart(t *testing.T) {
 	updated, err := svc.UpdateSettings(domain.Settings{
 		LogLimit:             domain.NumberUnitValue{Value: 3, Unit: domain.StorageLines},
 		InactivePreservation: domain.NumberUnitValue{Value: 1, Unit: domain.StorageLines},
+		InactiveAfterSeconds: 300,
+		DeleteInactiveDays:   7,
 	})
 	if err != nil || updated.LogLimit.Value != 3 {
 		t.Fatalf("could not update settings: %+v, %v", updated, err)

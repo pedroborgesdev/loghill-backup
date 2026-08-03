@@ -85,10 +85,13 @@ func (s *Service) List(filters domain.EventFilters) domain.EventPage {
 		if filters.SenderID != "" && !contains(event.SenderIDs, filters.SenderID) {
 			continue
 		}
+		if filters.SenderName != "" && !s.matchesSenderName(event.SenderIDs, filters.SenderName) {
+			continue
+		}
 		if filters.ActionType != "" && event.ActionType != filters.ActionType {
 			continue
 		}
-		if query != "" && !strings.Contains(strings.ToLower(event.Name+" "+event.Key+" "+strings.Join(event.SenderIDs, " ")), query) {
+		if query != "" && !strings.Contains(strings.ToLower(event.Name+" "+event.Key), query) {
 			continue
 		}
 		filtered = append(filtered, event)
@@ -110,6 +113,17 @@ func (s *Service) List(filters domain.EventFilters) domain.EventPage {
 	}
 	pages := (total + filters.PageSize - 1) / filters.PageSize
 	return domain.EventPage{Items: filtered[start:end], Pagination: domain.Pagination{Page: filters.Page, PageSize: filters.PageSize, Returned: end - start, Total: int64(total), TotalPages: pages}}
+}
+
+func (s *Service) matchesSenderName(ids []string, query string) bool {
+	query = strings.ToLower(strings.TrimSpace(query))
+	for _, id := range ids {
+		sender, err := s.senders.Get(context.Background(), id)
+		if err == nil && strings.Contains(strings.ToLower(sender.Name), query) {
+			return true
+		}
+	}
+	return false
 }
 
 func (s *Service) Summary() map[string]int64 {
@@ -254,6 +268,14 @@ func (s *Service) MarkPending(id string, test bool) error {
 	})
 }
 
+func (s *Service) RecordTriggered(id string) error {
+	return s.store.Mutate(id, func(event *domain.EventDefinition) {
+		now := s.clock.Now()
+		event.LastTriggeredAt = timePointer(now)
+		event.TriggerCount++
+	})
+}
+
 func (s *Service) RecordDelivery(id string, test bool, status domain.DeliveryStatus, message string) error {
 	return s.store.Mutate(id, func(event *domain.EventDefinition) {
 		now := s.clock.Now()
@@ -304,8 +326,8 @@ func (s *Service) validate(ctx context.Context, input domain.EventInput, require
 	if requireKey && input.Key == "" || !ValidKey(input.Key) {
 		return input, &ValidationError{Code: "INVALID_EVENT_KEY", Field: "key", Message: "O identificador do evento é inválido."}
 	}
-	if len(input.SenderIDs) == 0 || len(input.SenderIDs) > MaxEventSenders {
-		return input, invalid("sender_ids", "Selecione de 1 a 100 senders.")
+	if len(input.SenderIDs) > MaxEventSenders {
+		return input, invalid("sender_ids", "Selecione no máximo 100 senders.")
 	}
 	seenSenders := make(map[string]bool)
 	cleanSenders := make([]string, 0, len(input.SenderIDs))
@@ -325,8 +347,15 @@ func (s *Service) validate(ctx context.Context, input domain.EventInput, require
 	if input.ActionType == "" {
 		input.ActionType = domain.EventActionEmail
 	}
-	if input.ActionType != domain.EventActionEmail {
-		return input, &ValidationError{Code: "EVENT_ACTION_NOT_AVAILABLE", Field: "action_type", Message: "Somente a ação de e-mail está disponível."}
+	if input.ActionType != domain.EventActionEmail && input.ActionType != domain.EventActionNone {
+		return input, &ValidationError{Code: "EVENT_ACTION_NOT_AVAILABLE", Field: "action_type", Message: "A ação selecionada não está disponível."}
+	}
+	if input.ActionType == domain.EventActionNone {
+		input.Recipients = []string{}
+		input.SubjectTemplate = ""
+		input.MessageTemplate = ""
+		sort.Strings(input.SenderIDs)
+		return input, nil
 	}
 	if len(input.Recipients) == 0 || len(input.Recipients) > MaxEventRecipients {
 		return input, invalid("recipients", "Informe de 1 a 20 destinatários.")

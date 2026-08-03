@@ -28,6 +28,7 @@ import (
 var (
 	namePattern     = regexp.MustCompile(`^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$`)
 	eventKeyPattern = regexp.MustCompile(`^[a-z0-9][a-z0-9_-]{2,79}$`)
+	instancePattern = regexp.MustCompile(`^ins_[a-f0-9]{32}$`)
 )
 
 type SenderValidationError struct {
@@ -42,15 +43,16 @@ type SenderCredentials struct {
 }
 
 type Service struct {
-	repo      *repository.FileRepository
-	cfg       config.Config
-	clock     domain.Clock
-	settings  *settingsstore.Store
-	Hub       *Hub
-	started   time.Time
-	locks     *storage.LockManager
-	alertSink LogAlertSink
-	eventSink LogEventSink
+	repo           *repository.FileRepository
+	cfg            config.Config
+	clock          domain.Clock
+	settings       *settingsstore.Store
+	Hub            *Hub
+	started        time.Time
+	locks          *storage.LockManager
+	alertSink      LogAlertSink
+	eventSink      LogEventSink
+	monitoringSink LogMonitoringSink
 }
 
 type LogAlertSink interface {
@@ -61,12 +63,19 @@ type LogEventSink interface {
 	NotifyEvent(context.Context, domain.Sender, domain.LogEntry)
 }
 
+type LogMonitoringSink interface {
+	Notify(context.Context, domain.Sender, domain.LogEntry)
+	NotifySenderStatus(context.Context, domain.Sender, domain.SenderStatus)
+	NotifySenderCreated(context.Context, domain.Sender)
+}
+
 func New(repo *repository.FileRepository, cfg config.Config, clock domain.Clock, settings *settingsstore.Store) *Service {
 	return &Service{repo: repo, cfg: cfg, clock: clock, settings: settings, Hub: NewHub(cfg.SSEMaxClients, cfg.SSEBuffer), started: clock.Now(), locks: &storage.LockManager{}}
 }
 
-func (s *Service) SetAlertSink(sink LogAlertSink) { s.alertSink = sink }
-func (s *Service) SetEventSink(sink LogEventSink) { s.eventSink = sink }
+func (s *Service) SetAlertSink(sink LogAlertSink)           { s.alertSink = sink }
+func (s *Service) SetEventSink(sink LogEventSink)           { s.eventSink = sink }
+func (s *Service) SetMonitoringSink(sink LogMonitoringSink) { s.monitoringSink = sink }
 func NormalizeName(value string) (string, error) {
 	value = strings.ToLower(strings.TrimSpace(value))
 	var normalized strings.Builder
@@ -115,6 +124,14 @@ func generateSenderKey() (string, string, string, error) {
 	return key, hex.EncodeToString(sum[:]), key[:12] + "...", nil
 }
 
+func generateInstanceID() (string, error) {
+	random := make([]byte, 16)
+	if _, err := rand.Read(random); err != nil {
+		return "", err
+	}
+	return "ins_" + hex.EncodeToString(random), nil
+}
+
 func senderKeyMatches(expectedHash, candidate string) bool {
 	if expectedHash == "" || candidate == "" || len(candidate) > 256 {
 		return false
@@ -147,6 +164,9 @@ func (s *Service) CreateSender(ctx context.Context, name, description string) (d
 		return domain.Sender{}, SenderCredentials{}, domain.ErrSenderAlreadyExists
 	} else if err != nil {
 		return domain.Sender{}, SenderCredentials{}, err
+	}
+	if s.monitoringSink != nil {
+		s.monitoringSink.NotifySenderCreated(ctx, item)
 	}
 	return item, SenderCredentials{SenderKey: key, DisplayedOnce: true}, nil
 }
@@ -261,11 +281,99 @@ func authenticateSender(item domain.Sender, key string) error {
 func (s *Service) Get(ctx context.Context, id string) (domain.Sender, error) {
 	return s.repo.Get(ctx, id)
 }
+
+func (s *Service) InitInstance(ctx context.Context, senderID, senderKey string) (domain.SenderInstance, error) {
+	lock := s.locks.Get(senderID)
+	lock.Lock()
+	defer lock.Unlock()
+	sender, err := s.repo.Get(ctx, senderID)
+	if err != nil {
+		return domain.SenderInstance{}, domain.ErrInvalidSenderKey
+	}
+	if err = authenticateSender(sender, senderKey); err != nil {
+		return domain.SenderInstance{}, err
+	}
+	id, err := generateInstanceID()
+	if err != nil {
+		return domain.SenderInstance{}, err
+	}
+	instance := domain.SenderInstance{ID: id, CreatedAt: s.clock.Now()}
+	if err = s.repo.RegisterInstance(ctx, senderID, instance); err != nil {
+		return domain.SenderInstance{}, err
+	}
+	return instance, nil
+}
+
+func (s *Service) InitInstanceByKey(ctx context.Context, senderKey string) (domain.Sender, domain.SenderInstance, error) {
+	items, err := s.repo.All(ctx)
+	if err != nil {
+		return domain.Sender{}, domain.SenderInstance{}, err
+	}
+	for _, sender := range items {
+		if authenticateSender(sender, senderKey) != nil {
+			continue
+		}
+		instance, initErr := s.InitInstance(ctx, sender.ID, senderKey)
+		return sender, instance, initErr
+	}
+	return domain.Sender{}, domain.SenderInstance{}, domain.ErrInvalidSenderKey
+}
+
+func (s *Service) Instances(ctx context.Context, senderID string) ([]domain.SenderInstance, error) {
+	items, err := s.repo.ListInstances(ctx, senderID)
+	if err != nil {
+		return nil, err
+	}
+	now := s.clock.Now()
+	for index := range items {
+		activity := items[index].CreatedAt
+		if items[index].LastActivityAt != nil {
+			activity = *items[index].LastActivityAt
+		}
+		if items[index].LastHealthcheckAt != nil && items[index].LastHealthcheckAt.After(activity) {
+			activity = *items[index].LastHealthcheckAt
+		}
+		items[index].Status = domain.StatusOnline
+		if activity.IsZero() || now.Sub(activity) > time.Duration(s.settings.Get().InactiveAfterSeconds)*time.Second {
+			items[index].Status = domain.StatusInactive
+		}
+	}
+	return items, nil
+}
+
+func (s *Service) DeleteInstance(ctx context.Context, senderID, instanceID string) error {
+	if instanceID != "legacy" && !instancePattern.MatchString(instanceID) {
+		return domain.ErrNotFound
+	}
+	return s.repo.DeleteInstance(ctx, senderID, instanceID)
+}
+
+func (s *Service) validateInstance(ctx context.Context, senderID, instanceID string) error {
+	if instanceID == "" {
+		return nil
+	}
+	if !instancePattern.MatchString(instanceID) {
+		return domain.ErrConflict
+	}
+	exists, err := s.repo.InstanceExists(ctx, senderID, instanceID)
+	if err != nil {
+		return err
+	}
+	if !exists {
+		return domain.ErrConflict
+	}
+	return nil
+}
+
 func (s *Service) ReceiveLog(ctx context.Context, id, senderKey, severity, message string, timestamp *time.Time, metadata map[string]any) (domain.LogEntry, time.Time, error) {
 	return s.ReceiveLogWithEvent(ctx, id, senderKey, severity, message, "", "", timestamp, metadata)
 }
 
 func (s *Service) ReceiveLogWithEvent(ctx context.Context, id, senderKey, severity, message, event, occurrenceID string, timestamp *time.Time, metadata map[string]any) (domain.LogEntry, time.Time, error) {
+	return s.ReceiveLogWithInstanceAndEvent(ctx, id, senderKey, "", severity, message, event, occurrenceID, timestamp, metadata)
+}
+
+func (s *Service) ReceiveLogWithInstanceAndEvent(ctx context.Context, id, senderKey, instanceID, severity, message, event, occurrenceID string, timestamp *time.Time, metadata map[string]any) (domain.LogEntry, time.Time, error) {
 	lock := s.locks.Get(id)
 	lock.Lock()
 	defer lock.Unlock()
@@ -287,6 +395,9 @@ func (s *Service) ReceiveLogWithEvent(ctx context.Context, id, senderKey, severi
 	if err = authenticateSender(sender, senderKey); err != nil {
 		return domain.LogEntry{}, time.Time{}, err
 	}
+	if err = s.validateInstance(ctx, id, instanceID); err != nil {
+		return domain.LogEntry{}, time.Time{}, err
+	}
 	if event != "" {
 		if !eventKeyPattern.MatchString(event) {
 			return domain.LogEntry{}, time.Time{}, domain.ErrInvalidEventKey
@@ -295,12 +406,13 @@ func (s *Service) ReceiveLogWithEvent(ctx context.Context, id, senderKey, severi
 	if len([]rune(occurrenceID)) > 200 || strings.ContainsAny(occurrenceID, "\r\n\x00") {
 		return domain.LogEntry{}, time.Time{}, domain.ErrInvalidEventOccurrenceID
 	}
+	previousStatus := sender.Status
 	now := s.clock.Now()
 	ts := now
 	if timestamp != nil {
 		ts = *timestamp
 	}
-	e := domain.LogEntry{Timestamp: ts, SenderID: id, Severity: sev, Message: message, Event: event, EventOccurrenceID: occurrenceID, Metadata: metadata}
+	e := domain.LogEntry{Timestamp: ts, SenderID: id, InstanceID: instanceID, Severity: sev, Message: message, Event: event, EventOccurrenceID: occurrenceID, Metadata: metadata}
 	count, size, err := s.repo.Append(ctx, id, e, s.settings.Get().LogLimit)
 	if err != nil {
 		return e, time.Time{}, err
@@ -324,9 +436,19 @@ func (s *Service) ReceiveLogWithEvent(ctx context.Context, id, senderKey, severi
 	if s.eventSink != nil && e.Event != "" {
 		s.eventSink.NotifyEvent(ctx, sender, e)
 	}
+	if s.monitoringSink != nil {
+		s.monitoringSink.Notify(ctx, sender, e)
+		if previousStatus != sender.Status {
+			s.monitoringSink.NotifySenderStatus(ctx, sender, previousStatus)
+		}
+	}
 	return e, now, nil
 }
 func (s *Service) Health(ctx context.Context, id, senderKey string) (domain.Sender, time.Time, error) {
+	return s.HealthWithInstance(ctx, id, senderKey, "")
+}
+
+func (s *Service) HealthWithInstance(ctx context.Context, id, senderKey, instanceID string) (domain.Sender, time.Time, error) {
 	lock := s.locks.Get(id)
 	lock.Lock()
 	defer lock.Unlock()
@@ -337,7 +459,14 @@ func (s *Service) Health(ctx context.Context, id, senderKey string) (domain.Send
 	if err = authenticateSender(item, senderKey); err != nil {
 		return item, time.Time{}, err
 	}
+	if err = s.validateInstance(ctx, id, instanceID); err != nil {
+		return item, time.Time{}, err
+	}
 	now := s.clock.Now()
+	if err = s.repo.TouchInstance(ctx, id, instanceID, now, true); err != nil {
+		return item, time.Time{}, err
+	}
+	previousStatus := item.Status
 	item.Status = domain.StatusOnline
 	item.LastActivityAt = &now
 	item.LastHealthcheckAt = &now
@@ -345,6 +474,9 @@ func (s *Service) Health(ctx context.Context, id, senderKey string) (domain.Send
 	item.InactiveAt = nil
 	item.ExpiresAt = nil
 	err = s.repo.Update(ctx, item)
+	if err == nil && s.monitoringSink != nil && previousStatus != item.Status {
+		s.monitoringSink.NotifySenderStatus(ctx, item, previousStatus)
+	}
 	return item, now, err
 }
 func (s *Service) Logs(ctx context.Context, id string, f domain.LogFilters) (domain.LogPage, error) {
@@ -358,6 +490,16 @@ func (s *Service) Senders(ctx context.Context, f domain.SenderFilters) (domain.S
 	if err != nil {
 		return domain.SenderPage{}, err
 	}
+	for index := range items {
+		count, countErr := s.repo.InstanceCount(ctx, items[index].ID)
+		if countErr != nil {
+			return domain.SenderPage{}, countErr
+		}
+		if count == 0 && items[index].LogLineCount > 0 {
+			count = 1
+		}
+		items[index].InstanceCount = count
+	}
 	filtered := items[:0]
 	for _, v := range items {
 		if f.Status != "" && v.Status != f.Status {
@@ -366,7 +508,7 @@ func (s *Service) Senders(ctx context.Context, f domain.SenderFilters) (domain.S
 		if f.Name != "" && !strings.Contains(strings.ToLower(v.Name), strings.ToLower(f.Name)) {
 			continue
 		}
-		if f.Search != "" && !strings.Contains(strings.ToLower(v.Name+" "+v.ID), strings.ToLower(f.Search)) {
+		if f.Search != "" && !strings.Contains(strings.ToLower(v.Name), strings.ToLower(f.Search)) {
 			continue
 		}
 		if f.HasErrors && v.RecentErrorCount == 0 {
@@ -461,6 +603,17 @@ func (s *Service) Tick(ctx context.Context) error {
 		}
 		lock := s.locks.Get(item.ID)
 		lock.Lock()
+		if item.Status == domain.StatusInactive && item.InactiveAt != nil {
+			expires := item.InactiveAt.Add(time.Duration(currentSettings.DeleteInactiveDays) * 24 * time.Hour)
+			if item.ExpiresAt == nil || !item.ExpiresAt.Equal(expires) {
+				item.ExpiresAt = &expires
+				item.UpdatedAt = now
+				if err = s.repo.Update(ctx, item); err != nil {
+					lock.Unlock()
+					return err
+				}
+			}
+		}
 		if item.Status == domain.StatusInactive && item.ExpiresAt != nil && !now.Before(*item.ExpiresAt) {
 			if err = s.repo.DeleteLogs(ctx, item.ID); err != nil {
 				lock.Unlock()
@@ -478,9 +631,9 @@ func (s *Service) Tick(ctx context.Context) error {
 			lock.Unlock()
 			continue
 		}
-		if item.Status == domain.StatusOnline && item.LastActivityAt != nil && now.Sub(*item.LastActivityAt) > s.cfg.InactiveAfter {
+		if item.Status == domain.StatusOnline && item.LastActivityAt != nil && now.Sub(*item.LastActivityAt) > time.Duration(currentSettings.InactiveAfterSeconds)*time.Second {
 			inactive := now
-			expires := now.Add(s.cfg.DeleteAfter)
+			expires := now.Add(time.Duration(currentSettings.DeleteInactiveDays) * 24 * time.Hour)
 			count, size, e := s.repo.CompactByLimit(ctx, item.ID, currentSettings.InactivePreservation)
 			if e != nil && !errors.Is(e, domain.ErrLogFileNotFound) {
 				lock.Unlock()
@@ -496,6 +649,9 @@ func (s *Service) Tick(ctx context.Context) error {
 			if err = s.repo.Update(ctx, item); err != nil {
 				lock.Unlock()
 				return err
+			}
+			if s.monitoringSink != nil {
+				s.monitoringSink.NotifySenderStatus(ctx, item, domain.StatusOnline)
 			}
 		}
 		lock.Unlock()

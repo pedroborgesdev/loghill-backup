@@ -4,7 +4,10 @@ import "time"
 
 type EventActionType string
 
-const EventActionEmail EventActionType = "email"
+const (
+	EventActionNone  EventActionType = "none"
+	EventActionEmail EventActionType = "email"
+)
 
 type EventDefinition struct {
 	ID                 string          `json:"id"`
@@ -42,6 +45,7 @@ type EventInput struct {
 type EventFilters struct {
 	Search     string
 	SenderID   string
+	SenderName string
 	ActionType EventActionType
 	Enabled    *bool
 	Page       int

@@ -126,13 +126,14 @@ export function SenderTableSkeleton() {
       {Array.from({ length: 7 }, (_, index) => (
         <div
           key={index}
-          className="grid h-[52px] grid-cols-[92px_minmax(180px,1.5fr)_130px_90px_90px_40px] items-center gap-3 px-3"
+          className="grid h-[52px] grid-cols-[92px_minmax(180px,1.5fr)_130px_90px_90px_90px_40px] items-center gap-3 px-3"
         >
           <Skeleton className="h-5 w-16" />
           <Skeleton className="h-4 w-40" />
           <Skeleton className="h-4 w-20" />
           <Skeleton className="h-4 w-12" />
           <Skeleton className="h-4 w-14" />
+          <Skeleton className="h-4 w-10" />
           <Skeleton className="size-7" />
         </div>
       ))}
@@ -171,7 +172,7 @@ function InstanceChooser({
         <table className="w-full table-fixed text-left text-xs">
           <thead className="sticky top-0 z-10 bg-[#1c1c1f] text-zinc-500">
             <tr className="h-10 border-b border-zinc-800">
-              <th className="w-[104px] px-3 font-medium">Status</th>
+              <th className="w-[150px] px-3 font-medium">Status</th>
               <th className="px-3 font-medium">Instância</th>
               <th className="w-[150px] px-3 font-medium">Última atividade</th>
               <th className="w-[100px] px-3 text-right font-medium">Logs</th>
@@ -311,11 +312,12 @@ export function SenderTable({ items, onAction }: { items: Sender[]; onAction?: (
         <table className="w-full table-fixed text-left text-xs">
           <thead className="sticky top-0 z-10 bg-[#1c1c1f] text-zinc-500">
             <tr className="h-10 border-b border-zinc-800">
-              <th className="w-[104px] px-3 font-medium">Status</th>
+              <th className="w-[150px] px-3 font-medium">Status</th>
               <th className="px-3 font-medium">Sender</th>
               <th className="w-[150px] px-3 font-medium">Última atividade</th>
               <th className="w-[100px] px-3 text-right font-medium">Logs</th>
               <th className="w-[100px] px-3 text-right font-medium">Erros recentes</th>
+              <th className="w-[130px] px-3 text-right font-medium">Instâncias</th>
               <th className="w-12 px-2">
                 <span className="sr-only">Ações</span>
               </th>
@@ -324,6 +326,7 @@ export function SenderTable({ items, onAction }: { items: Sender[]; onAction?: (
           <tbody className="divide-y divide-zinc-800/80">
             {groups.map((group) => {
               const multiple = group.items.length > 1;
+              const instanceCount = group.items.reduce((total, item) => total + (item.instance_count ?? 0), 0);
               const sender = group.items[0];
               const openGroup = () => {
                 if (multiple) setSelectedGroupKey(group.key);
@@ -386,6 +389,16 @@ export function SenderTable({ items, onAction }: { items: Sender[]; onAction?: (
                   <td className="px-3 text-right font-mono tabular-nums text-zinc-500">
                     {formatNumber(group.recentErrorCount)}
                   </td>
+                  <td className="px-3 text-right">
+                    {instanceCount > 1 ? (
+                      <span className="ml-auto inline-flex items-center gap-1.5 rounded-full border border-sky-900/80 bg-sky-950/25 px-2 py-1 text-[10px] font-medium text-sky-400" title={`${instanceCount} instâncias conectadas a este sender`}>
+                        <Layers3 className="size-3" />
+                        {formatNumber(instanceCount)} instâncias
+                      </span>
+                    ) : (
+                      <span className="font-mono tabular-nums text-zinc-500">{formatNumber(instanceCount)}</span>
+                    )}
+                  </td>
                   <td className="px-2">
                     {multiple ? (
                       <span
@@ -408,6 +421,7 @@ export function SenderTable({ items, onAction }: { items: Sender[]; onAction?: (
       <div className="divide-y divide-zinc-800 md:hidden">
         {groups.map((group) => {
           const multiple = group.items.length > 1;
+          const instanceCount = group.items.reduce((total, item) => total + (item.instance_count ?? 0), 0);
           const sender = group.items[0];
           const openGroup = () => {
             if (multiple) setSelectedGroupKey(group.key);
@@ -454,7 +468,7 @@ export function SenderTable({ items, onAction }: { items: Sender[]; onAction?: (
                 </div>
                 <StatusBadge status={group.status} />
               </div>
-              <div className="mt-3 grid grid-cols-3 gap-2 text-xs">
+              <div className="mt-3 grid grid-cols-4 gap-2 text-xs">
                 <div>
                   <p className="text-zinc-600">Atividade</p>
                   <p className="mt-0.5 text-zinc-400">
@@ -473,6 +487,7 @@ export function SenderTable({ items, onAction }: { items: Sender[]; onAction?: (
                     {formatNumber(group.recentErrorCount)}
                   </p>
                 </div>
+                <div><p className="text-zinc-600">Instâncias</p>{instanceCount > 1 ? <p className="mt-0.5 inline-flex items-center gap-1 text-sky-400"><Layers3 className="size-3" />{formatNumber(instanceCount)}</p> : <p className="mt-0.5 font-mono">{formatNumber(instanceCount)}</p>}</div>
               </div>
             </article>
           );

@@ -9,6 +9,7 @@ import {
   Server,
   X,
   Zap,
+  Radar,
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
@@ -17,6 +18,10 @@ import {
   useLocation,
 } from "react-router-dom";
 import { api } from "../api";
+import { alertsApi } from "../api/alerts";
+import { eventsApi } from "../api/events";
+import { monitoringApi } from "../api/monitoring";
+import { queryClient } from "../api/queryClient";
 import { SettingsButton, SettingsDialog } from "../components/SettingsDialog";
 import type { SettingsCategory } from "../components/SettingsDialog";
 import type { StreamState } from "../hooks/useLogStream";
@@ -28,20 +33,52 @@ const navigation = [
   { to: "/senders", label: "Senders", icon: Server, end: false },
   { to: "/alerts", label: "Alertas", icon: Bell, end: false },
   { to: "/events", label: "Eventos", icon: Zap, end: false },
+  { to: "/monitoring", label: "Monitoramento", icon: Radar, end: false },
   { to: "/status", label: "Status do sistema", icon: Activity, end: false },
 ];
+
+function prefetchNavigation(to: string) {
+  if (to === "/" || to === "/senders") {
+    void queryClient.prefetchQuery({
+      queryKey: ["view", "dashboard", "summary"],
+      queryFn: api.summary,
+    });
+    void queryClient.prefetchQuery({
+      queryKey: ["view", "dashboard", "senders"],
+      queryFn: () => api.senders("page=1&page_size=25&group_by=name&sort=last_activity_at&order=desc"),
+    });
+  } else if (to === "/alerts") {
+    void queryClient.prefetchQuery({
+      queryKey: ["view", "alerts"],
+      queryFn: () => alertsApi.list("page=1&page_size=20"),
+    });
+  } else if (to === "/events") {
+    void queryClient.prefetchQuery({
+      queryKey: ["view", "events"],
+      queryFn: () => eventsApi.list("page=1&page_size=20"),
+    });
+  } else if (to === "/monitoring") {
+    void queryClient.prefetchQuery({
+      queryKey: ["view", "monitoring"],
+      queryFn: () => monitoringApi.list("page=1&page_size=20"),
+    });
+  } else if (to === "/status") {
+    void queryClient.prefetchQuery({
+      queryKey: ["view", "system-status"],
+      queryFn: api.health,
+    });
+  }
+}
 
 function SidebarContent({
   collapsed,
   onCollapse,
   onNavigate,
-  backendOnline,
   onOpenSettings,
 }: {
   collapsed: boolean;
   onCollapse: () => void;
   onNavigate?: () => void;
-  backendOnline: boolean | null;
   onOpenSettings: (trigger: HTMLButtonElement) => void;
 }) {
   return (
@@ -70,6 +107,8 @@ function SidebarContent({
               to={to}
               end={end}
               onClick={onNavigate}
+              onFocus={() => prefetchNavigation(to)}
+              onMouseEnter={() => prefetchNavigation(to)}
               className={({ isActive }) =>
                 `flex h-10 w-full items-center gap-3 rounded-lg px-3 text-sm transition-colors duration-150 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-white/50 ${
                   collapsed ? "justify-center" : ""
@@ -86,52 +125,25 @@ function SidebarContent({
           </Tooltip>
         ))}
       </nav>
-      <div className="flex flex-col gap-2 border-t border-zinc-800 p-2">
-        <div className="border-b border-zinc-800 pb-2">
+      <div className="flex flex-col gap-2 p-2">
+        <div>
           <SettingsButton collapsed={collapsed} onOpen={onOpenSettings} />
-        </div>
-        <div
-          className={`flex h-10 w-full items-center gap-3 rounded-lg px-3 ${
-            collapsed ? "justify-center" : ""
-          }`}
-        >
-          <span
-            className={`size-2 shrink-0 rounded-full ${
-              backendOnline === null
-                ? "bg-zinc-600"
-                : backendOnline
-                  ? "bg-emerald-400"
-                  : "bg-red-400"
-            }`}
-          />
-          {!collapsed && (
-            <div className="min-w-0">
-              <p className="text-xs text-zinc-400">Backend</p>
-              <p className="text-[10px] text-zinc-600">
-                {backendOnline === null
-                  ? "Verificando"
-                  : backendOnline
-                    ? "Operacional"
-                    : "Indisponível"}
-              </p>
-            </div>
-          )}
         </div>
         <IconButton
           label={collapsed ? "Expandir sidebar" : "Recolher sidebar"}
           tooltipClassName="block w-full"
           onClick={onCollapse}
-          className={`hidden w-full border-transparent lg:inline-flex ${
-            collapsed ? "justify-center" : "justify-start"
+          className={`mt-4 hidden w-full border-transparent lg:inline-flex ${
+            collapsed ? "justify-center" : "justify-start px-5"
           }`}
         >
           {collapsed ? (
             <ChevronRight className="size-4" />
           ) : (
-            <>
+            <span className="flex items-center gap-3">
               <PanelLeftClose className="size-4" />
               <span className="text-xs">Recolher</span>
-            </>
+            </span>
           )}
         </IconButton>
       </div>
@@ -143,6 +155,7 @@ function pageInformation(pathname: string, sender?: string) {
   if (pathname === "/status") return { title: "Status do sistema", breadcrumb: "Sistema" };
   if (pathname === "/alerts") return { title: "Alertas de e-mail", breadcrumb: "Notificações" };
   if (pathname === "/events") return { title: "Eventos", breadcrumb: "Automações" };
+  if (pathname.startsWith("/monitoring")) return { title: pathname === "/monitoring" ? "Monitoramento" : "Construtor de regra", breadcrumb: "Automações" };
   if (pathname.startsWith("/senders/"))
     return { title: "Detalhes do sender", breadcrumb: sender ?? "Sender" };
   if (pathname === "/senders") return { title: "Senders", breadcrumb: "Inventário" };
@@ -222,7 +235,7 @@ export function AppShell() {
 
   return (
     <ShellContext.Provider value={context}>
-      <div className="h-[100dvh] overflow-hidden bg-[#09090b] text-zinc-100">
+      <div className="h-[100dvh] overflow-hidden bg-[#0c0c0f] text-zinc-100">
         <aside
           className={`fixed inset-y-0 left-0 z-40 hidden border-r border-zinc-800 bg-[#111113] transition-[width] duration-150 ease-out lg:block ${
             collapsed ? "w-16" : "w-60"
@@ -231,7 +244,6 @@ export function AppShell() {
           <SidebarContent
             collapsed={collapsed}
             onCollapse={toggleCollapsed}
-            backendOnline={backendOnline}
             onOpenSettings={openSettings}
           />
         </aside>
@@ -255,7 +267,6 @@ export function AppShell() {
                 collapsed={false}
                 onCollapse={() => setMobileOpen(false)}
                 onNavigate={() => setMobileOpen(false)}
-                backendOnline={backendOnline}
                 onOpenSettings={openSettings}
               />
             </aside>

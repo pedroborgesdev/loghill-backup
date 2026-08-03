@@ -6,10 +6,9 @@ import {
   Database,
   Mail,
   RotateCcw,
-  Settings2,
+  Settings as SettingsIcon,
   SlidersHorizontal,
   TimerReset,
-  X,
 } from "lucide-react";
 import {
   useCallback,
@@ -28,12 +27,18 @@ import {
   type StorageUnit,
 } from "../types/api";
 import { Listbox } from "./controls";
+import { CONTROL_SURFACE } from "./controlStyles";
 import { EmailSettings } from "./settings/EmailSettings";
-import { Button, IconButton, Skeleton, Tooltip } from "./ui";
+import { Button, ModalCloseButton, Skeleton, Tooltip } from "./ui";
+import { restoreFocusWithoutTooltip } from "../utils/tooltipFocus";
+import { useCachedState } from "../hooks/useCachedState";
+import { waitForMinimumLoading } from "../utils/minimumLoading";
 
 const defaultSettings: Omit<Settings, "updated_at"> = {
   log_limit: { value: 10_000, unit: "lines" },
   inactive_preservation: { value: 2_000, unit: "lines" },
+  inactive_after_seconds: 300,
+  delete_inactive_after_days: 7,
 };
 
 const unitOptions = [
@@ -54,6 +59,8 @@ interface NumberUnitDraft {
 interface SettingsDraft {
   log_limit: NumberUnitDraft;
   inactive_preservation: NumberUnitDraft;
+  inactive_after_seconds: string;
+  delete_inactive_after_days: string;
 }
 
 export type SettingsCategory = "general" | "storage" | "inactivity" | "email";
@@ -68,6 +75,8 @@ function toDraft(value: Omit<Settings, "updated_at">): SettingsDraft {
       value: String(value.inactive_preservation.value),
       unit: value.inactive_preservation.unit,
     },
+    inactive_after_seconds: String(value.inactive_after_seconds),
+    delete_inactive_after_days: String(value.delete_inactive_after_days),
   };
 }
 
@@ -81,8 +90,28 @@ function validateValue(value: string) {
   return "";
 }
 
+function validateIntegerRange(value: string, minimum: number, maximum: number, unit: string) {
+  if (!/^\d+$/.test(value)) return `Informe um número inteiro de ${unit}.`;
+  const parsed = Number(value);
+  return parsed < minimum || parsed > maximum ? `Informe um valor entre ${minimum.toLocaleString("pt-BR")} e ${maximum.toLocaleString("pt-BR")} ${unit}.` : "";
+}
+
 function toNumberUnit(value: NumberUnitDraft): NumberUnitValue {
   return { value: Number(value.value), unit: value.unit };
+}
+
+function SettingsNumberInput({ value, min, max, label, disabled, error, onChange }: { value: string; min: number; max: number; label: string; disabled: boolean; error?: string; onChange: (value: string) => void }) {
+  const id = useId();
+  const numericValue = Number(value);
+  const valid = /^\d+$/.test(value);
+  const adjust = (direction: -1 | 1) => onChange(String(Math.min(max, Math.max(min, (valid ? numericValue : min) + direction))));
+  return <div className="relative mt-2">
+    <input id={id} type="number" inputMode="numeric" min={min} max={max} step={1} value={value} disabled={disabled} aria-invalid={Boolean(error)} onChange={(event) => onChange(event.target.value)} onKeyDown={(event) => { if (event.key === "ArrowUp" || event.key === "ArrowDown") { event.preventDefault(); adjust(event.key === "ArrowUp" ? 1 : -1); } }} className={`themed-number-input h-10 w-full rounded-lg border px-3 pr-11 font-mono text-sm text-zinc-100 disabled:cursor-not-allowed disabled:opacity-60 ${CONTROL_SURFACE} ${error ? "border-red-800" : "border-zinc-700"}`} />
+    <div className="absolute bottom-px right-px top-px flex w-8 flex-col overflow-hidden rounded-r-[7px] border-l border-zinc-700 bg-zinc-950">
+      <button type="button" aria-label={`Aumentar ${label}`} aria-controls={id} disabled={disabled || (valid && numericValue >= max)} onClick={() => adjust(1)} className="grid min-h-0 flex-1 place-items-center border-b border-zinc-800 text-zinc-500 hover:bg-zinc-800 hover:text-zinc-100 disabled:cursor-not-allowed disabled:text-zinc-700"><ChevronUp className="size-3" /></button>
+      <button type="button" aria-label={`Diminuir ${label}`} aria-controls={id} disabled={disabled || (valid && numericValue <= min)} onClick={() => adjust(-1)} className="grid min-h-0 flex-1 place-items-center text-zinc-500 hover:bg-zinc-800 hover:text-zinc-100 disabled:cursor-not-allowed disabled:text-zinc-700"><ChevronDown className="size-3" /></button>
+    </div>
+  </div>;
 }
 
 export function SettingsButton({
@@ -98,11 +127,11 @@ export function SettingsButton({
         type="button"
         aria-label="Abrir configurações"
         onClick={(event) => onOpen(event.currentTarget)}
-        className={`flex h-10 w-full items-center gap-3 rounded-lg px-3 text-sm text-zinc-500 transition-colors duration-150 hover:bg-zinc-900 hover:text-zinc-200 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-white/50 ${
-          collapsed ? "justify-center" : ""
+        className={`flex h-10 w-full items-center gap-3 rounded-lg text-sm text-zinc-500 transition-colors duration-150 hover:bg-zinc-900 hover:text-zinc-200 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-white/50 ${
+          collapsed ? "justify-center px-3" : "px-5"
         }`}
       >
-        <Settings2 className="size-5 shrink-0" aria-hidden="true" />
+        <SettingsIcon className="size-5 shrink-0" aria-hidden="true" />
         {!collapsed && <span className="truncate">Configurações</span>}
       </button>
     </Tooltip>
@@ -187,7 +216,7 @@ function NumberUnitInput({
             onChange={(event) =>
               onChange({ ...value, value: event.target.value })
             }
-            className={`themed-number-input h-10 w-full rounded-lg border bg-zinc-900 px-3 pr-11 font-mono text-sm text-zinc-100 outline-none focus:ring-1 focus:ring-white/50 disabled:cursor-not-allowed disabled:opacity-60 ${
+            className={`themed-number-input h-10 w-full rounded-lg border px-3 pr-11 font-mono text-sm text-zinc-100 disabled:cursor-not-allowed disabled:opacity-60 ${CONTROL_SURFACE} ${
               error
                 ? "border-red-800 focus:border-red-700"
                 : "border-zinc-700"
@@ -296,9 +325,9 @@ export function SettingsDialog({
   const descriptionId = useId();
   const dialog = useRef<HTMLDivElement>(null);
   const discardDialog = useRef<HTMLDivElement>(null);
-  const [original, setOriginal] = useState<Settings>();
-  const [draft, setDraft] = useState<SettingsDraft>();
-  const [isInitialLoading, setIsInitialLoading] = useState(true);
+  const [original, setOriginal] = useCachedState<Settings>(["modal", "settings"]);
+  const [draft, setDraft] = useState<SettingsDraft | undefined>(() => original ? toDraft(original) : undefined);
+  const [isInitialLoading, setIsInitialLoading] = useState(!original);
   const [isSaving, setIsSaving] = useState(false);
   const [loadError, setLoadError] = useState("");
   const [saveError, setSaveError] = useState("");
@@ -308,12 +337,17 @@ export function SettingsDialog({
   const [category, setCategory] = useState<SettingsCategory>(initialCategory);
   const [emailDirty, setEmailDirty] = useState(false);
   const [emailMounted, setEmailMounted] = useState(initialCategory === "email");
+  const hasLoadedSettings = useRef(Boolean(original));
 
   const load = useCallback(async () => {
-    setIsInitialLoading(true);
+    const firstLoad = !hasLoadedSettings.current;
+    const startedAt = performance.now();
+    setIsInitialLoading(firstLoad);
     setLoadError("");
     try {
       const value = await api.settings();
+      if (firstLoad) await waitForMinimumLoading(startedAt);
+      hasLoadedSettings.current = true;
       setOriginal(value);
       setDraft(toDraft(value));
     } catch (error) {
@@ -321,7 +355,7 @@ export function SettingsDialog({
     } finally {
       setIsInitialLoading(false);
     }
-  }, []);
+  }, [setOriginal]);
 
   useEffect(() => {
     void load();
@@ -339,6 +373,8 @@ export function SettingsDialog({
       "inactive_preservation.value": validateValue(
         draft.inactive_preservation.value,
       ),
+      inactive_after_seconds: validateIntegerRange(draft.inactive_after_seconds, 1, 86_400, "segundos"),
+      delete_inactive_after_days: validateIntegerRange(draft.delete_inactive_after_days, 1, 3_650, "dias"),
       ...backendFieldErrors,
     };
     if (
@@ -366,7 +402,7 @@ export function SettingsDialog({
     const timer = window.setTimeout(() => dialog.current?.focus());
     return () => {
       window.clearTimeout(timer);
-      if (returnFocus?.isConnected) returnFocus.focus();
+      restoreFocusWithoutTooltip(returnFocus);
     };
   }, [returnFocus]);
 
@@ -404,9 +440,16 @@ export function SettingsDialog({
   }, [discardOpen, requestClose]);
 
   const changeDraft = (
-    field: keyof SettingsDraft,
+    field: "log_limit" | "inactive_preservation",
     value: NumberUnitDraft,
   ) => {
+    setDraft((current) => current && { ...current, [field]: value });
+    setBackendFieldErrors({});
+    setSaveError("");
+    setSaveSucceeded(false);
+  };
+
+  const changeTimeDraft = (field: "inactive_after_seconds" | "delete_inactive_after_days", value: string) => {
     setDraft((current) => current && { ...current, [field]: value });
     setBackendFieldErrors({});
     setSaveError("");
@@ -422,6 +465,8 @@ export function SettingsDialog({
       const response = await api.updateSettings({
         log_limit: toNumberUnit(draft.log_limit),
         inactive_preservation: toNumberUnit(draft.inactive_preservation),
+        inactive_after_seconds: Number(draft.inactive_after_seconds),
+        delete_inactive_after_days: Number(draft.delete_inactive_after_days),
       });
       const next: Settings = {
         ...response.settings,
@@ -451,7 +496,7 @@ export function SettingsDialog({
     },
     inactivity: {
       title: "Inatividade",
-      description: "Defina quanto do histórico será preservado quando um sender ficar inativo.",
+      description: "Defina quando um sender fica inativo, quanto preservar e quando excluir seus logs.",
     },
     email: {
       title: "E-mail",
@@ -485,13 +530,10 @@ export function SettingsDialog({
               Configure os limites de armazenamento e compactação dos logs.
             </p>
           </div>
-          <IconButton
+          <ModalCloseButton
             label="Fechar configurações"
             onClick={requestClose}
-            className="size-8"
-          >
-            <X className="size-4" />
-          </IconButton>
+          />
         </header>
 
         <div className="min-h-0 flex-1 sm:grid sm:grid-cols-[184px_minmax(0,1fr)]">
@@ -637,18 +679,34 @@ export function SettingsDialog({
                     />
                   )}
                   {category === "inactivity" && (
-                    <NumberUnitInput
-                      label="Logs preservados após inatividade"
-                      description="Define quanto do histórico será mantido quando um sender for marcado como inativo."
-                      helper="Quando o sender ficar inativo, somente os registros mais recentes dentro deste limite serão mantidos."
-                      value={draft.inactive_preservation}
-                      original={original.inactive_preservation}
-                      disabled={isSaving}
-                      error={errors["inactive_preservation.value"]}
-                      changed={JSON.stringify(draft.inactive_preservation) !== JSON.stringify(toDraft(original).inactive_preservation)}
-                      zeroMessage="Nenhum log será preservado quando o sender ficar inativo."
-                      onChange={(value) => changeDraft("inactive_preservation", value)}
-                    />
+                    <div className="space-y-4">
+                      <div className="grid gap-3 sm:grid-cols-2">
+                        <label className="rounded-xl border border-zinc-800 bg-[#111113] p-4 text-xs text-zinc-300">
+                          Considerar inativo após
+                          <SettingsNumberInput value={draft.inactive_after_seconds} min={1} max={86400} label="tempo de inatividade" disabled={isSaving} error={errors.inactive_after_seconds} onChange={(value) => changeTimeDraft("inactive_after_seconds", value)} />
+                          <span className="mt-2 block text-[11px] text-zinc-600">Tempo sem logs ou healthcheck, em segundos.</span>
+                          {errors.inactive_after_seconds && <span role="alert" className="mt-2 block text-[11px] text-red-400">{errors.inactive_after_seconds}</span>}
+                        </label>
+                        <label className="rounded-xl border border-zinc-800 bg-[#111113] p-4 text-xs text-zinc-300">
+                          Excluir inativos após
+                          <SettingsNumberInput value={draft.delete_inactive_after_days} min={1} max={3650} label="prazo de exclusão" disabled={isSaving} error={errors.delete_inactive_after_days} onChange={(value) => changeTimeDraft("delete_inactive_after_days", value)} />
+                          <span className="mt-2 block text-[11px] text-zinc-600">Prazo contado a partir da inativação, em dias.</span>
+                          {errors.delete_inactive_after_days && <span role="alert" className="mt-2 block text-[11px] text-red-400">{errors.delete_inactive_after_days}</span>}
+                        </label>
+                      </div>
+                      <NumberUnitInput
+                        label="Logs preservados após inatividade"
+                        description="Define quanto do histórico será mantido quando um sender for marcado como inativo."
+                        helper="Quando o sender ficar inativo, somente os registros mais recentes dentro deste limite serão mantidos."
+                        value={draft.inactive_preservation}
+                        original={original.inactive_preservation}
+                        disabled={isSaving}
+                        error={errors["inactive_preservation.value"]}
+                        changed={JSON.stringify(draft.inactive_preservation) !== JSON.stringify(toDraft(original).inactive_preservation)}
+                        zeroMessage="Nenhum log será preservado quando o sender ficar inativo."
+                        onChange={(value) => changeDraft("inactive_preservation", value)}
+                      />
+                    </div>
                   )}
                 </div>
               ) : null)}
