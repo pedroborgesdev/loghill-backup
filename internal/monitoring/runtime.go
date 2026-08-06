@@ -12,11 +12,11 @@ import (
 	"logtheater/internal/emailconfig"
 	"logtheater/internal/events"
 	"logtheater/internal/notification"
-	"logtheater/internal/repository"
+	"logtheater/internal/repositories"
 )
 
 type Resolver struct {
-	Repo   *repository.FileRepository
+	Repo   *repositories.SenderRepository
 	Events *events.Service
 	Alerts *alerts.Service
 	Email  *emailconfig.Store

@@ -11,7 +11,7 @@ import (
 	"logtheater/internal/config"
 	"logtheater/internal/domain"
 	"logtheater/internal/emailconfig"
-	"logtheater/internal/repository"
+	"logtheater/internal/repositories"
 )
 
 type fixedClock struct{ now time.Time }
@@ -21,7 +21,7 @@ func (c fixedClock) Now() time.Time { return c.now }
 func eventFixture(t *testing.T) (*Service, string, string, string) {
 	t.Helper()
 	dir := filepath.Join(t.TempDir(), "data")
-	repo := repository.New(dir)
+	repo := repositories.New(dir)
 	if err := repo.Init(); err != nil {
 		t.Fatal(err)
 	}

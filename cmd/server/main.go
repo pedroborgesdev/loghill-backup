@@ -14,17 +14,18 @@ import (
 	"logtheater/internal/alerts"
 	"logtheater/internal/auth"
 	"logtheater/internal/config"
+	"logtheater/internal/controllers"
 	"logtheater/internal/domain"
 	"logtheater/internal/emailconfig"
 	"logtheater/internal/emailprovider"
 	"logtheater/internal/events"
 	"logtheater/internal/executions"
-	"logtheater/internal/handler"
 	"logtheater/internal/monitoring"
 	"logtheater/internal/notification"
-	"logtheater/internal/repository"
+	"logtheater/internal/repositories"
+	"logtheater/internal/routes"
 	"logtheater/internal/scheduler"
-	"logtheater/internal/service"
+	"logtheater/internal/services"
 	settingsstore "logtheater/internal/settings"
 	webassets "logtheater/web"
 )
@@ -35,7 +36,7 @@ func main() {
 		slog.Error("invalid configuration", "error", err)
 		os.Exit(1)
 	}
-	repo := repository.New(cfg.DataDir)
+	repo := repositories.NewSenderRepository(cfg.DataDir)
 	if err = repo.Init(); err != nil {
 		slog.Error("storage initialization failed", "error", err)
 		os.Exit(1)
@@ -61,7 +62,7 @@ func main() {
 		slog.Error("event storage initialization failed", "error", err)
 		os.Exit(1)
 	}
-	svc := service.New(repo, cfg, clock, settings)
+	svc := services.NewSenderService(repo, cfg, clock, settings)
 	alertService := alerts.NewService(alertStore, repo, emailSettings, clock)
 	eventService := events.NewService(eventStore, repo, emailSettings, clock)
 	monitoringStore, err := monitoring.Open(cfg.DataDir)
@@ -82,6 +83,7 @@ func main() {
 	emailTemplate := notification.NewTemplate(cfg.PublicURL)
 	recorder := notification.NewRecorder(alertService, eventService).SetExecutions(executionStore)
 	dispatcher := notification.NewDispatcher(cfg.EmailAlertQueueSize, cfg.EmailAlertWorkers, cfg.EmailAlertMaxRetries, cfg.EmailAlertSendTimeout, cfg.EmailAlertRetryInterval, emailProvider, emailTemplate, recorder)
+	notificationService := services.NewNotificationService(alertService, eventService, svc, emailSettings, emailProvider, dispatcher, cfg.PublicURL, cfg.EmailAlertSendTimeout)
 	dispatcher.Start()
 	monitoringService.SetExecutor(monitoring.NewExecutor(monitoringService, eventService, dispatcher))
 	svc.SetAlertSink(notification.NewRuntime(alertService, dispatcher).SetExecutions(executionStore))
@@ -122,13 +124,13 @@ func main() {
 	}
 	secureCookies := strings.HasPrefix(cfg.PublicURL, "https://")
 	sessions := auth.NewManager(cfg.AppPassword, 12*time.Hour, secureCookies)
-	api := handler.New(svc, cfg, sched, assets).
+	api := controllers.New(svc, cfg, sched, assets).
 		ConfigureAuth(sessions).
-		ConfigureNotifications(alertService, emailSettings, emailProvider, dispatcher).
+		ConfigureNotifications(alertService, notificationService).
 		ConfigureEvents(eventService).
 		ConfigureMonitoring(monitoringService).
 		ConfigureExecutions(executionStore)
-	server := &http.Server{Addr: cfg.Address(), Handler: api.Router(), ReadHeaderTimeout: 10 * time.Second, ReadTimeout: 30 * time.Second, WriteTimeout: 0, IdleTimeout: 60 * time.Second}
+	server := &http.Server{Addr: cfg.Address(), Handler: routes.New(api, cfg).Router(), ReadHeaderTimeout: 10 * time.Second, ReadTimeout: 30 * time.Second, WriteTimeout: 0, IdleTimeout: 60 * time.Second}
 	done := make(chan error, 1)
 	go func() { slog.Info("server started", "address", cfg.Address()); done <- server.ListenAndServe() }()
 	select {

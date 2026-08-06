@@ -14,7 +14,7 @@ import (
 
 	"logtheater/internal/domain"
 	"logtheater/internal/emailconfig"
-	"logtheater/internal/repository"
+	"logtheater/internal/repositories"
 	"logtheater/internal/validation"
 )
 
@@ -51,7 +51,7 @@ func (e *ValidationError) Error() string { return e.Message }
 
 type Service struct {
 	store       *Store
-	senders     *repository.FileRepository
+	senders     *repositories.SenderRepository
 	emailConfig *emailconfig.Store
 	clock       domain.Clock
 	writeMu     sync.Mutex
@@ -59,7 +59,7 @@ type Service struct {
 	index       map[string]map[string][]string
 }
 
-func NewService(store *Store, senders *repository.FileRepository, emailConfig *emailconfig.Store, clock domain.Clock) *Service {
+func NewService(store *Store, senders *repositories.SenderRepository, emailConfig *emailconfig.Store, clock domain.Clock) *Service {
 	service := &Service{store: store, senders: senders, emailConfig: emailConfig, clock: clock, index: make(map[string]map[string][]string)}
 	service.rebuildIndex()
 	return service

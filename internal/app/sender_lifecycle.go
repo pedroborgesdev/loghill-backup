@@ -8,7 +8,7 @@ import (
 	"logtheater/internal/domain"
 	"logtheater/internal/events"
 	"logtheater/internal/monitoring"
-	"logtheater/internal/service"
+	"logtheater/internal/services"
 )
 
 type SenderDependencies struct {
@@ -28,7 +28,7 @@ type DeleteSenderOptions struct {
 }
 
 type SenderLifecycle struct {
-	Senders    *service.Service
+	Senders    *services.SenderService
 	Alerts     *alerts.Service
 	Events     *events.Service
 	Monitoring *monitoring.Service

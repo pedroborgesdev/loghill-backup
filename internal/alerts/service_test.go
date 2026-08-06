@@ -13,7 +13,7 @@ import (
 	"logtheater/internal/config"
 	"logtheater/internal/domain"
 	"logtheater/internal/emailconfig"
-	"logtheater/internal/repository"
+	"logtheater/internal/repositories"
 )
 
 func TestAlertSupportsMultipleSendersAndMaintainsIndex(t *testing.T) {
@@ -87,10 +87,10 @@ type fixedClock struct{ value time.Time }
 
 func (c *fixedClock) Now() time.Time { return c.value }
 
-func alertFixture(t *testing.T) (*Service, *Store, *repository.FileRepository, *fixedClock, domain.Sender) {
+func alertFixture(t *testing.T) (*Service, *Store, *repositories.FileRepository, *fixedClock, domain.Sender) {
 	t.Helper()
 	dir := t.TempDir()
-	repo := repository.New(filepath.Join(dir, "data"))
+	repo := repositories.New(filepath.Join(dir, "data"))
 	if err := repo.Init(); err != nil {
 		t.Fatal(err)
 	}
@@ -207,7 +207,7 @@ func TestAlertValidation(t *testing.T) {
 
 func TestEnabledAlertRequiresOutlook(t *testing.T) {
 	dir := t.TempDir()
-	repo := repository.New(dir)
+	repo := repositories.New(dir)
 	if err := repo.Init(); err != nil {
 		t.Fatal(err)
 	}

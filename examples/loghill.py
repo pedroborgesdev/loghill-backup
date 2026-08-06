@@ -1,21 +1,31 @@
 """Logger Python resiliente para o LogHill, sem dependências externas.
 
-Falhas internas do cliente nunca interrompem a aplicação nem exibem traceback.
-Quando a API não puder ser usada, os logs continuam aparecendo no terminal.
+Características principais:
+- nunca deixa falhas internas interromperem a aplicação principal;
+- funciona somente como logger local quando LOGHILL_API_URL não está definida;
+- envia logs em uma thread de segundo plano;
+- mantém uma fila FIFO persistida em SQLite;
+- bloqueia o fluxo principal durante a inicialização e suas tentativas de conexão;
+- tenta novamente três vezes antes de informar que o LogHill está fora do ar;
+- continua tentando restabelecer a conexão e reenviar os logs em ordem;
+- mantém a saída normal dos logs no terminal.
 """
 
 from __future__ import annotations
 
 import atexit
+import hashlib
 import json
 import logging
 import os
 import re
 import socket
+import sqlite3
 import sys
 import threading
 import urllib.error
 import urllib.request
+from collections import deque
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Mapping
@@ -25,6 +35,7 @@ _EVENT_RE = re.compile(r"^[a-z0-9][a-z0-9_-]{2,79}$")
 _KEY_RE = re.compile(r"^snd_[A-Za-z0-9_-]+$")
 _URL_ENVS = ("LOGHILL_API_URL", "LOG_API_URL")
 _KEY_ENVS = ("LOGHILL_SENDER_KEY", "LOGHILL_SENDER_ID", "LOG_SENDER_KEY")
+_QUEUE_FILE_ENV = "LOGHILL_QUEUE_FILE"
 
 _STARTUP_BANNER = r"""
  __            _____ _ _ _ 
@@ -33,6 +44,14 @@ _STARTUP_BANNER = r"""
 |_____|___|_  |__|__|_|_|_|
           |___|             
 """.strip("\n")
+
+
+class _RequestFailure(RuntimeError):
+    """Falha controlada de comunicação com a API."""
+
+    def __init__(self, message: str, *, retryable: bool) -> None:
+        super().__init__(message)
+        self.retryable = retryable
 
 
 def _env(*names: str) -> str:
@@ -83,7 +102,7 @@ def _config(
     key = sender_key or _env(*_KEY_ENVS)
 
     if not url:
-        raise ValueError("LOGHILL_API_URL não foi configurada no ambiente ou no arquivo .env.")
+        return "", ""
     if not url.startswith(("http://", "https://")):
         raise ValueError("LOGHILL_API_URL deve começar com http:// ou https://.")
     if not key:
@@ -151,6 +170,9 @@ def _http_error_message(error: urllib.error.HTTPError) -> str:
 
 def _friendly_error(error: Exception) -> str:
     """Traduz qualquer falha interna conhecida para uma mensagem legível."""
+    if isinstance(error, _RequestFailure):
+        return str(error)
+
     if isinstance(error, urllib.error.HTTPError):
         return _http_error_message(error)
 
@@ -187,14 +209,22 @@ def _friendly_error(error: Exception) -> str:
         return f"a resposta da API não contém o campo obrigatório '{field}'."
     if isinstance(error, OSError):
         text = str(error).strip()
-        return f"ocorreu uma falha de rede ou do sistema operacional: {text}" if text else "ocorreu uma falha de rede ou do sistema operacional."
+        return (
+            f"ocorreu uma falha de rede ou do sistema operacional: {text}"
+            if text
+            else "ocorreu uma falha de rede ou do sistema operacional."
+        )
 
     text = str(error).strip()
     return text or f"ocorreu uma falha interna no cliente LogHill ({type(error).__name__})."
 
 
+def _is_retryable_http_status(status: int) -> bool:
+    return status in {408, 425, 429} or status >= 500
+
+
 class LogHillLogger(logging.Logger):
-    """Um único objeto para console, API e healthcheck do LogHill."""
+    """Logger local com integração remota opcional ao LogHill."""
 
     def __init__(
         self,
@@ -207,12 +237,17 @@ class LogHillLogger(logging.Logger):
         console: bool = True,
         healthcheck_interval: float = 60.0,
         timeout: float = 10.0,
+        retry_attempts: int = 3,
+        retry_interval: float = 5.0,
+        queue_file: str | Path | None = None,
     ) -> None:
         super().__init__(name, level)
         self.api_url = ""
         self.sender_key = ""
         self.healthcheck_interval = healthcheck_interval
         self.timeout = timeout
+        self.retry_attempts = max(int(retry_attempts), 0)
+        self.retry_interval = max(float(retry_interval), 0.1)
         self.sender_id = ""
         self.instance_id = ""
         self.propagate = False
@@ -221,9 +256,20 @@ class LogHillLogger(logging.Logger):
         self._remote_enabled = True
         self._disabled_reason = ""
         self._reported_errors: set[str] = set()
-        self._lock = threading.Lock()
+        self._report_lock = threading.Lock()
+        self._instance_lock = threading.Lock()
+        self._queue_lock = threading.Lock()
         self._stop = threading.Event()
+        self._queue_event = threading.Event()
         self._health_thread: threading.Thread | None = None
+        self._worker_thread: threading.Thread | None = None
+        self._previous_sys_excepthook = None
+        self._previous_threading_excepthook = None
+        self._sys_excepthook = None
+        self._threading_excepthook = None
+        self._queue_path: Path | None = None
+        self._persistent_queue_enabled = False
+        self._memory_queue: deque[dict[str, Any]] = deque()
 
         if console:
             try:
@@ -237,11 +283,28 @@ class LogHillLogger(logging.Logger):
                 )
                 self.addHandler(handler)
             except Exception as error:
-                self._report_error(f"não foi possível configurar a saída do terminal: {_friendly_error(error)}")
+                self._report_error(
+                    f"não foi possível configurar a saída do terminal: {_friendly_error(error)}"
+                )
 
         try:
             self.api_url, self.sender_key = _config(api_url, sender_key, env_file)
-            self._init_instance()
+            if not self.api_url:
+                self._remote_enabled = False
+                self._disabled_reason = "LOGHILL_API_URL não configurada; modo local ativo."
+            else:
+                self._queue_path = self._resolve_queue_path(queue_file)
+                self._prepare_queue_storage()
+
+                # A inicialização é síncrona: create_logger() só devolve o controle
+                # após conectar ou esgotar todas as tentativas iniciais.
+                initialized = self._initialize_blocking()
+
+                # O worker só é iniciado quando o init teve sucesso. Se todas as
+                # tentativas iniciais falharem, não começa uma segunda sequência
+                # de tentativas em segundo plano nesta execução.
+                if initialized and self._remote_enabled:
+                    self._start_worker()
         except Exception as error:
             self._disable_remote(_friendly_error(error))
 
@@ -249,6 +312,9 @@ class LogHillLogger(logging.Logger):
             atexit.register(self.close)
         except Exception:
             pass
+
+        if self._remote_enabled:
+            self._install_exception_hooks()
 
     def _log(
         self,
@@ -275,7 +341,9 @@ class LogHillLogger(logging.Logger):
                 safe_metadata = dict(metadata or {})
             except Exception:
                 safe_metadata = {}
-                self._report_error("metadata inválida: informe um dicionário ou outro Mapping. O campo foi ignorado.")
+                self._report_error(
+                    "metadata inválida: informe um dicionário ou outro Mapping. O campo foi ignorado."
+                )
 
             super()._log(
                 level,
@@ -315,6 +383,7 @@ class LogHillLogger(logging.Logger):
         metadata: Mapping[str, Any] | None = None,
         timestamp: datetime | None = None,
     ) -> dict[str, Any]:
+        """Registra localmente ou enfileira para a API quando ela está configurada."""
         try:
             validation_error = _validation_error(event, event_occurrence_id)
             if validation_error:
@@ -323,71 +392,449 @@ class LogHillLogger(logging.Logger):
                 event_occurrence_id = None
 
             if not self._remote_enabled:
-                return {"sent": False, "reason": self._disabled_reason}
+                severity_name = str(severity).upper()
+                local_level = {
+                    "TRACE": logging.DEBUG,
+                    "DEBUG": logging.DEBUG,
+                    "INFO": logging.INFO,
+                    "WARN": logging.WARNING,
+                    "WARNING": logging.WARNING,
+                    "ERROR": logging.ERROR,
+                    "FATAL": logging.CRITICAL,
+                    "CRITICAL": logging.CRITICAL,
+                }.get(severity_name, logging.INFO)
+                self.log(local_level, str(message))
+                return {"sent": False, "queued": False, "local": True}
 
-            self._init_instance()
+            try:
+                safe_metadata = dict(metadata or {})
+            except Exception:
+                safe_metadata = {}
+                self._report_error(
+                    "metadata inválida: informe um dicionário ou outro Mapping. O campo foi ignorado."
+                )
 
             payload: dict[str, Any] = {
-                "sender": self.sender_id,
                 "severity": str(severity).upper(),
                 "message": str(message),
                 "timestamp": (timestamp or datetime.now(timezone.utc)).isoformat(),
-                "metadata": dict(metadata or {}),
+                "metadata": safe_metadata,
             }
             if event:
                 payload["event"] = event
             if event_occurrence_id:
                 payload["event_occurrence_id"] = event_occurrence_id
 
-            return self._post("/api/v1/logs", payload)
+            queue_id = self._enqueue_payload(payload)
+            return {
+                "sent": False,
+                "queued": True,
+                "queue_id": queue_id,
+            }
         except Exception as error:
             reason = _friendly_error(error)
-            self._report_error(f"log não enviado: {reason}")
-            return {"sent": False, "reason": reason}
+            self._report_error(f"não foi possível enfileirar o log: {reason}")
+            return {"sent": False, "queued": False, "reason": reason}
 
     def close(self) -> None:
+        """Finaliza as threads; registros ainda não enviados permanecem no SQLite."""
         try:
             if self._closed:
                 return
             self._closed = True
+            self._restore_exception_hooks()
             self._stop.set()
-            if (
-                self._health_thread
-                and self._health_thread.is_alive()
-                and threading.current_thread() is not self._health_thread
-            ):
-                self._health_thread.join(timeout=min(float(self.timeout), 2.0))
-        except Exception as error:
-            self._report_error(f"não foi possível finalizar o logger corretamente: {_friendly_error(error)}")
+            self._queue_event.set()
 
-    def _init_instance(self) -> None:
-        if self.instance_id or not self._remote_enabled:
+            current = threading.current_thread()
+            for thread in (self._worker_thread, self._health_thread):
+                if thread and thread.is_alive() and current is not thread:
+                    thread.join(timeout=min(max(float(self.timeout), 0.1), 2.0))
+        except Exception as error:
+            self._report_error(
+                f"não foi possível finalizar o logger corretamente: {_friendly_error(error)}"
+            )
+
+    def _install_exception_hooks(self) -> None:
+        """Captura tracebacks nao tratados sem substituir a impressao padrao."""
+        try:
+            self._previous_sys_excepthook = sys.excepthook
+            self._sys_excepthook = self._handle_unhandled_exception
+            sys.excepthook = self._sys_excepthook
+
+            if hasattr(threading, "excepthook"):
+                self._previous_threading_excepthook = threading.excepthook
+                self._threading_excepthook = self._handle_thread_exception
+                threading.excepthook = self._threading_excepthook
+        except Exception as error:
+            self._report_error(
+                f"nao foi possivel capturar tracebacks nao tratados: {_friendly_error(error)}"
+            )
+
+    def _restore_exception_hooks(self) -> None:
+        try:
+            if self._sys_excepthook is not None and sys.excepthook is self._sys_excepthook:
+                sys.excepthook = self._previous_sys_excepthook or sys.__excepthook__
+
+            if (
+                self._threading_excepthook is not None
+                and hasattr(threading, "excepthook")
+                and threading.excepthook is self._threading_excepthook
+            ):
+                threading.excepthook = (
+                    self._previous_threading_excepthook or threading.__excepthook__
+                )
+        except Exception:
+            pass
+
+    def _handle_unhandled_exception(
+        self,
+        exc_type: type[BaseException],
+        exc_value: BaseException,
+        exc_traceback: Any,
+    ) -> None:
+        try:
+            self._send_unhandled_exception(exc_type, exc_value, exc_traceback, thread_name=None)
+        finally:
+            previous = self._previous_sys_excepthook or sys.__excepthook__
+            previous(exc_type, exc_value, exc_traceback)
+
+    def _handle_thread_exception(self, args: threading.ExceptHookArgs) -> None:
+        try:
+            self._send_unhandled_exception(
+                args.exc_type,
+                args.exc_value,
+                args.exc_traceback,
+                thread_name=getattr(args.thread, "name", None),
+            )
+        finally:
+            previous = self._previous_threading_excepthook or threading.__excepthook__
+            previous(args)
+
+    def _send_unhandled_exception(
+        self,
+        exc_type: type[BaseException] | None,
+        exc_value: BaseException | None,
+        exc_traceback: Any,
+        *,
+        thread_name: str | None,
+    ) -> None:
+        try:
+            if exc_type is None or exc_value is None:
+                return
+            if issubclass(exc_type, (KeyboardInterrupt, SystemExit)):
+                return
+
+            message = logging.Formatter().formatException(
+                (exc_type, exc_value, exc_traceback)
+            )
+            self.send(message, severity="ERROR")
+        except Exception as error:
+            self._report_error(
+                f"nao foi possivel enviar traceback nao tratado: {_friendly_error(error)}"
+            )
+
+    def pending_count(self) -> int:
+        """Retorna quantos logs ainda aguardam envio."""
+        total = 0
+        try:
+            with self._queue_lock:
+                total += len(self._memory_queue)
+                if self._persistent_queue_enabled and self._queue_path:
+                    with self._queue_connection() as connection:
+                        row = connection.execute("SELECT COUNT(*) FROM log_queue").fetchone()
+                        total += int(row[0]) if row else 0
+        except Exception as error:
+            self._report_error(f"não foi possível consultar a fila: {_friendly_error(error)}")
+        return total
+
+    def _resolve_queue_path(self, queue_file: str | Path | None) -> Path:
+        configured = queue_file or os.getenv(_QUEUE_FILE_ENV, "").strip()
+        if configured:
+            return Path(configured).expanduser().resolve()
+
+        queue_identity = f"{self.api_url}|{self.sender_key}"
+        key_hash = hashlib.sha256(queue_identity.encode("utf-8")).hexdigest()[:12]
+        return Path.home() / ".loghill" / f"queue-{key_hash}.sqlite3"
+
+    def _prepare_queue_storage(self) -> None:
+        if not self._queue_path:
+            return
+
+        try:
+            self._queue_path.parent.mkdir(parents=True, exist_ok=True)
+            with self._queue_connection() as connection:
+                connection.execute("PRAGMA journal_mode=WAL")
+                connection.execute("PRAGMA synchronous=FULL")
+                connection.execute(
+                    """
+                    CREATE TABLE IF NOT EXISTS log_queue (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        payload TEXT NOT NULL,
+                        created_at TEXT NOT NULL
+                    )
+                    """
+                )
+                connection.commit()
+            self._persistent_queue_enabled = True
+        except Exception as error:
+            self._persistent_queue_enabled = False
+            self._report_error(
+                "não foi possível criar a fila persistente; usando uma fila temporária em memória: "
+                f"{_friendly_error(error)}"
+            )
+
+    def _queue_connection(self) -> sqlite3.Connection:
+        if not self._queue_path:
+            raise RuntimeError("o caminho da fila persistente não foi configurado.")
+        return sqlite3.connect(str(self._queue_path), timeout=5.0)
+
+    def _enqueue_payload(self, payload: Mapping[str, Any]) -> int | None:
+        serialized = json.dumps(payload, ensure_ascii=False, default=str)
+
+        with self._queue_lock:
+            if self._persistent_queue_enabled:
+                try:
+                    with self._queue_connection() as connection:
+                        cursor = connection.execute(
+                            "INSERT INTO log_queue (payload, created_at) VALUES (?, ?)",
+                            (serialized, datetime.now(timezone.utc).isoformat()),
+                        )
+                        connection.commit()
+                        queue_id = int(cursor.lastrowid)
+                    self._queue_event.set()
+                    return queue_id
+                except Exception as error:
+                    self._report_error(
+                        "falha ao gravar na fila persistente; o log ficará temporariamente em memória: "
+                        f"{_friendly_error(error)}"
+                    )
+
+            self._memory_queue.append(dict(payload))
+            self._queue_event.set()
+            return None
+
+    def _peek_payload(self) -> tuple[str, int | None, dict[str, Any]] | None:
+        with self._queue_lock:
+            if self._persistent_queue_enabled:
+                try:
+                    while True:
+                        with self._queue_connection() as connection:
+                            row = connection.execute(
+                                "SELECT id, payload FROM log_queue ORDER BY id ASC LIMIT 1"
+                            ).fetchone()
+
+                        if not row:
+                            break
+
+                        queue_id = int(row[0])
+                        try:
+                            payload = json.loads(str(row[1]))
+                            if not isinstance(payload, dict):
+                                raise ValueError("o conteúdo da fila não é um objeto JSON.")
+                            return "disk", queue_id, payload
+                        except Exception as error:
+                            self._delete_disk_payload(queue_id)
+                            self._report_error(
+                                f"um registro inválido foi removido da fila persistente: {_friendly_error(error)}"
+                            )
+                except Exception as error:
+                    self._report_error(
+                        f"não foi possível ler a fila persistente: {_friendly_error(error)}"
+                    )
+
+            if self._memory_queue:
+                return "memory", None, dict(self._memory_queue[0])
+
+        return None
+
+    def _ack_payload(self, source: str, queue_id: int | None) -> None:
+        with self._queue_lock:
+            if source == "disk" and queue_id is not None:
+                self._delete_disk_payload(queue_id)
+                return
+
+            if source == "memory" and self._memory_queue:
+                self._memory_queue.popleft()
+
+    def _delete_disk_payload(self, queue_id: int) -> None:
+        with self._queue_connection() as connection:
+            connection.execute("DELETE FROM log_queue WHERE id = ?", (queue_id,))
+            connection.commit()
+
+    def _initialize_blocking(self) -> bool:
+        """Inicializa o logger bloqueando somente durante as tentativas iniciais.
+
+        A primeira conexão é feita imediatamente. Se falhar por um motivo
+        temporário, executa ``retry_attempts`` novas tentativas, respeitando
+        ``retry_interval``. Depois disso, libera a aplicação sem iniciar o
+        worker remoto; uma nova conexão será tentada na próxima execução.
+        """
+        retries_done = 0
+
+        while not self._stop.is_set() and self._remote_enabled:
+            try:
+                self._initialize_instance()
+                return True
+
+            except _RequestFailure as error:
+                if not error.retryable:
+                    self._handle_permanent_request_failure(error)
+                    return False
+
+                if retries_done >= self.retry_attempts:
+                    self._report_status(
+                        "LogHill está fora do ar após as tentativas iniciais. "
+                        "A aplicação será liberada e não haverá novas tentativas nesta execução."
+                    )
+                    return False
+
+                retries_done += 1
+                self._report_status(
+                    "Falha ao inicializar a conexão com a API. "
+                    f"Nova tentativa ({retries_done}/{self.retry_attempts}): {error}"
+                )
+
+                if self._stop.wait(self.retry_interval):
+                    return False
+
+            except Exception as error:
+                self._report_error(
+                    "falha interna durante a inicialização do LogHill: "
+                    f"{_friendly_error(error)}"
+                )
+                return False
+
+        return False
+
+    def _start_worker(self) -> None:
+        if self._worker_thread and self._worker_thread.is_alive():
+            return
+
+        self._worker_thread = threading.Thread(
+            target=self._worker_loop,
+            name=f"loghill-sender-{self.name}",
+            daemon=True,
+        )
+        self._worker_thread.start()
+
+    def _worker_loop(self) -> None:
+        consecutive_failures = 0
+        queue_notice_shown = False
+        offline_announced = False
+
+        while not self._stop.is_set() and self._remote_enabled:
+            try:
+                if not self.instance_id:
+                    self._initialize_instance()
+                    consecutive_failures = 0
+                    if offline_announced:
+                        self._report_status(
+                            f"Conexão restabelecida. Reenviando {self.pending_count()} log(s) pendente(s) em ordem."
+                        )
+                    queue_notice_shown = False
+                    offline_announced = False
+
+                queued = self._peek_payload()
+                if queued is None:
+                    self._queue_event.clear()
+                    self._queue_event.wait(timeout=0.5)
+                    continue
+
+                source, queue_id, payload = queued
+                api_payload = dict(payload)
+                api_payload["sender"] = self.sender_id
+
+                self._post("/api/v1/logs", api_payload)
+                self._ack_payload(source, queue_id)
+
+                if consecutive_failures or offline_announced:
+                    self._report_status(
+                        f"Conexão restabelecida. Reenviando {self.pending_count()} log(s) pendente(s) em ordem."
+                    )
+                consecutive_failures = 0
+                queue_notice_shown = False
+                offline_announced = False
+
+            except _RequestFailure as error:
+                if not error.retryable:
+                    self._handle_permanent_request_failure(error)
+                    return
+
+                consecutive_failures += 1
+
+                if not queue_notice_shown:
+                    self._report_status(
+                        "Falha na conexão com a API. Os logs estão sendo enfileirados para reenvio automático."
+                    )
+                    queue_notice_shown = True
+
+                if consecutive_failures <= self.retry_attempts:
+                    self._report_status(
+                        "Nova tentativa de conexão "
+                        f"({consecutive_failures}/{self.retry_attempts}): {error}"
+                    )
+                elif not offline_announced:
+                    self._report_status(
+                        "LogHill está fora do ar. Os logs continuarão enfileirados e serão reenviados automaticamente."
+                    )
+                    offline_announced = True
+                    # Após uma indisponibilidade prolongada, força uma nova instância.
+                    # Isso também cobre reinícios da API que invalidem a instância anterior.
+                    self.instance_id = ""
+                    self.sender_id = ""
+
+                self._stop.wait(self.retry_interval)
+
+            except Exception as error:
+                self._report_error(
+                    f"falha interna no worker de envio: {_friendly_error(error)}"
+                )
+                self._stop.wait(self.retry_interval)
+
+    def _handle_permanent_request_failure(self, error: _RequestFailure) -> None:
+        self._disable_remote(str(error))
+
+    def _initialize_instance(self) -> None:
+        if self.instance_id:
             return
         if self._closed:
             raise RuntimeError("o logger já foi fechado.")
 
-        with self._lock:
+        with self._instance_lock:
             if self.instance_id:
                 return
 
             data = self._post("/api/v1/instances/init", {})
             if not isinstance(data, dict):
-                raise RuntimeError("a API retornou uma resposta inválida ao inicializar o logger.")
+                raise _RequestFailure(
+                    "a API retornou uma resposta inválida ao inicializar o logger.",
+                    retryable=False,
+                )
 
             instance_id = data.get("instance_id")
             sender_id = data.get("sender")
             if not instance_id or not sender_id:
-                raise RuntimeError("a API não retornou instance_id e sender ao inicializar o logger.")
+                raise _RequestFailure(
+                    "a API não retornou instance_id e sender ao inicializar o logger.",
+                    retryable=False,
+                )
 
             self.instance_id = str(instance_id)
             self.sender_id = str(sender_id)
-            self._health_thread = threading.Thread(
-                target=self._health_loop,
-                name=f"loghill-health-{self.sender_id}",
-                daemon=True,
-            )
-            self._health_thread.start()
+            self._start_health_thread()
             self._report_started()
+
+    def _start_health_thread(self) -> None:
+        if self._health_thread and self._health_thread.is_alive():
+            return
+
+        self._health_thread = threading.Thread(
+            target=self._health_loop,
+            name=f"loghill-health-{self.sender_id}",
+            daemon=True,
+        )
+        self._health_thread.start()
 
     def _send_record(self, record: logging.LogRecord) -> None:
         try:
@@ -418,7 +865,7 @@ class LogHillLogger(logging.Logger):
                 timestamp=datetime.fromtimestamp(record.created, timezone.utc),
             )
         except Exception as error:
-            self._report_error(f"log não enviado: {_friendly_error(error)}")
+            self._report_error(f"log não enfileirado: {_friendly_error(error)}")
 
     def _health_loop(self) -> None:
         try:
@@ -429,86 +876,125 @@ class LogHillLogger(logging.Logger):
 
         while not self._stop.wait(interval):
             try:
+                if not self.instance_id or not self.sender_id:
+                    continue
                 self._post(
                     f"/api/v1/senders/{self.sender_id}/health",
                     {"status": "healthy", "details": {"client": "python-logging"}},
                 )
+            except _RequestFailure as error:
+                if not error.retryable:
+                    self._report_error(f"healthcheck rejeitado: {error}")
+                else:
+                    self._report_error(
+                        "healthcheck não enviado; o worker continuará tentando restabelecer a conexão: "
+                        f"{error}"
+                    )
             except Exception as error:
                 self._report_error(f"healthcheck não enviado: {_friendly_error(error)}")
 
     def _post(self, path: str, payload: Mapping[str, Any]) -> dict[str, Any]:
+        headers = {
+            "Accept": "application/json",
+            "Content-Type": "application/json",
+            "X-Sender-Key": self.sender_key,
+        }
+        if self.instance_id:
+            headers["X-Sender-Instance-ID"] = self.instance_id
+
         try:
-            headers = {
-                "Accept": "application/json",
-                "Content-Type": "application/json",
-                "X-Sender-Key": self.sender_key,
-            }
-            if self.instance_id:
-                headers["X-Sender-Instance-ID"] = self.instance_id
+            encoded_payload = json.dumps(
+                payload,
+                ensure_ascii=False,
+                default=str,
+            ).encode("utf-8")
+        except Exception as error:
+            raise _RequestFailure(
+                f"não foi possível converter o log para JSON: {error}",
+                retryable=False,
+            ) from None
 
-            try:
-                encoded_payload = json.dumps(payload, ensure_ascii=False).encode("utf-8")
-            except Exception as error:
-                raise ValueError(f"não foi possível converter o log para JSON: {error}") from None
+        request = urllib.request.Request(
+            self.api_url + path,
+            encoded_payload,
+            headers,
+            method="POST",
+        )
 
-            request = urllib.request.Request(
-                self.api_url + path,
-                encoded_payload,
-                headers,
-                method="POST",
-            )
-
+        try:
             with urllib.request.urlopen(request, timeout=float(self.timeout)) as response:
                 body = response.read()
+        except urllib.error.HTTPError as error:
+            raise _RequestFailure(
+                _http_error_message(error),
+                retryable=_is_retryable_http_status(error.code),
+            ) from None
+        except urllib.error.URLError as error:
+            raise _RequestFailure(_friendly_error(error), retryable=True) from None
+        except (
+            TimeoutError,
+            socket.timeout,
+            ConnectionRefusedError,
+            ConnectionResetError,
+            ConnectionAbortedError,
+            BrokenPipeError,
+            socket.gaierror,
+            OSError,
+        ) as error:
+            raise _RequestFailure(_friendly_error(error), retryable=True) from None
+        except Exception as error:
+            raise _RequestFailure(_friendly_error(error), retryable=False) from None
 
-            if not body:
-                return {}
+        if not body:
+            return {}
 
+        try:
             decoded = body.decode("utf-8")
             parsed = json.loads(decoded)
-            if not isinstance(parsed, dict):
-                raise ValueError("a API retornou JSON, mas o conteúdo não é um objeto.")
-            return parsed
-
         except Exception as error:
-            # O "from None" impede que Python monte uma cadeia de exceções.
-            raise RuntimeError(_friendly_error(error)) from None
+            raise _RequestFailure(_friendly_error(error), retryable=False) from None
+
+        if not isinstance(parsed, dict):
+            raise _RequestFailure(
+                "a API retornou JSON, mas o conteúdo não é um objeto.",
+                retryable=False,
+            )
+        return parsed
 
     def _disable_remote(self, reason: str) -> None:
         self._remote_enabled = False
         self._disabled_reason = reason
+        self._stop.set()
+        self._queue_event.set()
         self._report_error(
-            f"{reason} Os logs continuarão aparecendo no terminal, mas não serão enviados à API."
+            f"{reason} Os logs continuarão aparecendo no terminal. "
+            "Os registros já persistidos continuarão guardados para a próxima inicialização."
         )
 
     def _report_started(self) -> None:
         """Mostra o banner somente quando a API inicializar a instância com sucesso."""
         try:
-            print(
-                """
- __            _____ _ _ _ 
-|  |   ___ ___|  |  |_| | |
-|  |__| . | . |     | | | |
-|_____|___|_  |__|__|_|_|_|
-          |___|             
-""",
-                file=sys.stdout,
-                flush=True,
-            )
+            print(_STARTUP_BANNER, file=sys.stdout, flush=True)
             print("Inicializado com sucesso!\n", file=sys.stdout, flush=True)
         except Exception:
-            # A mensagem visual nunca pode interromper a aplicação.
+            pass
+
+    def _report_status(self, message: str) -> None:
+        """Exibe mudanças de estado, permitindo que ocorram novamente no futuro."""
+        try:
+            print(f"[LogHill] {str(message).strip()}", file=sys.stderr, flush=True)
+        except Exception:
             pass
 
     def _report_error(self, message: str) -> None:
         try:
             message = str(message).strip() or "ocorreu uma falha interna no cliente LogHill."
-            if message in self._reported_errors:
-                return
-            self._reported_errors.add(message)
-            print(f"[LogHill] {message}", file=sys.stderr)
+            with self._report_lock:
+                if message in self._reported_errors:
+                    return
+                self._reported_errors.add(message)
+            print(f"[LogHill] {message}", file=sys.stderr, flush=True)
         except Exception:
-            # Nunca permite que o próprio tratamento de erro gere outro erro.
             pass
 
     @staticmethod
@@ -533,33 +1019,52 @@ def create_logger(**kwargs: Any) -> LogHillLogger:
     try:
         return LogHillLogger(**kwargs)
     except Exception as error:
-        # Proteção final inclusive para argumentos inválidos passados ao construtor.
         try:
             name = str(kwargs.get("name", "loghill"))
             level = kwargs.get("level", logging.DEBUG)
-            logger = LogHillLogger(name=name, level=level, console=bool(kwargs.get("console", True)))
+            logger = LogHillLogger(
+                name=name,
+                level=level,
+                console=bool(kwargs.get("console", True)),
+            )
             logger._disable_remote(f"não foi possível criar o logger: {_friendly_error(error)}")
             return logger
         except Exception:
-            # Último fallback: logger padrão apenas para terminal.
             logger = LogHillLogger.__new__(LogHillLogger)
             logging.Logger.__init__(logger, "loghill", logging.DEBUG)
             logger.propagate = False
             handler = logging.StreamHandler(sys.stdout)
-            handler.setFormatter(logging.Formatter("%(asctime)s [%(levelname)-8s] %(message)s"))
+            handler.setFormatter(
+                logging.Formatter("%(asctime)s [%(levelname)-8s] %(message)s")
+            )
             logger.addHandler(handler)
             logger.api_url = ""
             logger.sender_key = ""
             logger.healthcheck_interval = 60.0
             logger.timeout = 10.0
+            logger.retry_attempts = 3
+            logger.retry_interval = 5.0
             logger.sender_id = ""
             logger.instance_id = ""
             logger._closed = False
             logger._remote_enabled = False
             logger._disabled_reason = "o cliente LogHill não pôde ser inicializado."
             logger._reported_errors = set()
-            logger._lock = threading.Lock()
+            logger._report_lock = threading.Lock()
+            logger._instance_lock = threading.Lock()
+            logger._queue_lock = threading.Lock()
             logger._stop = threading.Event()
+            logger._queue_event = threading.Event()
             logger._health_thread = None
-            logger._report_error("o cliente LogHill não pôde ser inicializado. Usando somente o terminal.")
+            logger._worker_thread = None
+            logger._previous_sys_excepthook = None
+            logger._previous_threading_excepthook = None
+            logger._sys_excepthook = None
+            logger._threading_excepthook = None
+            logger._queue_path = None
+            logger._persistent_queue_enabled = False
+            logger._memory_queue = deque()
+            logger._report_error(
+                "o cliente LogHill não pôde ser inicializado. Usando somente o terminal."
+            )
             return logger

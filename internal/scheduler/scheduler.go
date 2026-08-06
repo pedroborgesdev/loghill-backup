@@ -6,16 +6,18 @@ import (
 	"sync/atomic"
 	"time"
 
-	"logtheater/internal/service"
+	"logtheater/internal/services"
 )
 
 type Scheduler struct {
-	svc      *service.Service
+	svc      *services.SenderService
 	interval time.Duration
 	ready    atomic.Bool
 }
 
-func New(s *service.Service, d time.Duration) *Scheduler { return &Scheduler{svc: s, interval: d} }
+func New(s *services.SenderService, d time.Duration) *Scheduler {
+	return &Scheduler{svc: s, interval: d}
+}
 func (s *Scheduler) Run(ctx context.Context) {
 	s.ready.Store(true)
 	defer s.ready.Store(false)
