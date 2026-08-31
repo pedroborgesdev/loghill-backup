@@ -2,8 +2,11 @@ package events
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
+	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -13,6 +16,29 @@ import (
 	"logtheater/internal/emailconfig"
 	"logtheater/internal/repositories"
 )
+
+func TestStoreNormalizesLegacyNullCollections(t *testing.T) {
+	dir := t.TempDir()
+	legacy := `{"version":1,"events":[{"id":"evt_123456789abc","name":"Evento legado","key":"evento_legado","sender_ids":null,"action_type":"none","recipients":null,"enabled":false,"created_at":"2026-08-01T00:00:00Z","updated_at":"2026-08-01T00:00:00Z"}]}`
+	if err := os.WriteFile(filepath.Join(dir, "events.json"), []byte(legacy), 0600); err != nil {
+		t.Fatal(err)
+	}
+	store, err := Open(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	items := store.All()
+	if len(items) != 1 || items[0].SenderIDs == nil || items[0].Recipients == nil {
+		t.Fatalf("legacy collections were not normalized: %+v", items)
+	}
+	response, err := json.Marshal(items[0])
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(response), `"sender_ids":[]`) || !strings.Contains(string(response), `"recipients":[]`) {
+		t.Fatalf("normalized event still serializes null collections: %s", response)
+	}
+}
 
 type fixedClock struct{ now time.Time }
 

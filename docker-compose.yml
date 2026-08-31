@@ -2,11 +2,11 @@ services:
   log-theater:
     build: .
     ports:
-      - "8080:8080"
+      - "8001:8001"
     environment:
-      APP_PORT: "8080"
+      APP_PORT: "8001"
       DATA_DIR: /app/data
-      APP_PUBLIC_URL: http://localhost:8080
+      APP_PUBLIC_URL: http://localhost:8001
       # Defina APP_PASSWORD para exigir login na interface.
       # APP_PASSWORD: troque-me
       TZ: America/Sao_Paulo
@@ -14,7 +14,7 @@ services:
       - ./data:/app/data
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8080/health"]
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8001/health"]
       interval: 30s
       timeout: 3s
       retries: 3

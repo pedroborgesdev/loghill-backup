@@ -1,133 +1,74 @@
 # Cliente de logs do LogHill
 
-O cliente não cria senders. Antes do deploy, um administrador deve abrir o dashboard ou `/senders`, selecionar **Novo sender** e copiar a chave exibida uma única vez. O backend identifica o sender pela própria chave durante o handshake.
-
-Guarde a chave em um cofre de secrets. Não a coloque em código-fonte, URL, query string, logs, `localStorage` ou arquivos versionados.
-
-## Variáveis de ambiente
+O cliente conecta pelo nome do sender e a API o cria automaticamente quando necessário. Configure apenas a URL da API e o nome desejado (ou seu identificador normalizado).
 
 ```env
-LOGHILL_API_URL=http://localhost:8080
-LOGHILL_SENDER_KEY=snd_chave_copiada_na_interface
+LOGHILL_API_URL=http://localhost:8001
+LOGHILL_SENDER_NAME=automacao-financeira
 ```
 
-O cliente Python também aceita `LOGHILL_SENDER_ID` como alias da chave, além dos nomes legados `LOG_API_URL` e `LOG_SENDER_KEY`.
+Ao usar `instrument(name="automacao-financeira")`, `LOGHILL_SENDER_NAME` é opcional: o nome do logger será usado. `LOGHILL_SENDER_ID` continua aceito como alias de migração.
 
-## Requisições
+## Inicialização da instância
 
-Cada processo cliente deve começar chamando `POST /api/v1/instances/init`. A resposta contém o sender identificado pela chave e um `instance_id` único para aquela execução. Logs e healthchecks enviam esse valor em `X-Sender-Instance-ID`, além da chave normal em `X-Sender-Key`.
-
-O ID da instância existe exclusivamente para separar os consoles de logs de processos simultâneos. Alertas, eventos e regras de monitoramento continuam associados ao sender e não à instância.
+Cada processo chama `POST /api/v1/instances/init` com `sender_name`. Se ainda não existir um sender com esse nome, a API o cria automaticamente; não é necessário cadastrá-lo previamente. A API retorna o ID canônico, um `instance_id` e um `instance_token` exclusivo da execução. Somente o hash do token é persistido pelo LogHill.
 
 ```bash
 curl -X POST "$LOGHILL_API_URL/api/v1/instances/init" \
   -H "Content-Type: application/json" \
-  -H "X-Sender-Key: $LOGHILL_SENDER_KEY" \
-  -d '{}'
+  -d '{"sender_name":"automacao-financeira"}'
 ```
-
-Resposta:
 
 ```json
-{"sender":"automacao-financeira","instance_id":"ins_0123456789abcdef0123456789abcdef","initialized_at":"2026-08-03T12:00:00Z"}
+{
+  "sender_id": "automacao-financeira",
+  "instance_id": "ins_0123456789abcdef0123456789abcdef",
+  "instance_token": "inst_credencial_da_execucao",
+  "initialized_at": "2026-08-28T12:00:00Z"
+}
 ```
 
-Clientes antigos sem handshake continuam aceitos, mas somente inicializações com handshake possuem isolamento físico por processo.
-
-O campo opcional `event` chama uma configuração explícita de **Eventos**. Consulte [events.md](events.md) para matching, templates e limites.
+O `sender_name` é usado somente nessa inicialização. Logs seguintes usam o `sender_id` devolvido, junto de `X-Sender-Instance-ID` e `X-Sender-Instance-Token`. O token deve ficar apenas na memória do processo e ser descartado ao encerrar.
 
 ```bash
 curl -X POST "$LOGHILL_API_URL/api/v1/logs" \
   -H "Content-Type: application/json" \
-  -H "X-Sender-Key: $LOGHILL_SENDER_KEY" \
-  -H "X-Sender-Instance-ID: $LOG_INSTANCE_ID" \
-  -d '{"sender":"automacao-financeira","severity":"ERROR","message":"Falha ao processar boleto"}'
+  -H "X-Sender-Instance-ID: $LOGHILL_INSTANCE_ID" \
+  -H "X-Sender-Instance-Token: $LOGHILL_INSTANCE_TOKEN" \
+  -d '{"sender_id":"automacao-financeira","severity":"ERROR","message":"Falha ao processar boleto"}'
 ```
 
-## Go
+O ID da instância separa os consoles de processos simultâneos. Alertas, eventos e regras de monitoramento continuam associados ao sender.
 
-```go
-type LogClient struct {
-    BaseURL   string
-    SenderID  string
-    SenderKey string
-    InstanceID string
-    Client    *http.Client
-}
-
-func (client *LogClient) Init(ctx context.Context) error {
-    req, err := http.NewRequestWithContext(ctx, http.MethodPost,
-        client.BaseURL+"/api/v1/instances/init", bytes.NewReader([]byte(`{}`)))
-    if err != nil { return err }
-    req.Header.Set("Content-Type", "application/json")
-    req.Header.Set("X-Sender-Key", client.SenderKey)
-    response, err := client.Client.Do(req)
-    if err != nil { return err }
-    defer response.Body.Close()
-    var result struct { Sender string `json:"sender"`; InstanceID string `json:"instance_id"` }
-    if err = json.NewDecoder(response.Body).Decode(&result); err != nil { return err }
-    client.InstanceID = result.InstanceID
-    client.SenderID = result.Sender
-    return nil
-}
-
-func (client *LogClient) Send(ctx context.Context, severity, message string) error {
-    payload := map[string]any{
-        "sender": client.SenderID, "severity": severity, "message": message,
-    }
-    body, err := json.Marshal(payload)
-    if err != nil { return err }
-
-    req, err := http.NewRequestWithContext(
-        ctx, http.MethodPost, client.BaseURL+"/api/v1/logs", bytes.NewReader(body),
-    )
-    if err != nil { return err }
-    req.Header.Set("Content-Type", "application/json")
-    req.Header.Set("X-Sender-Key", client.SenderKey)
-    req.Header.Set("X-Sender-Instance-ID", client.InstanceID)
-    response, err := client.Client.Do(req)
-    if err != nil { return err }
-    defer response.Body.Close()
-    if response.StatusCode >= 300 { return fmt.Errorf("LogHill HTTP %d", response.StatusCode) }
-    return nil
-}
-```
+Uma instância sem logs ou healthchecks passa a inativa após o prazo configurado. Ao terminar a retenção de inativos, a API remove permanentemente a instância e seus logs. Quando a última instância expira, o sender também é removido; uma conexão futura com o mesmo nome cria outro automaticamente.
 
 ## Python
 
-- [`examples/python_log_client.py`](../examples/python_log_client.py) — classe `LogHill` (lê `.env`, handshake, healthcheck, integração com `logging`)
-- [`examples/simulate_logs.py`](../examples/simulate_logs.py) — script de exemplo que envia logs em loop
+```python
+from loghill import instrument
+
+log = instrument(name="automacao-financeira")
+
+# Importe Uvicorn, FastAPI e a aplicação somente depois da instrumentação.
+import uvicorn
+
+log.info("Processamento concluído")
+```
+
+`instrument()` é idempotente: chamadas posteriores no mesmo processo, inclusive por `create_logger()`, reutilizam a mesma conexão e o mesmo `instance_id`.
+
+Também é possível informar o nome explicitamente:
 
 ```python
-from python_log_client import LogHill
-
-with LogHill.from_env() as client:
-    log = client.logger()
-    log.info(
-        "Processamento concluído",
-        event="processamento_finalizado",
-        metadata={"protocolo": "ABC-123"},
-    )
+log = instrument(
+    name="worker",
+    sender_name="automacao-financeira",
+    api_url="http://localhost:8001",
+)
 ```
 
-Também dá para enviar sem o módulo `logging`:
+O cliente mantém fila SQLite, healthcheck e captura os descritores reais `stdout`/`stderr`. Isso inclui `print`, handlers de logging, `os.write(1/2, ...)`, Uvicorn, bibliotecas nativas e subprocessos que herdem os descritores. Saídas brutas do terminal recebem severidade `UNDEFINED`. Cada item enfileirado guarda o `sender_id` e o `instance_id` que o originaram, mas nunca o token. Após cada handshake bem-sucedido, todos os registros persistidos de execuções anteriores são apagados antes do worker de envio começar; portanto, eles não são reenviados depois de reiniciar o processo.
 
-```python
-client = LogHill.from_env()
-client.send("Falha ao processar boleto", severity="ERROR")
-client.close()
-```
+## Compatibilidade
 
-Para ver o fluxo completo:
-
-```bash
-python examples/simulate_logs.py
-```
-
-## Rotação e reativação
-
-Ao gerar uma nova chave, a anterior deixa de funcionar imediatamente. Atualize `LOGHILL_SENDER_KEY` no cofre e reinicie/recarregue o cliente. Reativar um sender revogado também gera uma chave nova; a chave revogada nunca é restaurada.
-
-Senders criados antes da autenticação por chave mantêm o ID e o diretório originais. Antes de reconectar um cliente legado, use **Gerar nova chave** na interface e configure a credencial gerada; nenhum ID legado é renomeado automaticamente.
-
-Respostas `401 INVALID_SENDER_KEY` não revelam se o sender existe ou se a chave pertence a outro sender.
+As rotas com `X-Sender-Key` continuam disponíveis para clientes antigos e para operações internas. Novas integrações não precisam receber, armazenar ou configurar essa chave.

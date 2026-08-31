@@ -25,8 +25,8 @@ Cada sender é armazenado em `data/senders/{sender}/`. Seus metadados ficam em `
 ## Decisões técnicas
 
 - **Limite de armazenamento:** o limite é configurável entre 0 e 10.000 em linhas ou MB e vale integralmente para cada instância. A escrita continua append-only e só compacta após ultrapassar o limite, usando uma margem interna de 5% para evitar reescrita a cada entrada.
-- **Inatividade:** log ou healthcheck contam como atividade por padrão. Após cinco minutos, o sender fica `inactive` e preserva o volume configurado em linhas ou MB.
-- **Expiração:** depois de sete dias inativo, os arquivos de logs das instâncias são removidos e `sender.json` permanece com status `expired`. Um sender expirado não pode ser reativado.
+- **Inatividade:** log ou healthcheck contam como atividade da instância. Após cinco minutos sem atividade, ela aparece como `inactive` durante o prazo de retenção configurado.
+- **Expiração:** ao completar o prazo de exclusão após a inativação, a instância, seus logs e o sender são removidos permanentemente quando não restar outra instância retida. Uma conexão futura com o mesmo nome cria um novo sender automaticamente.
 - **Concorrência:** cada sender possui um `sync.RWMutex`; senders distintos nunca disputam um lock global de escrita.
 - **Persistência segura:** metadados e compactações usam arquivo temporário, `Sync`, fechamento e rename.
 - **Configuração dinâmica:** `data/config.json` usa o mesmo fluxo atômico e um `RWMutex`. Alterações passam a valer no próximo log ou ciclo de manutenção, sem reinício.
@@ -57,7 +57,7 @@ npm ci
 npm run dev
 ```
 
-O Vite encaminha `/api`, `/health` e `/ready` para `localhost:8080`.
+O Vite encaminha `/api`, `/health` e `/ready` para `localhost:8001`.
 
 ## Build de produção
 
@@ -70,7 +70,7 @@ go build -o log-theater ./cmd/server
 ./log-theater
 ```
 
-A interface e a API ficam disponíveis em `http://localhost:8080`.
+A interface e a API ficam disponíveis em `http://localhost:8001`.
 
 ## Testes e lint
 
@@ -130,34 +130,44 @@ O fluxo completo de configuração dos clientes está em [`docs/sender-client.md
 Criar um sender:
 
 ```bash
-curl -X POST http://localhost:8080/api/v1/senders \
+curl -X POST http://localhost:8001/api/v1/senders \
   -H "Content-Type: application/json" \
   -H "X-API-Key: $APP_PASSWORD" \
   -d '{"name":"Automação Teste","description":"Processamento de exemplo"}'
 ```
 
-Enviar um log:
+Inicializar uma instância pelo nome do sender (o sender é criado automaticamente caso ainda não exista):
 
 ```bash
-curl -X POST http://localhost:8080/api/v1/logs \
+curl -X POST http://localhost:8001/api/v1/instances/init \
   -H "Content-Type: application/json" \
-  -H "X-Sender-Key: $LOG_SENDER_KEY" \
-  -d '{"sender":"automacao-teste","severity":"ERROR","message":"Falha no login","metadata":{"step":"login"}}'
+  -d '{"sender_name":"automacao-teste"}'
+```
+
+A resposta fornece `instance_id` e `instance_token`. Use os dois valores durante a execução:
+
+```bash
+curl -X POST http://localhost:8001/api/v1/logs \
+  -H "Content-Type: application/json" \
+  -H "X-Sender-Instance-ID: $LOGHILL_INSTANCE_ID" \
+  -H "X-Sender-Instance-Token: $LOGHILL_INSTANCE_TOKEN" \
+  -d '{"sender_id":"automacao-teste","severity":"ERROR","message":"Falha no login","metadata":{"step":"login"}}'
 ```
 
 Enviar um log que chama um evento explicitamente:
 
 ```bash
-curl -X POST http://localhost:8080/api/v1/logs \
+curl -X POST http://localhost:8001/api/v1/logs \
   -H "Content-Type: application/json" \
-  -H "X-Sender-Key: $LOG_SENDER_KEY" \
-  -d '{"sender":"automacao-teste","severity":"INFO","message":"Processamento concluído","event":"processamento_finalizado","metadata":{"protocolo":"ABC-123"}}'
+  -H "X-Sender-Instance-ID: $LOGHILL_INSTANCE_ID" \
+  -H "X-Sender-Instance-Token: $LOGHILL_INSTANCE_TOKEN" \
+  -d '{"sender_id":"automacao-teste","severity":"INFO","message":"Processamento concluído","event":"processamento_finalizado","metadata":{"protocolo":"ABC-123"}}'
 ```
 
 Consultar:
 
 ```bash
-curl "http://localhost:8080/api/v1/senders/automacao-teste/logs?severity=ERROR,WARN&search=login&page=1&page_size=100&order=desc"
+curl "http://localhost:8001/api/v1/senders/automacao-teste/logs?severity=ERROR,WARN&search=login&page=1&page_size=100&order=desc"
 ```
 
 ## Configuração
@@ -172,18 +182,18 @@ As principais variáveis são:
 
 | Variável | Padrão | Descrição |
 |---|---:|---|
-| `APP_PORT` | `8080` | Porta HTTP |
+| `APP_PORT` | `8001` | Porta HTTP |
 | `DATA_DIR` | `./data` | Diretório persistente |
 | `MAX_LOG_LINES` | `100000` | Limite do arquivo |
 | `LOG_COMPACT_TARGET_LINES` | `95000` | Alvo após exceder o limite |
 | `INACTIVE_AFTER` | `5m` | Prazo de inatividade |
 | `COMPACT_KEEP_LINES` | `2000` | Linhas mantidas ao inativar |
-| `DELETE_AFTER` | `168h` | Prazo para expiração |
+| `DELETE_AFTER` | `168h` | Prazo para excluir instâncias inativas |
 | `APP_PASSWORD` | _(vazio)_ | Senha da interface. Se definida, o login é exigido |
 | `APP_AUTH_ENABLED` | _(auto)_ | Força auth on/off; por padrão segue `APP_PASSWORD` |
 | `EMAIL_SETTINGS_ENCRYPTION_KEY` | auto (`DATA_DIR/email-encryption.key`) | Base64 de 32 bytes para secrets salvos pela UI. Se vazio/inválido, é gerada e persistida automaticamente |
 
-Logs de ingestão e healthchecks de sender usam `X-Sender-Key`, gerada no cadastro administrativo. A chave completa não é persistida e só aparece na criação, rotação ou reativação. A interface autentica com cookie de sessão (`APP_PASSWORD`); clientes não-browser podem enviar `X-API-Key` com a mesma senha.
+Novos clientes conectam com `sender_name`; o handshake devolve uma credencial exclusiva da instância, cujo hash é persistido internamente. A fila do cliente associa cada log à instância que o originou, inclusive quando o envio ocorre depois de reiniciar o processo, sem persistir o token localmente. A compatibilidade com `X-Sender-Key` permanece para clientes antigos. A interface autentica com cookie de sessão (`APP_PASSWORD`); clientes não-browser podem enviar `X-API-Key` com a mesma senha.
 
 ## Alertas por e-mail e Outlook
 

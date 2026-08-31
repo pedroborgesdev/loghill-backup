@@ -43,18 +43,19 @@ type Sender struct {
 type LogSeverity string
 
 const (
-	Trace LogSeverity = "TRACE"
-	Debug LogSeverity = "DEBUG"
-	Info  LogSeverity = "INFO"
-	Warn  LogSeverity = "WARN"
-	Error LogSeverity = "ERROR"
-	Fatal LogSeverity = "FATAL"
+	Undefined LogSeverity = "UNDEFINED"
+	Trace     LogSeverity = "TRACE"
+	Debug     LogSeverity = "DEBUG"
+	Info      LogSeverity = "INFO"
+	Warn      LogSeverity = "WARN"
+	Error     LogSeverity = "ERROR"
+	Fatal     LogSeverity = "FATAL"
 )
 
 func ParseSeverity(v string) (LogSeverity, error) {
 	s := LogSeverity(strings.ToUpper(strings.TrimSpace(v)))
 	switch s {
-	case Trace, Debug, Info, Warn, Error, Fatal:
+	case Undefined, Trace, Debug, Info, Warn, Error, Fatal:
 		return s, nil
 	}
 	return "", ErrInvalidSeverity
@@ -62,6 +63,7 @@ func ParseSeverity(v string) (LogSeverity, error) {
 
 type LogEntry struct {
 	Timestamp         time.Time      `json:"timestamp"`
+	ActivityAt        time.Time      `json:"-"`
 	SenderID          string         `json:"sender,omitempty"`
 	InstanceID        string         `json:"instance_id,omitempty"`
 	Severity          LogSeverity    `json:"severity"`
@@ -99,6 +101,7 @@ type LogFilters struct {
 
 type SenderInstance struct {
 	ID                string       `json:"id"`
+	TokenHash         string       `json:"-"`
 	CreatedAt         time.Time    `json:"created_at"`
 	LastActivityAt    *time.Time   `json:"last_activity_at,omitempty"`
 	LastHealthcheckAt *time.Time   `json:"last_healthcheck_at,omitempty"`
@@ -223,6 +226,7 @@ var (
 	ErrInvalidName              = errors.New("invalid sender name")
 	ErrSenderAlreadyExists      = errors.New("sender already exists")
 	ErrInvalidSenderKey         = errors.New("invalid sender key")
+	ErrInvalidInstanceToken     = errors.New("invalid instance token")
 	ErrSenderRevoked            = errors.New("sender revoked")
 	ErrConflict                 = errors.New("conflict")
 	ErrTooManySubscribers       = errors.New("too many subscribers")

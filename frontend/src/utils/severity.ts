@@ -1,6 +1,7 @@
 import type { LogSeverity } from "../types/api";
 
 export const severities: LogSeverity[] = [
+  "UNDEFINED",
   "TRACE",
   "DEBUG",
   "INFO",
@@ -13,6 +14,10 @@ export const severityStyles: Record<
   LogSeverity,
   { badge: string; line: string }
 > = {
+  UNDEFINED: {
+    badge: "border-zinc-700 bg-zinc-900 text-zinc-400",
+    line: "border-l-zinc-600",
+  },
   TRACE: {
     badge: "border-zinc-800 bg-zinc-900 text-zinc-500",
     line: "border-l-zinc-700",

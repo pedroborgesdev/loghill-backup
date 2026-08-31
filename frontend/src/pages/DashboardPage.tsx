@@ -1,13 +1,11 @@
 import {
   Activity,
-  AlertTriangle,
   Archive,
   Bell,
   Database,
   Radar,
   Radio,
   RefreshCw,
-  Server,
   ShieldAlert,
   Zap,
 } from "lucide-react";
@@ -34,6 +32,7 @@ import {
 } from "../components/ui";
 import { useDebounce } from "../hooks/useDebounce";
 import { useCachedState } from "../hooks/useCachedState";
+import { useAutoRefresh } from "../hooks/useAutoRefresh";
 import { useAppShell } from "../layouts/appShellContext";
 import type { Sender, SenderPage, Summary } from "../types/api";
 import type { ExecutionRecord } from "../types/execution";
@@ -45,6 +44,7 @@ import { CONTROL_OUTLINE } from "../components/controlStyles";
 
 const emptySummary: Summary = {
   senders: { total: 0, never_connected: 0, online: 0, inactive: 0, expired: 0, revoked: 0 },
+  instances: { active: 0, inactive: 0 },
   logs: {
     total: 0,
     last_24_hours: 0,
@@ -94,9 +94,6 @@ export function DashboardPage() {
   const [createOpen, setCreateOpen] = useState(false);
   const [selectedSender, setSelectedSender] = useState<Sender>();
   const [senderAction, setSenderAction] = useState<SenderAction>();
-  const [autoRefresh, setAutoRefresh] = useState(
-    () => Number(localStorage.getItem("dashboard-refresh") ?? 30),
-  );
   const debounced = useDebounce(search);
   const page = Math.max(1, Number(params.get("page") ?? 1));
   const pageSize = Math.max(1, Number(params.get("page_size") ?? 25));
@@ -157,7 +154,9 @@ export function DashboardPage() {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [debounced, page, pageSize, setData, setRefreshing, setSummary, status]);
+  }, [debounced, page, pageSize, setData, setRecentExecutions, setRefreshing, setSummary, status]);
+
+  const [autoRefresh, setAutoRefresh] = useAutoRefresh(() => void load());
 
   useEffect(() => { void load(); }, [load, refreshToken]);
 
@@ -170,12 +169,6 @@ export function DashboardPage() {
   }, [refreshActivity, showMetrics]);
 
   useEffect(() => {
-    if (!autoRefresh) return;
-    const timer = window.setInterval(() => void load(), autoRefresh * 1_000);
-    return () => window.clearInterval(timer);
-  }, [autoRefresh, load]);
-
-  useEffect(() => {
     setParams(
       (current) => syncSearchParams(current, debounced),
       { replace: true },
@@ -183,10 +176,8 @@ export function DashboardPage() {
   }, [debounced, setParams]);
 
   const metrics = [
-    { label: "Senders", value: summary.senders.total, hint: "registrados", icon: <Server className="size-4" /> },
-    { label: "Online", value: summary.senders.online, hint: `de ${summary.senders.total} senders`, icon: <Radio className="size-4 text-emerald-500" /> },
-    { label: "Inativos", value: summary.senders.inactive, hint: "aguardando expiração", icon: <Archive className="size-4 text-amber-500" /> },
-    { label: "Expirados", value: summary.senders.expired, hint: "arquivos removidos", icon: <AlertTriangle className="size-4 text-red-500" /> },
+    { label: "Instâncias", value: summary.instances?.active ?? 0, hint: "ativas", icon: <Radio className="size-4 text-emerald-500" /> },
+    { label: "Inativas", value: summary.instances?.inactive ?? 0, hint: "aguardando exclusão", icon: <Archive className="size-4 text-amber-500" /> },
     { label: "Total de logs", value: summary.logs.total, hint: "linhas armazenadas", icon: <Database className="size-4" /> },
     { label: "Últimas 24h", value: summary.logs.last_24_hours, hint: "novas entradas", icon: <Activity className="size-4" /> },
     { label: "Erros 24h", value: summary.logs.errors_last_24_hours, hint: "severity ERROR", icon: <ShieldAlert className="size-4 text-red-500" /> },
@@ -227,10 +218,7 @@ export function DashboardPage() {
             Atualização
             <Listbox
             value={autoRefresh}
-            onChange={(value) => {
-              setAutoRefresh(value);
-              localStorage.setItem("dashboard-refresh", String(value));
-            }}
+            onChange={setAutoRefresh}
             label="Intervalo de atualização"
             size="compact"
             className="w-28"
@@ -275,7 +263,6 @@ export function DashboardPage() {
               { value: "never_connected", label: "Nunca conectado" },
               { value: "online", label: "Online" },
               { value: "inactive", label: "Inativo" },
-              { value: "expired", label: "Expirado" },
               { value: "revoked", label: "Revogado" },
             ]}
           />

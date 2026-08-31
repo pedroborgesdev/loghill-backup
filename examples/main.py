@@ -2,6 +2,10 @@ import time
 import loghill
 
 
+# Inicialize antes de importar frameworks ou módulos que criem handlers próprios.
+log = loghill.instrument()
+
+
 def simular_traceback():
     dados = {"pedido": "BB-123", "status": "pendente"}
     return processar_pedido(dados)
@@ -12,8 +16,6 @@ def processar_pedido(dados):
 
 
 def main():
-    log = loghill.create_logger()
-
     time.sleep(1)
 
     while True:

@@ -20,7 +20,7 @@ func CORS(cfg config.Config) gin.HandlerFunc {
 				break
 			}
 		}
-		c.Header("Access-Control-Allow-Headers", "Content-Type, X-API-Key, X-Sender-Key, X-Sender-Instance-ID")
+		c.Header("Access-Control-Allow-Headers", "Content-Type, X-API-Key, X-Sender-Key, X-Sender-Instance-ID, X-Sender-Instance-Token")
 		c.Header("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS")
 		if c.Request.Method == "OPTIONS" {
 			c.AbortWithStatus(204)

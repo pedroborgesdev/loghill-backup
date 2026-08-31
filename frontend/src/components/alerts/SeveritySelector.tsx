@@ -1,7 +1,8 @@
 import type { LogSeverity } from "../../types/api";
 
-const severities: LogSeverity[] = ["TRACE", "DEBUG", "INFO", "WARN", "ERROR", "FATAL"];
+const severities: LogSeverity[] = ["UNDEFINED", "TRACE", "DEBUG", "INFO", "WARN", "ERROR", "FATAL"];
 const styles: Record<LogSeverity, string> = {
+  UNDEFINED: "border-zinc-700 text-zinc-400",
   TRACE: "border-zinc-700 text-zinc-500",
   DEBUG: "border-slate-700 text-slate-400",
   INFO: "border-blue-900 text-blue-400",

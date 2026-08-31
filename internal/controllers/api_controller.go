@@ -123,6 +123,8 @@ func (a *APIController) fail(c *gin.Context, err error) {
 		status, code, msg = 409, "SENDER_ALREADY_EXISTS", "Já existe um sender com este identificador."
 	case errors.Is(err, domain.ErrInvalidSenderKey):
 		status, code, msg = 401, "INVALID_SENDER_KEY", "A chave informada não é válida para este sender."
+	case errors.Is(err, domain.ErrInvalidInstanceToken):
+		status, code, msg = 401, "INVALID_INSTANCE_TOKEN", "A credencial da instância é inválida. Inicialize uma nova instância."
 	case errors.Is(err, domain.ErrSenderRevoked):
 		status, code, msg = 409, "SENDER_REVOKED", "O sender está revogado. Gere uma nova chave ao reativá-lo."
 	case errors.Is(err, domain.ErrConflict):
@@ -249,16 +251,28 @@ func (a *APIController) ReceiveLog(c *gin.Context) {
 		c.JSON(400, errBody(c, "INVALID_REQUEST", "Body inválido"))
 		return
 	}
+	senderID := strings.TrimSpace(in.SenderID)
+	if senderID == "" {
+		senderID = strings.TrimSpace(in.Sender)
+	}
+	if senderID == "" {
+		c.JSON(http.StatusBadRequest, errorBodyWithField(c, "INVALID_REQUEST", "Informe sender_id.", "sender_id"))
+		return
+	}
 	instanceID := strings.TrimSpace(c.GetHeader("X-Sender-Instance-ID"))
 	if instanceID == "" {
 		instanceID = strings.TrimSpace(c.Query("instance_id"))
 	}
-	_, at, err := a.svc.ReceiveLogWithInstanceAndEvent(c.Request.Context(), in.Sender, c.GetHeader("X-Sender-Key"), instanceID, in.Severity, in.Message, in.Event, in.EventOccurrenceID, in.Timestamp, in.Metadata)
+	originInstanceID := strings.TrimSpace(c.GetHeader("X-LogHill-Origin-Instance-ID"))
+	if originInstanceID == "" {
+		originInstanceID = instanceID
+	}
+	_, at, err := a.svc.ReceiveLogWithAuthenticatedInstanceAndEvent(c.Request.Context(), senderID, c.GetHeader("X-Sender-Key"), instanceID, strings.TrimSpace(c.GetHeader("X-Sender-Instance-Token")), originInstanceID, in.Severity, in.Message, in.Event, in.EventOccurrenceID, in.Timestamp, in.Metadata)
 	if err != nil {
 		a.fail(c, err)
 		return
 	}
-	c.JSON(202, gin.H{"accepted": true, "sender": in.Sender, "instance_id": instanceID, "received_at": at})
+	c.JSON(202, gin.H{"accepted": true, "sender_id": senderID, "sender": senderID, "instance_id": originInstanceID, "received_at": at})
 }
 
 func (a *APIController) InitSenderInstance(c *gin.Context) {
@@ -267,16 +281,30 @@ func (a *APIController) InitSenderInstance(c *gin.Context) {
 		a.fail(c, err)
 		return
 	}
-	c.JSON(http.StatusCreated, gin.H{"sender": c.Param("sender"), "instance_id": instance.ID, "initialized_at": instance.CreatedAt})
+	c.JSON(http.StatusCreated, gin.H{"sender_id": c.Param("sender"), "sender": c.Param("sender"), "instance_id": instance.ID, "initialized_at": instance.CreatedAt})
 }
 
 func (a *APIController) InitInstanceByKey(c *gin.Context) {
+	var in dto.InitInstanceRequest
+	if err := c.ShouldBindJSON(&in); err != nil && !errors.Is(err, io.EOF) {
+		c.JSON(http.StatusBadRequest, errBody(c, "INVALID_REQUEST", "Body inválido"))
+		return
+	}
+	if strings.TrimSpace(in.SenderName) != "" {
+		sender, instance, token, err := a.svc.InitInstanceByName(c.Request.Context(), in.SenderName)
+		if err != nil {
+			a.fail(c, err)
+			return
+		}
+		c.JSON(http.StatusCreated, gin.H{"sender_id": sender.ID, "sender": sender.ID, "instance_id": instance.ID, "instance_token": token, "initialized_at": instance.CreatedAt})
+		return
+	}
 	sender, instance, err := a.svc.InitInstanceByKey(c.Request.Context(), c.GetHeader("X-Sender-Key"))
 	if err != nil {
 		a.fail(c, err)
 		return
 	}
-	c.JSON(http.StatusCreated, gin.H{"sender": sender.ID, "instance_id": instance.ID, "initialized_at": instance.CreatedAt})
+	c.JSON(http.StatusCreated, gin.H{"sender_id": sender.ID, "sender": sender.ID, "instance_id": instance.ID, "initialized_at": instance.CreatedAt})
 }
 
 func (a *APIController) ListSenderInstances(c *gin.Context) {
@@ -315,7 +343,7 @@ func (a *APIController) SenderHealth(c *gin.Context) {
 		c.JSON(400, errBody(c, "INVALID_REQUEST", "Body inválido"))
 		return
 	}
-	s, at, err := a.svc.HealthWithInstance(c.Request.Context(), c.Param("sender"), c.GetHeader("X-Sender-Key"), strings.TrimSpace(c.GetHeader("X-Sender-Instance-ID")))
+	s, at, err := a.svc.HealthWithInstanceAuth(c.Request.Context(), c.Param("sender"), c.GetHeader("X-Sender-Key"), strings.TrimSpace(c.GetHeader("X-Sender-Instance-ID")), strings.TrimSpace(c.GetHeader("X-Sender-Instance-Token")))
 	if err != nil {
 		a.fail(c, err)
 		return

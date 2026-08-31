@@ -1,5 +1,5 @@
 export type SenderStatus = "never_connected" | "online" | "inactive" | "archived" | "expired" | "revoked";
-export type LogSeverity = "TRACE" | "DEBUG" | "INFO" | "WARN" | "ERROR" | "FATAL";
+export type LogSeverity = "UNDEFINED" | "TRACE" | "DEBUG" | "INFO" | "WARN" | "ERROR" | "FATAL";
 export interface Sender {
   id:string; name:string; description?:string; status:SenderStatus; created_at:string; updated_at:string;
   key_prefix?:string; key_rotated_at?:string|null;
@@ -19,7 +19,7 @@ export interface SenderPage { items:Sender[]; pagination:Pagination }
 export interface LogPage { sender:string; items:LogEntry[]; pagination:Pagination }
 export interface SenderInstance { id:string; created_at:string; last_activity_at?:string|null; last_healthcheck_at?:string|null; log_line_count:number; log_file_size:number; legacy?:boolean; status:"online"|"inactive" }
 export interface SenderInstancePage { sender:string; items:SenderInstance[]; pagination:Pagination }
-export interface Summary { senders:Record<"total"|"never_connected"|"online"|"inactive"|"expired"|"revoked",number>; logs:Record<"total"|"last_24_hours"|"errors_last_24_hours"|"fatal_last_24_hours",number>; executions?:import("./execution").ExecutionSummary }
+export interface Summary { senders:Record<"total"|"never_connected"|"online"|"inactive"|"expired"|"revoked",number>; instances?:Record<"active"|"inactive",number>; logs:Record<"total"|"last_24_hours"|"errors_last_24_hours"|"fatal_last_24_hours",number>; executions?:import("./execution").ExecutionSummary }
 export interface HealthResponse {
   status:string;
   time:string;

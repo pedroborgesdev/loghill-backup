@@ -207,6 +207,8 @@ func statusLabel(status domain.SenderStatus) string {
 
 func themeFor(severity domain.LogSeverity) severityTheme {
 	switch severity {
+	case domain.Undefined:
+		return severityTheme{Headline: "Novo log do sistema registrado", Subject: "Log do sistema registrado", Color: "#a1a1aa", Background: "#18181b", Border: "#3f3f46"}
 	case domain.Trace:
 		return severityTheme{Headline: "Novo rastreamento registrado", Subject: "Rastreamento registrado", Color: "#d4d4d8", Background: "#27272a", Border: "#52525b"}
 	case domain.Debug:

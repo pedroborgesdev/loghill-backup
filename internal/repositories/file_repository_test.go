@@ -151,6 +151,29 @@ func TestInstanceLogLimitsAreIndependent(t *testing.T) {
 	}
 }
 
+func TestInstanceTokenHashPersistsButIsNotSerializedByDomain(t *testing.T) {
+	repository, sender := createRepositorySender(t)
+	instance := domain.SenderInstance{
+		ID:        "ins_33333333333333333333333333333333",
+		TokenHash: strings.Repeat("a", 64),
+		CreatedAt: time.Now(),
+	}
+	if err := repository.RegisterInstance(context.Background(), sender.ID, instance); err != nil {
+		t.Fatal(err)
+	}
+	stored, err := repository.GetInstance(context.Background(), sender.ID, instance.ID)
+	if err != nil || stored.TokenHash != instance.TokenHash {
+		t.Fatalf("token hash was not restored: instance=%+v err=%v", stored, err)
+	}
+	response, err := json.Marshal(stored)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(response), instance.TokenHash) || strings.Contains(string(response), "token") {
+		t.Fatalf("domain response exposed token hash: %s", response)
+	}
+}
+
 func TestCompactByLimitPreservesNewestEntries(t *testing.T) {
 	repository, sender := createRepositorySender(t)
 	for _, message := range []string{"one", "two", "three", "four"} {

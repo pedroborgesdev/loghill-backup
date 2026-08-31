@@ -19,9 +19,11 @@ paths:
         "503": { description: Aplicação indisponível }
   /api/v1/logs:
     post:
-      summary: Recebe um log autenticado pelo sender
-      security: [{ SenderKey: [] }]
-      parameters: [{ $ref: "#/components/parameters/SenderInstanceHeader" }]
+      summary: Recebe um log autenticado pela instância
+      security: [{ SenderInstanceToken: [] }, { SenderKey: [] }]
+      parameters:
+        - { $ref: "#/components/parameters/SenderInstanceHeader" }
+        - { $ref: "#/components/parameters/OriginInstanceHeader" }
       requestBody:
         required: true
         content:
@@ -131,7 +133,7 @@ paths:
   /api/v1/senders/{sender}/health:
     post:
       summary: Registra um healthcheck autenticado
-      security: [{ SenderKey: [] }]
+      security: [{ SenderInstanceToken: [] }, { SenderKey: [] }]
       parameters: [{ $ref: "#/components/parameters/Sender" }, { $ref: "#/components/parameters/SenderInstanceHeader" }]
       requestBody: { content: { application/json: { schema: { type: object, additionalProperties: true } } } }
       responses:
@@ -149,16 +151,14 @@ paths:
         "401": { $ref: "#/components/responses/InvalidSenderKey" }
   /api/v1/instances/init:
     post:
-      summary: Identifica o sender pela chave e inicializa uma instância
-      description: Endpoint recomendado para clientes. Não exige que o sender_id seja configurado na aplicação produtora.
-      security: [{ SenderKey: [] }]
-      requestBody: { content: { application/json: { schema: { type: object, additionalProperties: false } } } }
+      summary: Identifica ou cria o sender pelo nome e inicializa uma instância
+      description: Endpoint recomendado para clientes. Se o nome ainda não existir, o sender é criado automaticamente. A credencial retornada é exclusiva desta execução; a inicialização legada por X-Sender-Key permanece compatível.
+      requestBody: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/SenderInstanceInitInput" } } } }
       responses:
-        "201": { description: Sender identificado e instância inicializada, content: { application/json: { schema: { $ref: "#/components/schemas/SenderInstanceInitResponse" } } } }
-        "401": { $ref: "#/components/responses/InvalidSenderKey" }
+        "201": { description: Sender identificado ou criado e instância inicializada, content: { application/json: { schema: { $ref: "#/components/schemas/SenderInstanceNameInitResponse" } } } }
   /api/v1/senders/{sender}/instances:
     get:
-      summary: Lista as instâncias conhecidas e o volume retido de logs de cada uma
+      summary: Lista as instâncias ativas ou ainda dentro do prazo de retenção e o volume de logs de cada uma
       security: [{ AdminApiKey: [] }]
       parameters:
         - { $ref: "#/components/parameters/Sender" }
@@ -208,7 +208,7 @@ paths:
       responses: { "200": { description: Arquivo JSON Lines } }
   /api/v1/dashboard/summary:
     get:
-      summary: Retorna as métricas do dashboard
+      summary: Retorna métricas de instâncias ativas/inativas e volume de logs do dashboard
       security: [{ AdminApiKey: [] }]
       responses: { "200": { description: Resumo } }
   /api/v1/settings:
@@ -441,12 +441,14 @@ paths:
 components:
   securitySchemes:
     SenderKey: { type: apiKey, in: header, name: X-Sender-Key, description: Chave secreta específica do sender }
+    SenderInstanceToken: { type: apiKey, in: header, name: X-Sender-Instance-Token, description: Credencial efêmera retornada ao inicializar uma instância por sender_name }
     AdminApiKey: { type: apiKey, in: header, name: X-API-Key, description: Credencial administrativa opcional }
   parameters:
     Sender: { name: sender, in: path, required: true, schema: { type: string, pattern: "^[a-z0-9][a-z0-9_-]{0,62}$" } }
     AlertID: { name: alertID, in: path, required: true, schema: { type: string, pattern: "^alert-[a-f0-9]{16}$" } }
     EventID: { name: eventID, in: path, required: true, schema: { type: string, pattern: "^evt_[a-f0-9]{12}$" } }
     SenderInstanceHeader: { name: X-Sender-Instance-ID, in: header, required: false, schema: { type: string, pattern: "^ins_[a-f0-9]{32}$" }, description: ID retornado pelo handshake de inicialização do processo cliente }
+    OriginInstanceHeader: { name: X-LogHill-Origin-Instance-ID, in: header, required: false, schema: { type: string, pattern: "^ins_[a-f0-9]{32}$" }, description: Instância que originou um log pendente. É validada no mesmo sender autenticado e usada automaticamente pelo cliente oficial durante reenvios. }
   schemas:
     ExecutionSourceType: { type: string, enum: [alert, event, monitoring] }
     ExecutionStatus: { type: string, enum: [pending, processing, success, partial, failed, cancelled, skipped] }
@@ -539,13 +541,14 @@ components:
         expression: { $ref: "#/components/schemas/MonitoringExpressionGroup" }
         actions: { type: array, minItems: 1, maxItems: 10, items: { $ref: "#/components/schemas/MonitoringAction" } }
     SenderStatus: { type: string, enum: [never_connected, online, inactive, archived, expired, revoked] }
-    Severity: { type: string, enum: [TRACE, DEBUG, INFO, WARN, ERROR, FATAL] }
+    Severity: { type: string, enum: [UNDEFINED, TRACE, DEBUG, INFO, WARN, ERROR, FATAL] }
     LogInput:
       type: object
       additionalProperties: false
-      required: [sender, severity, message]
+      required: [sender_id, severity, message]
       properties:
-        sender: { type: string, example: automacao-financeira }
+        sender_id: { type: string, example: automacao-financeira, description: Identificador canônico retornado pelo handshake }
+        sender: { type: string, deprecated: true, description: Alias legado de sender_id }
         severity: { $ref: "#/components/schemas/Severity" }
         message: { type: string }
         timestamp: { type: string, format: date-time }
@@ -566,11 +569,25 @@ components:
         status: { type: string, enum: [online, inactive] }
     SenderInstanceInitResponse:
       type: object
-      required: [sender, instance_id, initialized_at]
+      required: [sender_id, instance_id, initialized_at]
       properties:
-        sender: { type: string }
+        sender_id: { type: string, description: Identificador canônico que deve ser usado nos logs e healthchecks }
+        sender: { type: string, deprecated: true, description: Alias legado de sender_id }
         instance_id: { type: string, pattern: "^ins_[a-f0-9]{32}$" }
         initialized_at: { type: string, format: date-time }
+    SenderInstanceNameInitResponse:
+      allOf:
+        - { $ref: "#/components/schemas/SenderInstanceInitResponse" }
+        - type: object
+          required: [instance_token]
+          properties:
+            instance_token: { type: string, writeOnly: true, pattern: "^inst_[A-Za-z0-9_-]+$" }
+    SenderInstanceInitInput:
+      type: object
+      additionalProperties: false
+      required: [sender_name]
+      properties:
+        sender_name: { type: string, minLength: 1, maxLength: 80, example: Automação Financeira }
     SenderInstancePage:
       type: object
       required: [sender, items, pagination]
@@ -764,8 +781,8 @@ components:
       properties:
         log_limit: { $ref: "#/components/schemas/NumberUnitValue" }
         inactive_preservation: { $ref: "#/components/schemas/NumberUnitValue" }
-        inactive_after_seconds: { type: integer, minimum: 1, maximum: 86400, description: Tempo sem atividade para considerar o sender inativo. }
-        delete_inactive_after_days: { type: integer, minimum: 1, maximum: 3650, description: Prazo desde a inativação para excluir os logs. }
+        inactive_after_seconds: { type: integer, minimum: 1, maximum: 86400, description: Tempo sem atividade para considerar uma instância inativa. }
+        delete_inactive_after_days: { type: integer, minimum: 1, maximum: 3650, description: Prazo desde a inativação para excluir permanentemente a instância e seus logs; o sender também é removido quando não restam instâncias. }
     Settings:
       allOf:
         - { $ref: "#/components/schemas/SettingsInput" }

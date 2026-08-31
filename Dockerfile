@@ -20,8 +20,8 @@ WORKDIR /app
 COPY --from=backend-builder /out/log-theater /app/log-theater
 COPY docs/openapi.yaml /app/docs/openapi.yaml
 USER app
-ENV APP_HOST=0.0.0.0 APP_PORT=8080 DATA_DIR=/app/data
-EXPOSE 8080
+ENV APP_HOST=0.0.0.0 APP_PORT=8001 DATA_DIR=/app/data
+EXPOSE 8001
 VOLUME ["/app/data"]
-HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 CMD wget -qO- http://127.0.0.1:8080/health || exit 1
+HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 CMD wget -qO- http://127.0.0.1:8001/health || exit 1
 ENTRYPOINT ["/app/log-theater"]

@@ -48,22 +48,30 @@ func (r *FileRepository) RegisterInstance(ctx context.Context, senderID string, 
 }
 
 func (r *FileRepository) InstanceExists(ctx context.Context, senderID, instanceID string) (bool, error) {
+	_, err := r.GetInstance(ctx, senderID, instanceID)
+	if errors.Is(err, domain.ErrNotFound) {
+		return false, nil
+	}
+	return err == nil, err
+}
+
+func (r *FileRepository) GetInstance(ctx context.Context, senderID, instanceID string) (domain.SenderInstance, error) {
 	d, err := r.dir(senderID)
 	if err != nil {
-		return false, err
+		return domain.SenderInstance{}, err
 	}
 	release := r.acquireRead(ctx, senderID)
 	defer release()
 	instances, err := readInstances(filepath.Join(d, "instances.json"))
 	if err != nil {
-		return false, err
+		return domain.SenderInstance{}, err
 	}
 	for _, instance := range instances {
 		if instance.ID == instanceID {
-			return true, nil
+			return instance, nil
 		}
 	}
-	return false, nil
+	return domain.SenderInstance{}, domain.ErrNotFound
 }
 
 func (r *FileRepository) InstanceCount(ctx context.Context, senderID string) (int, error) {
@@ -78,6 +86,21 @@ func (r *FileRepository) InstanceCount(ctx context.Context, senderID string) (in
 		return 0, err
 	}
 	return len(instances), nil
+}
+
+// RegisteredInstances retorna somente execuções registradas em instances.json.
+// Logs legados sem instance_id não representam um processo ativo e ficam fora.
+func (r *FileRepository) RegisteredInstances(ctx context.Context, senderID string) ([]domain.SenderInstance, error) {
+	d, err := r.dir(senderID)
+	if err != nil {
+		return nil, err
+	}
+	release := r.acquireRead(ctx, senderID)
+	defer release()
+	if _, err = r.readSender(filepath.Join(d, "sender.json")); err != nil {
+		return nil, err
+	}
+	return readInstances(filepath.Join(d, "instances.json"))
 }
 
 func (r *FileRepository) DeleteInstance(ctx context.Context, senderID, instanceID string) error {
@@ -244,11 +267,21 @@ func readInstances(path string) ([]domain.SenderInstance, error) {
 	if err = json.Unmarshal(b, &stored); err != nil {
 		return nil, err
 	}
-	return stored.Items, nil
+	items := make([]domain.SenderInstance, 0, len(stored.Items))
+	for _, storedInstance := range stored.Items {
+		instance := storedInstance.SenderInstance
+		instance.TokenHash = storedInstance.TokenHash
+		items = append(items, instance)
+	}
+	return items, nil
 }
 
 func writeInstancesAtomic(path string, instances []domain.SenderInstance) error {
-	b, err := json.MarshalIndent(persistedInstances{Items: instances}, "", "  ")
+	stored := make([]persistedInstance, 0, len(instances))
+	for _, instance := range instances {
+		stored = append(stored, persistedInstance{SenderInstance: instance, TokenHash: instance.TokenHash})
+	}
+	b, err := json.MarshalIndent(persistedInstances{Items: stored}, "", "  ")
 	if err != nil {
 		return err
 	}

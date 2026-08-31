@@ -1,4 +1,4 @@
-import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
+import { BrowserRouter, Navigate, Route, Routes, useLocation } from "react-router-dom";
 import { AuthProvider, useAuth } from "./auth/AuthProvider";
 import { AppShell } from "./layouts/AppShell";
 import { DashboardPage } from "./pages/DashboardPage";
@@ -13,6 +13,7 @@ import { Skeleton } from "./components/ui";
 
 function ProtectedApp() {
   const { state } = useAuth();
+  const location = useLocation();
   if (state === "loading") {
     return (
       <div className="grid min-h-[100dvh] place-items-center bg-[#0c0c0f]">
@@ -25,7 +26,9 @@ function ProtectedApp() {
     );
   }
   if (state === "anonymous") {
-    return <LoginPage />;
+    return location.pathname === "/login"
+      ? <LoginPage />
+      : <Navigate to="/login" replace />;
   }
   return (
     <Routes>

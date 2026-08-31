@@ -111,7 +111,10 @@ func (r *FileRepository) Append(ctx context.Context, id string, entry domain.Log
 	if instanceIndex >= 0 {
 		instances[instanceIndex].LogLineCount = count
 		instances[instanceIndex].LogFileSize = size
-		at := time.Now()
+		at := entry.ActivityAt
+		if at.IsZero() {
+			at = time.Now()
+		}
 		instances[instanceIndex].LastActivityAt = &at
 		if err = writeInstancesAtomic(filepath.Join(d, "instances.json"), instances); err != nil {
 			return 0, 0, err

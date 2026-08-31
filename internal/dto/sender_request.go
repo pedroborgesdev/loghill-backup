@@ -13,11 +13,16 @@ type UpdateSenderRequest struct {
 }
 
 type ReceiveLogRequest struct {
-	Sender            string         `json:"sender" binding:"required"`
+	SenderID          string         `json:"sender_id"`
+	Sender            string         `json:"sender"`
 	Severity          string         `json:"severity" binding:"required"`
 	Message           string         `json:"message" binding:"required"`
 	Timestamp         *time.Time     `json:"timestamp"`
 	Event             string         `json:"event"`
 	EventOccurrenceID string         `json:"event_occurrence_id"`
 	Metadata          map[string]any `json:"metadata"`
+}
+
+type InitInstanceRequest struct {
+	SenderName string `json:"sender_name"`
 }

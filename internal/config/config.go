@@ -82,7 +82,7 @@ func Load() (Config, error) {
 		authEnabled = envBool("ADMIN_AUTH_ENABLED", false)
 	}
 	c := Config{
-		Host: env("APP_HOST", "0.0.0.0"), Port: env("APP_PORT", "8080"), DataDir: env("DATA_DIR", "./data"),
+		Host: env("APP_HOST", "0.0.0.0"), Port: env("APP_PORT", "8001"), DataDir: env("DATA_DIR", "./data"),
 		MaxLogLines: envInt("MAX_LOG_LINES", 100000), CompactTarget: envInt("LOG_COMPACT_TARGET_LINES", 95000),
 		CompactKeep: envInt("COMPACT_KEEP_LINES", 2000), MaxPageSize: envInt("MAX_PAGE_SIZE", 1000),
 		MaxBodySize: envInt64("MAX_BODY_SIZE", 1048576), MaxMessageSize: envInt64("MAX_MESSAGE_SIZE", 262144),
@@ -95,7 +95,7 @@ func Load() (Config, error) {
 		AuthEnabled: authEnabled, AppPassword: appPassword,
 		SSEBuffer: envInt("SSE_CLIENT_BUFFER", 100), SSEMaxClients: envInt("SSE_MAX_CLIENTS_PER_SENDER", 100),
 		ShutdownTimeout: envDuration("SHUTDOWN_TIMEOUT", 10*time.Second),
-		PublicURL:       strings.TrimRight(env("APP_PUBLIC_URL", "http://localhost:8080"), "/"),
+		PublicURL:       strings.TrimRight(env("APP_PUBLIC_URL", "http://localhost:8001"), "/"),
 		EmailProvider:   emailProvider, OutlookEnabled: outlookEnabled, OutlookEnabledManaged: outlookEnabledManaged,
 		OutlookTenantID: outlookTenantID, OutlookClientID: outlookClientID,
 		OutlookClientSecret: outlookClientSecret, OutlookSenderEmail: outlookSenderEmail,

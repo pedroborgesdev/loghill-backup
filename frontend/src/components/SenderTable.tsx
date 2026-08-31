@@ -123,7 +123,6 @@ function Actions({ sender, onAction }: { sender: Sender; onAction?: (sender: Sen
             <button type="button" role="menuitem" onClick={() => { setOpen(false); onAction?.(sender, "reactivate"); }} className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-zinc-300 hover:bg-zinc-800"><KeyRound className="size-3.5" />Reativar acesso</button>
           ) : sender.status !== "expired" ? (
             <>
-              <button type="button" role="menuitem" onClick={() => { setOpen(false); onAction?.(sender, "rotate"); }} className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-zinc-300 hover:bg-zinc-800"><KeyRound className="size-3.5" />Gerar nova chave</button>
               <button type="button" role="menuitem" onClick={() => { setOpen(false); onAction?.(sender, "revoke"); }} className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-amber-300 hover:bg-zinc-800"><ShieldOff className="size-3.5" />Revogar acesso</button>
             </>
           ) : null}

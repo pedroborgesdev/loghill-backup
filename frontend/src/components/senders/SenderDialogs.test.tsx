@@ -16,7 +16,7 @@ describe("cadastro administrativo de sender", () => {
     expect(normalizeSenderID("Cobrança / Santander")).toBe("cobranca-santander");
   });
 
-  it("verifica disponibilidade, cria e protege a chave de exibição única", async () => {
+  it("verifica disponibilidade e cria a configuração por sender_name", async () => {
     const fetchMock = vi.fn(async (input: RequestInfo | URL, options?: RequestInit) => {
       const path = String(input);
       if (path.includes("check-id")) return new Response(JSON.stringify({ id: "automacao-financeira", available: true }), { status: 200 });
@@ -32,12 +32,12 @@ describe("cadastro administrativo de sender", () => {
     expect(await screen.findByText("Identificador disponível")).toBeInTheDocument();
     await userEvent.click(screen.getByRole("button", { name: "Criar sender" }));
     expect(await screen.findByRole("dialog", { name: "Sender criado" })).toBeInTheDocument();
-    expect(screen.getByText("snd_12345678901234567890123456789012")).toBeInTheDocument();
+    expect(screen.queryByText("snd_12345678901234567890123456789012")).not.toBeInTheDocument();
+    expect(screen.getByText(/nenhuma chave precisa ser configurada/i)).toBeInTheDocument();
     expect(created).toHaveBeenCalled();
-    await userEvent.click(screen.getByRole("button", { name: "Concluir" }));
-    expect(screen.getByRole("dialog", { name: "Você ainda não copiou a chave" })).toBeInTheDocument();
-    await userEvent.click(screen.getByRole("button", { name: "Continuar nesta janela" }));
-    await userEvent.click(screen.getByRole("button", { name: "Copiar chave" }));
-    await waitFor(() => expect(navigator.clipboard.writeText).toHaveBeenCalledWith("snd_12345678901234567890123456789012"));
+    await userEvent.click(screen.getByRole("button", { name: "Copiar configuração de ambiente" }));
+    await waitFor(() => expect(navigator.clipboard.writeText).toHaveBeenCalledWith(
+      expect.stringContaining("LOGHILL_SENDER_NAME=automacao-financeira"),
+    ));
   });
 });

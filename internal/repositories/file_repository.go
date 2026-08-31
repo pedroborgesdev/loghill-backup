@@ -23,7 +23,12 @@ type persistedSender struct {
 }
 
 type persistedInstances struct {
-	Items []domain.SenderInstance `json:"items"`
+	Items []persistedInstance `json:"items"`
+}
+
+type persistedInstance struct {
+	domain.SenderInstance
+	TokenHash string `json:"token_hash,omitempty"`
 }
 
 func New(root string) *FileRepository {

@@ -3,6 +3,7 @@ package services
 import (
 	"context"
 	"errors"
+	"os"
 	"path/filepath"
 	"testing"
 	"time"
@@ -85,6 +86,64 @@ func TestReceiveLogPersistsAndStreamsEvent(t *testing.T) {
 		t.Fatalf("expected invalid event key, got %v", err)
 	}
 }
+
+func TestReplayedLogKeepsOriginInstanceAndOriginalActivityTime(t *testing.T) {
+	dir := filepath.Join(t.TempDir(), "data")
+	repo := repositories.New(dir)
+	if err := repo.Init(); err != nil {
+		t.Fatal(err)
+	}
+	clock := &fakeClock{now: time.Date(2026, 8, 28, 18, 30, 0, 0, time.UTC)}
+	settings, err := settingsstore.Open(dir, clock.Now())
+	if err != nil {
+		t.Fatal(err)
+	}
+	svc := New(repo, testConfig(dir), clock, settings)
+	sender, _, err := svc.CreateSender(context.Background(), "Worker Replay", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, origin, _, err := svc.InitInstanceByName(context.Background(), sender.Name)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, current, currentToken, err := svc.InitInstanceByName(context.Background(), sender.Name)
+	if err != nil {
+		t.Fatal(err)
+	}
+	originalTime := clock.now.Add(-10 * time.Minute)
+	entry, _, err := svc.ReceiveLogWithAuthenticatedInstanceAndEvent(
+		context.Background(), sender.ID, "", current.ID, currentToken, origin.ID,
+		"UNDEFINED", "Finished server process", "", "", &originalTime, nil,
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if entry.InstanceID != origin.ID {
+		t.Fatalf("replayed log instance=%q, want %q", entry.InstanceID, origin.ID)
+	}
+	page, err := svc.Logs(context.Background(), sender.ID, domain.LogFilters{InstanceID: origin.ID, Page: 1, PageSize: 10, Order: "asc"})
+	if err != nil || len(page.Items) != 1 || page.Items[0].Message != "Finished server process" {
+		t.Fatalf("origin logs=%+v err=%v", page.Items, err)
+	}
+	instances, err := svc.Instances(context.Background(), sender.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	foundOrigin := false
+	for _, instance := range instances {
+		if instance.ID == origin.ID {
+			foundOrigin = true
+			if instance.Status != domain.StatusInactive {
+				t.Fatalf("origin instance status=%q, want inactive", instance.Status)
+			}
+		}
+	}
+	if !foundOrigin {
+		t.Fatalf("origin instance %q was not listed", origin.ID)
+	}
+}
+
 func TestLifecycleAndCompaction(t *testing.T) {
 	dir := t.TempDir()
 	repo := repositories.New(filepath.Join(dir, "data"))
@@ -227,5 +286,142 @@ func TestSettingsAreAppliedWithoutRestart(t *testing.T) {
 	sender, _ = svc.Get(context.Background(), sender.ID)
 	if sender.LogLineCount != 1 || sender.Status != domain.StatusInactive {
 		t.Fatalf("dynamic preservation was not applied: %+v", sender)
+	}
+}
+
+func TestDashboardAndSenderCountOnlyActiveInstances(t *testing.T) {
+	dataDir := filepath.Join(t.TempDir(), "data")
+	repo := repositories.New(dataDir)
+	if err := repo.Init(); err != nil {
+		t.Fatal(err)
+	}
+	clock := &fakeClock{now: time.Date(2026, 8, 31, 10, 0, 0, 0, time.UTC)}
+	store, err := settingsstore.Open(dataDir, clock.Now())
+	if err != nil {
+		t.Fatal(err)
+	}
+	svc := New(repo, testConfig(dataDir), clock, store)
+	ctx := context.Background()
+	sender, oldInstance, _, err := svc.InitInstanceByName(ctx, "Worker Dashboard")
+	if err != nil {
+		t.Fatal(err)
+	}
+	clock.now = clock.now.Add(6 * time.Minute)
+	_, activeInstance, _, err := svc.InitInstanceByName(ctx, sender.Name)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if oldInstance.ID == activeInstance.ID {
+		t.Fatal("initializations returned the same instance")
+	}
+
+	page, err := svc.Senders(ctx, domain.SenderFilters{Page: 1, PageSize: 20})
+	if err != nil || len(page.Items) != 1 {
+		t.Fatalf("senders=%+v err=%v", page.Items, err)
+	}
+	if page.Items[0].InstanceCount != 1 {
+		t.Fatalf("instance_count=%d, want only one active instance", page.Items[0].InstanceCount)
+	}
+
+	summary, err := svc.Summary(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	instances, ok := summary["instances"].(map[string]int64)
+	if !ok || instances["active"] != 1 || instances["inactive"] != 1 {
+		t.Fatalf("unexpected instance summary: %#v", summary["instances"])
+	}
+}
+
+func TestTickPermanentlyDeletesSenderWhenLastInstanceExpires(t *testing.T) {
+	dataDir := filepath.Join(t.TempDir(), "data")
+	repo := repositories.New(dataDir)
+	if err := repo.Init(); err != nil {
+		t.Fatal(err)
+	}
+	clock := &fakeClock{now: time.Date(2026, 8, 31, 10, 0, 0, 0, time.UTC)}
+	store, err := settingsstore.Open(dataDir, clock.Now())
+	if err != nil {
+		t.Fatal(err)
+	}
+	svc := New(repo, testConfig(dataDir), clock, store)
+	if _, err = svc.UpdateSettings(domain.Settings{
+		LogLimit:             domain.NumberUnitValue{Value: 10, Unit: domain.StorageLines},
+		InactivePreservation: domain.NumberUnitValue{Value: 2, Unit: domain.StorageLines},
+		InactiveAfterSeconds: 300,
+		DeleteInactiveDays:   1,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	ctx := context.Background()
+	sender, instance, token, err := svc.InitInstanceByName(ctx, "Worker Expirável")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err = svc.ReceiveLogWithAuthenticatedInstanceAndEvent(
+		ctx, sender.ID, "", instance.ID, token, instance.ID,
+		"INFO", "primeiro log", "", "", nil, nil,
+	); err != nil {
+		t.Fatal(err)
+	}
+
+	clock.now = clock.now.Add(6 * time.Minute)
+	if err = svc.Tick(ctx); err != nil {
+		t.Fatal(err)
+	}
+	listed, err := svc.Instances(ctx, sender.ID)
+	if err != nil || len(listed) != 1 || listed[0].Status != domain.StatusInactive {
+		t.Fatalf("instance should wait inactive before deletion: %+v err=%v", listed, err)
+	}
+
+	clock.now = clock.now.Add(24 * time.Hour)
+	if err = svc.Tick(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = svc.Get(ctx, sender.ID); !errors.Is(err, domain.ErrNotFound) {
+		t.Fatalf("sender should disappear after its last instance expires: %v", err)
+	}
+	if _, err = os.Stat(filepath.Join(dataDir, "senders", sender.ID)); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("expired sender directory still exists: %v", err)
+	}
+	summary, err := svc.Summary(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	senders := summary["senders"].(map[string]int64)
+	instances := summary["instances"].(map[string]int64)
+	if senders["total"] != 0 || instances["active"] != 0 || instances["inactive"] != 0 {
+		t.Fatalf("expired sender remained visible in dashboard: %#v", summary)
+	}
+}
+
+func TestTickDeletesPreviouslyExpiredSender(t *testing.T) {
+	dataDir := filepath.Join(t.TempDir(), "data")
+	repo := repositories.New(dataDir)
+	if err := repo.Init(); err != nil {
+		t.Fatal(err)
+	}
+	clock := &fakeClock{now: time.Date(2026, 8, 31, 10, 0, 0, 0, time.UTC)}
+	store, err := settingsstore.Open(dataDir, clock.Now())
+	if err != nil {
+		t.Fatal(err)
+	}
+	svc := New(repo, testConfig(dataDir), clock, store)
+	ctx := context.Background()
+	sender, _, err := svc.CreateSender(ctx, "Sender Expirado Antigo", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	sender.Status = domain.StatusExpired
+	sender.UpdatedAt = clock.Now()
+	if err = repo.Update(ctx, sender); err != nil {
+		t.Fatal(err)
+	}
+
+	if err = svc.Tick(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = svc.Get(ctx, sender.ID); !errors.Is(err, domain.ErrNotFound) {
+		t.Fatalf("previously expired sender should be permanently deleted: %v", err)
 	}
 }

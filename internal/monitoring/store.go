@@ -18,7 +18,11 @@ type persistedRules struct {
 	Rules   []Rule `json:"rules"`
 }
 
-var everySeverity = []domain.LogSeverity{domain.Trace, domain.Debug, domain.Info, domain.Warn, domain.Error, domain.Fatal}
+var everySeverity = []domain.LogSeverity{domain.Undefined, domain.Trace, domain.Debug, domain.Info, domain.Warn, domain.Error, domain.Fatal}
+
+// Severidades existentes quando o gatilho generico era persistido como uma
+// condicao "severity in". Manter esta lista permite migrar regras antigas.
+var legacyEverySeverity = []domain.LogSeverity{domain.Trace, domain.Debug, domain.Info, domain.Warn, domain.Error, domain.Fatal}
 
 type persistedPending struct {
 	Version int                 `json:"version"`
@@ -120,7 +124,7 @@ func coversEverySeverity(raw any) bool {
 	for _, item := range list {
 		present[fmt.Sprint(item)] = true
 	}
-	for _, severity := range everySeverity {
+	for _, severity := range legacyEverySeverity {
 		if !present[string(severity)] {
 			return false
 		}

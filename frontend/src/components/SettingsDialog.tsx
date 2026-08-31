@@ -688,9 +688,9 @@ export function SettingsDialog({
                           {errors.inactive_after_seconds && <span role="alert" className="mt-2 block text-[11px] text-red-400">{errors.inactive_after_seconds}</span>}
                         </label>
                         <label className="rounded-xl border border-zinc-800 bg-[#111113] p-4 text-xs text-zinc-300">
-                          Excluir inativos após
+                          Excluir instâncias inativas após
                           <SettingsNumberInput value={draft.delete_inactive_after_days} min={1} max={3650} label="prazo de exclusão" disabled={isSaving} error={errors.delete_inactive_after_days} onChange={(value) => changeTimeDraft("delete_inactive_after_days", value)} />
-                          <span className="mt-2 block text-[11px] text-zinc-600">Prazo contado a partir da inativação, em dias.</span>
+                          <span className="mt-2 block text-[11px] text-zinc-600">Prazo contado a partir da inativação; a instância e seus logs serão removidos. Sem outras instâncias, o sender também desaparece.</span>
                           {errors.delete_inactive_after_days && <span role="alert" className="mt-2 block text-[11px] text-red-400">{errors.delete_inactive_after_days}</span>}
                         </label>
                       </div>
