@@ -1,0 +1,11 @@
+.git
+.github
+.env
+data
+.loghill
+frontend/node_modules
+frontend/dist
+web/dist
+*.log
+*.sqlite
+*.sqlite3

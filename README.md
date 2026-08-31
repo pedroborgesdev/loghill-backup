@@ -90,6 +90,30 @@ docker compose up --build
 
 O volume `./data:/app/data` preserva os logs. O Dockerfile tem estágios separados para frontend, backend e runtime sem privilégios.
 
+### Publicação automática da imagem
+
+O workflow `.github/workflows/publish-image.yml` testa, compila e publica a imagem no GitHub Container Registry usando o `GITHUB_TOKEN` do próprio repositório:
+
+- push em `master`: publica `ghcr.io/pedroborgesdev/loghill-backup:latest` e uma tag baseada no commit;
+- tag Git `v*`, como `v1.2.0`: publica também `ghcr.io/pedroborgesdev/loghill-backup:v1.2.0`;
+- execução manual: disponível em **Actions > Publish container image > Run workflow**.
+
+Para publicar uma versão:
+
+```bash
+git tag v1.0.0
+git push origin v1.0.0
+```
+
+Para executar a imagem publicada:
+
+```bash
+docker pull ghcr.io/pedroborgesdev/loghill-backup:latest
+docker run -d --name loghill --restart unless-stopped -p 8001:8001 -v loghill-data:/app/data ghcr.io/pedroborgesdev/loghill-backup:latest
+```
+
+O pacote pode nascer privado. Para permitir pulls sem autenticação, altere sua visibilidade para pública nas configurações do package no GitHub.
+
 ## API
 
 A especificação está em `docs/openapi.yaml` e a interface Swagger em `/docs`.
