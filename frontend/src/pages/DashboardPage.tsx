@@ -3,7 +3,7 @@ import {
   Archive,
   Bell,
   Database,
-  Radar,
+  ScanSearch,
   Radio,
   RefreshCw,
   ShieldAlert,
@@ -186,7 +186,7 @@ export function DashboardPage() {
   const activityMetrics = summary.executions ? [
     { label: "Alerts", value: summary.executions.alerts_last_24_hours, to: "/alerts?tab=executions&period=24h", icon: Bell },
     { label: "Events", value: summary.executions.events_last_24_hours, to: "/events?tab=executions&period=24h", icon: Zap },
-    { label: "Monitorings", value: summary.executions.monitoring_last_24_hours, to: "/monitoring?tab=executions&period=24h", icon: Radar },
+    { label: "Monitorings", value: summary.executions.monitoring_last_24_hours, to: "/monitoring?tab=executions&period=24h", icon: ScanSearch },
     { label: "Failures 1h", value: summary.executions.failed_last_hour, to: "/monitoring?tab=executions&period=1h&status=failed", icon: ShieldAlert },
     { label: "In progress", value: summary.executions.running, to: "/monitoring?tab=executions&status=processing", icon: RefreshCw },
   ] : [];

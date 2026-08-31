@@ -273,7 +273,7 @@ func (s *Service) Validate(ctx context.Context, in RuleInput, currentID string) 
 		return &ValidationError{"status", "Invalid rule status."}
 	}
 	if !in.IncludeNewSenders && (len(in.SenderIDs) < 1 || len(in.SenderIDs) > 100) {
-		return &ValidationError{"sender_ids", "Select entre 1 e 100 senders."}
+		return &ValidationError{"sender_ids", "Select between 1 and 100 senders."}
 	}
 	for _, id := range in.SenderIDs {
 		v, err := s.deps.Sender(ctx, id)
@@ -834,7 +834,7 @@ func conditionSummary(c Condition) string {
 func (s *Service) Test(ctx context.Context, rule Rule, input TestInput) (EvaluationResult, error) {
 	sender, err := s.deps.Sender(ctx, input.SenderID)
 	if err != nil {
-		return EvaluationResult{}, &ValidationError{"sender_id", "Sender not encontrado."}
+		return EvaluationResult{}, &ValidationError{"sender_id", "Sender not found."}
 	}
 	if !contains(rule.SenderIDs, sender.ID) {
 		return EvaluationResult{}, &ValidationError{"sender_id", "The sender is outside the rule scope."}

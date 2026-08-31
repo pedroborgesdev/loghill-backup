@@ -57,7 +57,7 @@ func (a *APIController) ListExecutions(c *gin.Context) {
 func (a *APIController) GetExecution(c *gin.Context) {
 	record, ok := a.executions.Get(c.Param("executionID"))
 	if !ok {
-		c.JSON(http.StatusNotFound, errBody(c, "EXECUTION_NOT_FOUND", "Execution not encontrada."))
+		c.JSON(http.StatusNotFound, errBody(c, "EXECUTION_NOT_FOUND", "Execution not found."))
 		return
 	}
 	c.JSON(http.StatusOK, record)

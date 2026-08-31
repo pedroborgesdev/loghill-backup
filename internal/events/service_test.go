@@ -80,7 +80,7 @@ func TestEventWithoutEmailCanBeActive(t *testing.T) {
 		t.Fatal(err)
 	}
 	if event.ActionType != domain.EventActionNone || len(event.Recipients) != 0 || event.SubjectTemplate != "" || !event.Enabled {
-		t.Fatalf("evento sem e-mail inválido: %#v", event)
+		t.Fatalf("invalid event without email: %#v", event)
 	}
 }
 

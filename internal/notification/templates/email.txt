@@ -9,8 +9,8 @@ MESSAGE
 {{if .ProviderTest}}Provider{{else}}Sender{{end}}: {{.SenderName}}
 {{if .ProviderTest}}Integration{{else}}Identifier{{end}}: {{.SenderID}}
 Status: {{.SenderStatus}}
-{{if not .ProviderTest}}Severidade: {{.Severity}}
-Time do log: {{.Timestamp}}
+{{if not .ProviderTest}}Severity: {{.Severity}}
+Log time: {{.Timestamp}}
 {{end}}Sent em: {{.SentAt}}
 
 {{if .HasMetadata}}METADADOS

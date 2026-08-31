@@ -153,7 +153,7 @@ func TestOutlookSendExplainsForbiddenPermission(t *testing.T) {
 	if !errors.As(err, &providerError) || providerError.Code != "OUTLOOK_SEND_FORBIDDEN" {
 		t.Fatalf("unexpected error: %#v", err)
 	}
-	if !strings.Contains(providerError.Message, "Mail.Send") || !strings.Contains(providerError.Message, "escopo permitido") {
+	if !strings.Contains(providerError.Message, "Mail.Send") || !strings.Contains(providerError.Message, "allowed Exchange scope") {
 		t.Fatalf("error is not actionable: %q", providerError.Message)
 	}
 }

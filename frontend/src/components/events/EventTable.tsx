@@ -1,4 +1,4 @@
-import { Edit3, Eye, Mail, Power, Radar, Send, Trash2 } from "lucide-react";
+import { Edit3, Eye, Mail, Power, ScanSearch as Radar, Send, Trash2 } from "lucide-react";
 import type { EventDefinition } from "../../types/event";
 import { relativeDate } from "../../utils/format";
 import { IconButton } from "../ui";

@@ -37,7 +37,7 @@ func Open(dataDir string, now time.Time) (*Store, error) {
 	if err = json.Unmarshal(data, &store.current); err != nil {
 		return nil, fmt.Errorf("decode settings: %w", err)
 	}
-	// Settings criadas antes destes campos usam os padrões históricos.
+	// Settings created before these fields use the historical defaults.
 	if store.current.InactiveAfterSeconds == 0 {
 		store.current.InactiveAfterSeconds = 300
 	}

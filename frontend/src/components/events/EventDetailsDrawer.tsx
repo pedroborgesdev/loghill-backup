@@ -1,4 +1,4 @@
-import { Clipboard, Edit3, Mail, Radar, Send } from "lucide-react";
+import { Clipboard, Edit3, Mail, ScanSearch as Radar, Send } from "lucide-react";
 import { useEffect, useId, useState } from "react";
 import { createPortal } from "react-dom";
 import type { EventDefinition } from "../../types/event";

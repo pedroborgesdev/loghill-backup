@@ -34,7 +34,7 @@ func newSenderSecurityService(t *testing.T) (*Service, *fakeClock, string) {
 
 func TestSenderIDNormalizationHasNoGeneratedSuffix(t *testing.T) {
 	cases := map[string]string{
-		"  Automação   Financeira  ": "financial-automation",
+		"  Automação   Financeira  ": "automacao-financeira",
 		"Consulta PJe - TRF3":        "consulta-pje-trf3",
 		"Cobrança / Santander":       "cobranca-santander",
 		"---Robô___de@@Consulta---":  "robo-de-consulta",

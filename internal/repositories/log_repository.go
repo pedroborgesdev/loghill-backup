@@ -407,6 +407,56 @@ func (r *FileRepository) ListLogs(ctx context.Context, id string, filters domain
 	return domain.LogPage{Sender: id, Items: items[start:end], Pagination: domain.Pagination{Page: filters.Page, PageSize: filters.PageSize, Returned: end - start, Total: int64(total), TotalPages: pages}}, nil
 }
 
+func (r *FileRepository) RecentLogCounts(ctx context.Context, id string, since time.Time) (total, errorCount, fatalCount int64, err error) {
+	d, err := r.dir(id)
+	if err != nil {
+		return 0, 0, 0, err
+	}
+	release := r.acquireRead(ctx, id)
+	defer release()
+	paths, err := r.logPathsUnlocked(d, "")
+	if err != nil {
+		return 0, 0, 0, err
+	}
+	for _, path := range paths {
+		file, openErr := os.Open(path)
+		if errors.Is(openErr, os.ErrNotExist) {
+			continue
+		}
+		if openErr != nil {
+			return 0, 0, 0, openErr
+		}
+		scan := bufio.NewScanner(file)
+		scan.Buffer(make([]byte, 64*1024), 2*1024*1024)
+		for scan.Scan() {
+			if err = ctx.Err(); err != nil {
+				_ = file.Close()
+				return 0, 0, 0, err
+			}
+			var entry domain.LogEntry
+			if json.Unmarshal(scan.Bytes(), &entry) != nil || entry.Timestamp.Before(since) {
+				continue
+			}
+			total++
+			if entry.Severity == domain.Error {
+				errorCount++
+			}
+			if entry.Severity == domain.Fatal {
+				fatalCount++
+			}
+		}
+		scanErr := scan.Err()
+		closeErr := file.Close()
+		if scanErr != nil {
+			return 0, 0, 0, scanErr
+		}
+		if closeErr != nil {
+			return 0, 0, 0, closeErr
+		}
+	}
+	return total, errorCount, fatalCount, nil
+}
+
 func (r *FileRepository) logPathsUnlocked(senderDir, instanceID string) ([]string, error) {
 	if instanceID == "legacy" {
 		return []string{filepath.Join(senderDir, "logs.txt")}, nil

@@ -359,8 +359,8 @@ func (s *Service) InitInstanceByName(ctx context.Context, senderName string) (do
 			case createErr == nil:
 				senderID = created.ID
 			case errors.Is(createErr, domain.ErrSenderAlreadyExists):
-				// Outra inicialização com o mesmo nome venceu a criação. O
-				// repositório serializa a escrita por sender, então já é seguro
+				// Another initialization with the same name won the creation race. The
+				// repository serializes writes per sender, so it is now safe
 				// carregar o registro persistido abaixo.
 			default:
 				return domain.Sender{}, domain.SenderInstance{}, "", createErr
@@ -747,11 +747,19 @@ func (s *Service) Summary(ctx context.Context) (map[string]any, error) {
 	counts := map[string]int64{"total": int64(len(items)), "never_connected": 0, "online": 0, "inactive": 0, "expired": 0, "revoked": 0}
 	instanceCounts := map[string]int64{"active": 0, "inactive": 0}
 	now := s.clock.Now()
+	dayAgo := now.Add(-24 * time.Hour)
 	inactiveAfter := time.Duration(s.settings.Get().InactiveAfterSeconds) * time.Second
-	var logs int64
+	var logs, recentLogs, recentErrors, recentFatals int64
 	for _, v := range items {
 		counts[string(v.Status)]++
 		logs += v.LogLineCount
+		lastDay, errorsLastDay, fatalsLastDay, countErr := s.repo.RecentLogCounts(ctx, v.ID, dayAgo)
+		if countErr != nil {
+			return nil, countErr
+		}
+		recentLogs += lastDay
+		recentErrors += errorsLastDay
+		recentFatals += fatalsLastDay
 		instances, instancesErr := s.repo.RegisteredInstances(ctx, v.ID)
 		if instancesErr != nil {
 			return nil, instancesErr
@@ -764,7 +772,7 @@ func (s *Service) Summary(ctx context.Context) (map[string]any, error) {
 			}
 		}
 	}
-	return map[string]any{"senders": counts, "instances": instanceCounts, "logs": map[string]int64{"total": logs, "last_24_hours": 0, "errors_last_24_hours": 0, "fatal_last_24_hours": 0}}, nil
+	return map[string]any{"senders": counts, "instances": instanceCounts, "logs": map[string]int64{"total": logs, "last_24_hours": recentLogs, "errors_last_24_hours": recentErrors, "fatal_last_24_hours": recentFatals}}, nil
 }
 func (s *Service) Tick(ctx context.Context) error {
 	items, err := s.repo.All(ctx)

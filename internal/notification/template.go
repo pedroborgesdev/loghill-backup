@@ -64,7 +64,7 @@ func (t *Template) Render(value domain.Notification) (domain.EmailMessage, error
 	if value.Test {
 		subjectPrefix = "LogHill test"
 	}
-	subject := cleanSubject(fmt.Sprintf("%s — %s em %s: %s", subjectPrefix, theme.Subject, data.SenderName, data.Message))
+	subject := cleanSubject(fmt.Sprintf("%s — %s on %s: %s", subjectPrefix, theme.Subject, data.SenderName, data.Message))
 	return renderMessage(value.Alert.Recipients, subject, data)
 }
 
@@ -153,8 +153,8 @@ func (t *Template) RenderProviderTest(recipient string, provider domain.EmailPro
 		description = "The LogHill integration with Gmail is working and ready to deliver your alerts."
 	}
 	data := templateData{
-		AlertName: "Configuration de e-mail", SenderName: providerName, SenderID: integrationName,
-		SenderStatus: "Configuration validada", Severity: "SUCCESS",
+		AlertName: "Email configuration", SenderName: providerName, SenderID: integrationName,
+		SenderStatus: "Configuration validated", Severity: "SUCCESS",
 		Message:   message,
 		Timestamp: now, SentAt: now, Link: t.publicURL, LogoURL: t.publicURL + "/loghill.png",
 		Kicker: "EMAIL TEST", Headline: "Your email is ready",
@@ -210,7 +210,7 @@ func themeFor(severity domain.LogSeverity) severityTheme {
 	case domain.Undefined:
 		return severityTheme{Headline: "New system log recorded", Subject: "System log recorded", Color: "#a1a1aa", Background: "#18181b", Border: "#3f3f46"}
 	case domain.Trace:
-		return severityTheme{Headline: "New trace recorded", Subject: "Rastreamento registrado", Color: "#d4d4d8", Background: "#27272a", Border: "#52525b"}
+		return severityTheme{Headline: "New trace recorded", Subject: "Trace recorded", Color: "#d4d4d8", Background: "#27272a", Border: "#52525b"}
 	case domain.Debug:
 		return severityTheme{Headline: "New diagnostics available", Subject: "Diagnostics recorded", Color: "#c4b5fd", Background: "#2e1065", Border: "#5b21b6"}
 	case domain.Info:
@@ -220,7 +220,7 @@ func themeFor(severity domain.LogSeverity) severityTheme {
 	case domain.Fatal:
 		return severityTheme{Headline: "A critical failure was detected", Subject: "Critical failure detected", Color: "#fda4af", Background: "#4c0519", Border: "#9f1239"}
 	default:
-		return severityTheme{Headline: "An error was detected", Subject: "Erro detectado", Color: "#fca5a5", Background: "#450a0a", Border: "#991b1b"}
+		return severityTheme{Headline: "An error was detected", Subject: "Error detected", Color: "#fca5a5", Background: "#450a0a", Border: "#991b1b"}
 	}
 }
 

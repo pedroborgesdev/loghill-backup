@@ -20,6 +20,6 @@ func ErrorHandler() gin.HandlerFunc {
 			"path", c.Request.URL.Path,
 			"error", err,
 		)
-		c.AbortWithStatusJSON(http.StatusInternalServerError, errorBody(c, "INTERNAL_ERROR", "Erro interno"))
+		c.AbortWithStatusJSON(http.StatusInternalServerError, errorBody(c, "INTERNAL_ERROR", "Internal error"))
 	}
 }

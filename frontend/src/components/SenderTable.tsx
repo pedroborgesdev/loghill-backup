@@ -35,7 +35,7 @@ import {
 } from "../utils/senders";
 import { EmptyState, IconButton, Skeleton, StatusBadge } from "./ui";
 
-// Prefetch só do cabeçalho (sender + instances). Logs ficam de fora de propósito.
+// Prefetch only the header (sender + instances). Logs are intentionally excluded.
 function prefetchSenderHeader(id: string) {
   void queryClient.prefetchQuery({
     queryKey: ["view", "sender", id, "details"],
@@ -95,7 +95,7 @@ function Actions({ sender, onAction }: { sender: Sender; onAction?: (sender: Sen
       onKeyDown={(event) => event.stopPropagation()}
     >
       <IconButton
-        label={`Actions de ${sender.id}`}
+        label={`Actions for ${sender.id}`}
         className="size-8"
         aria-expanded={open}
         onClick={() => setOpen((value) => !value)}
@@ -221,7 +221,7 @@ function InstanceChooser({
                     {sender.id}
                   </span>
                   <span className="block truncate text-[10px] text-zinc-600">
-                    Created em {formatDate(sender.created_at)}
+                    Created on {formatDate(sender.created_at)}
                   </span>
                 </td>
                 <td

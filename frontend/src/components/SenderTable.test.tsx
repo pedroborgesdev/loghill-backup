@@ -26,14 +26,14 @@ function sender(id: string, name: string, logs: number): Sender {
   };
 }
 
-describe("agrupamento de senders", () => {
+describe("sender grouping", () => {
   const items = [
     sender("simulador-teste-a1", "simulador-teste", 10),
     sender("simulador-teste-b2", "simulador-teste", 20),
     sender("worker-c3", "worker", 5),
   ];
 
-  it("consolida nome, logs e tamanho das instancias", () => {
+  it("consolidates name, logs, and instance count", () => {
     const groups = groupSenders(items);
     expect(groups).toHaveLength(2);
     expect(groups[0].items).toHaveLength(2);
@@ -41,7 +41,7 @@ describe("agrupamento de senders", () => {
     expect(groups[0].logFileSize).toBe(300);
   });
 
-  it("troca a tabela pela escolha de instancias ao abrir um grupo", async () => {
+  it("replaces the table with instance selection when opening a group", async () => {
     render(
       <MemoryRouter>
         <SenderTable items={items} />
@@ -49,11 +49,11 @@ describe("agrupamento de senders", () => {
     );
 
     const groupRows = screen.getAllByRole("button", {
-      name: "Abrir grupo simulador-teste com 2 instances",
+      name: "Open simulador-teste group with 2 instances",
     });
     await userEvent.click(groupRows[0]);
 
-    expect(screen.getByText("Escolha uma das 2 instances")).toBeInTheDocument();
+    expect(screen.getByText("Choose one of 2 instances")).toBeInTheDocument();
     expect(screen.getAllByText("simulador-teste-a1")).not.toHaveLength(0);
     expect(screen.getAllByText("simulador-teste-b2")).not.toHaveLength(0);
 
@@ -62,17 +62,17 @@ describe("agrupamento de senders", () => {
     );
     expect(
       screen.getAllByRole("button", {
-        name: "Abrir grupo simulador-teste com 2 instances",
+        name: "Open simulador-teste group with 2 instances",
       }),
     ).not.toHaveLength(0);
   });
 
-  it("abre os detalhes ao clicar em qualquer parte da linha", async () => {
+  it("opens details when any part of the row is clicked", async () => {
     render(
       <MemoryRouter initialEntries={["/senders"]}>
         <Routes>
           <Route path="/senders" element={<SenderTable items={items} />} />
-          <Route path="/senders/:id" element={<p>Detalhes do sender</p>} />
+          <Route path="/senders/:id" element={<p>Sender details</p>} />
         </Routes>
       </MemoryRouter>,
     );
@@ -81,6 +81,6 @@ describe("agrupamento de senders", () => {
       screen.getAllByRole("link", { name: "Open sender worker" })[0],
     );
 
-    expect(screen.getByText("Detalhes do sender")).toBeInTheDocument();
+    expect(screen.getByText("Sender details")).toBeInTheDocument();
   });
 });

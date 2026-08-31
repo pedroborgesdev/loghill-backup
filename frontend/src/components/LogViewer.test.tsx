@@ -9,7 +9,7 @@ afterEach(() => {
 });
 
 describe("LogViewer Follow", () => {
-  it("desliga ao arrastar a scrollbar e volta ao recente quando solicitado", () => {
+  it("turns off when the scrollbar is dragged and returns to recent logs on request", () => {
     const onAutoScrollChange = vi.fn();
     Object.defineProperty(HTMLElement.prototype, "scrollTo", {
       configurable: true,
@@ -70,7 +70,7 @@ describe("LogViewer Follow", () => {
     expect(onAutoScrollChange).toHaveBeenLastCalledWith(true);
   });
 
-  it("insere novos logs sem acionar o reposicionamento do Follow", () => {
+  it("inserts new logs without triggering Follow repositioning", () => {
     const scrollTo = vi.fn();
     Object.defineProperty(HTMLElement.prototype, "scrollTo", {
       configurable: true,
@@ -122,7 +122,7 @@ describe("LogViewer Follow", () => {
     expect(scrollTo).not.toHaveBeenCalled();
   });
 
-  it("preserva exatamente o log visivel quando outro entra no topo", () => {
+  it("preserves the exact visible log when another enters at the top", () => {
     const offsetTop = vi
       .spyOn(HTMLElement.prototype, "offsetTop", "get")
       .mockImplementation(function (this: HTMLElement) {

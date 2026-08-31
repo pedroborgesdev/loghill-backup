@@ -74,8 +74,8 @@ const LogRow = memo(function LogRow({
       <div
         className={`grid min-w-0 items-start font-mono ${
           compact
-            ? "grid-cols-[58px_58px_minmax(0,1fr)_26px_26px] gap-1.5 px-2.5 py-0.5 text-[11px] leading-4 sm:grid-cols-[78px_58px_minmax(0,1fr)_26px_26px]"
-            : "grid-cols-[64px_68px_minmax(0,1fr)_32px_32px] gap-2 px-3 py-1.5 text-xs leading-5 sm:grid-cols-[86px_68px_minmax(0,1fr)_32px_32px]"
+            ? "grid-cols-[58px_58px_minmax(0,1fr)_26px_26px] gap-1.5 px-2.5 py-0.5 text-[11px] leading-4 sm:grid-cols-[104px_58px_minmax(0,1fr)_26px_26px]"
+            : "grid-cols-[64px_68px_minmax(0,1fr)_32px_32px] gap-2 px-3 py-1.5 text-xs leading-5 sm:grid-cols-[112px_68px_minmax(0,1fr)_32px_32px]"
         }`}
       >
         <time
@@ -110,7 +110,7 @@ const LogRow = memo(function LogRow({
               aria-expanded={messageExpanded}
             >
               {messageExpanded ? <ChevronUp className="size-3" /> : <ChevronDown className="size-3" />}
-              {messageExpanded ? "Collapse" : "Expandir"}
+              {messageExpanded ? "Collapse" : "Expand"}
             </button>
           )}
         </div>
@@ -472,8 +472,8 @@ export function LogViewer({
       <div
         className={`grid shrink-0 items-center border-b border-zinc-700 bg-[#1c1c1f] font-mono uppercase tracking-wider text-zinc-500 ${
           compactView
-            ? "h-7 grid-cols-[58px_58px_minmax(0,1fr)_26px_26px] gap-1.5 px-2.5 text-[9px] sm:grid-cols-[78px_58px_minmax(0,1fr)_26px_26px]"
-            : "h-8 grid-cols-[64px_68px_minmax(0,1fr)_32px_32px] gap-2 px-3 text-[10px] sm:grid-cols-[86px_68px_minmax(0,1fr)_32px_32px]"
+            ? "h-7 grid-cols-[58px_58px_minmax(0,1fr)_26px_26px] gap-1.5 px-2.5 text-[9px] sm:grid-cols-[104px_58px_minmax(0,1fr)_26px_26px]"
+            : "h-8 grid-cols-[64px_68px_minmax(0,1fr)_32px_32px] gap-2 px-3 text-[10px] sm:grid-cols-[112px_68px_minmax(0,1fr)_32px_32px]"
         }`}
       >
         <span>Time</span><span>Severity</span><span>Message</span>

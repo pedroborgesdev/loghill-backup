@@ -17,7 +17,7 @@ describe("alert form controls", () => {
     await user.type(input, "DEV@Example.com{enter}");
     expect(screen.getByText("dev@example.com")).toBeInTheDocument();
     await user.type(screen.getByPlaceholderText("Add another email"), " dev@example.com{enter}");
-    expect(screen.getByRole("alert")).toHaveTextContent("já foi adicionado");
+    expect(screen.getByRole("alert")).toHaveTextContent("has already been added");
     await user.click(screen.getByRole("button", { name: "Remove dev@example.com" }));
     expect(screen.queryByText("dev@example.com")).not.toBeInTheDocument();
   });

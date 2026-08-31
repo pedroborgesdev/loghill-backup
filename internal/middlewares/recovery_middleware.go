@@ -18,7 +18,7 @@ func Recovery() gin.HandlerFunc {
 					"error", fmt.Sprint(recovered),
 					"stack", string(debug.Stack()),
 				)
-				c.AbortWithStatusJSON(http.StatusInternalServerError, errorBody(c, "INTERNAL_ERROR", "Erro interno"))
+				c.AbortWithStatusJSON(http.StatusInternalServerError, errorBody(c, "INTERNAL_ERROR", "Internal error"))
 			}
 		}()
 		c.Next()

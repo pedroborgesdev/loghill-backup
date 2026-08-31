@@ -4,8 +4,8 @@ import {
   limitLiveEntries,
 } from "./livePagination";
 
-describe("paginacao dos logs ao vivo", () => {
-  it("mantem 25 itens na primeira pagina quando chega o log 26", () => {
+describe("live log pagination", () => {
+  it("keeps 25 items on the first page when log 26 arrives", () => {
     const entries = Array.from({ length: 26 }, (_, index) => index + 1);
     const firstPage = limitLiveEntries(entries, 25);
 
@@ -14,7 +14,7 @@ describe("paginacao dos logs ao vivo", () => {
     expect(firstPage).not.toContain(26);
   });
 
-  it("move o excedente para uma nova pagina no total ao vivo", () => {
+  it("moves overflow to a new page in the live total", () => {
     expect(
       calculateLivePagination({
         baseTotal: 25,

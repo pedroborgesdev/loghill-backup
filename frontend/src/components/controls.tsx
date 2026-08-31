@@ -241,7 +241,7 @@ export function DateTimePicker({
   value,
   onChange,
   label,
-  placeholder = "Select data e hora",
+  placeholder = "Select date and time",
 }: {
   value: string;
   onChange: (value: string) => void;

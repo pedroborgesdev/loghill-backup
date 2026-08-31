@@ -27,7 +27,7 @@ it("returns to the login state when an authenticated request receives 401", asyn
       return new Response(JSON.stringify({ authenticated: true, auth_required: true }), { status: 200 });
     }
     return new Response(
-      JSON.stringify({ error: { code: "UNAUTHORIZED", message: "Credencial invÃ¡lida" } }),
+      JSON.stringify({ error: { code: "UNAUTHORIZED", message: "Invalid credential" } }),
       { status: 401 },
     );
   });

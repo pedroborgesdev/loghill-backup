@@ -15,15 +15,15 @@ describe("EmailSettings", () => {
     expect(screen.getByRole("button", { name: /Gmail/ })).toBeEnabled();
     const secret = screen.getByPlaceholderText("Credential configured — type only to replace it");
     expect(secret).toHaveValue("");
-    expect(screen.getByText(/O value salvo nunca é exibido/)).toBeInTheDocument();
+    expect(screen.getByText(/The saved value is never displayed/)).toBeInTheDocument();
   });
 
   it("tests the connection without losing fields", async () => {
-    const fetchMock = vi.fn(async (input: RequestInfo | URL) => String(input).includes("test-connection") ? new Response(JSON.stringify({ success: true, message: "Conexão validada." }), { status: 200 }) : new Response(JSON.stringify(settings), { status: 200 }));
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => String(input).includes("test-connection") ? new Response(JSON.stringify({ success: true, message: "Connection validated." }), { status: 200 }) : new Response(JSON.stringify(settings), { status: 200 }));
     vi.stubGlobal("fetch", fetchMock);
     render(<EmailSettings />);
     await userEvent.click(await screen.findByRole("button", { name: "Test connection" }));
-    expect(await screen.findByText("Conexão validada.")).toBeInTheDocument();
+    expect(await screen.findByText("Connection validated.")).toBeInTheDocument();
     expect(screen.getAllByDisplayValue("tenant")).toHaveLength(1);
   });
 
@@ -38,13 +38,13 @@ describe("EmailSettings", () => {
 
   it("explains how to fix a forbidden Outlook send", async () => {
     const fetchMock = vi.fn(async (input: RequestInfo | URL) => String(input).includes("send-test")
-      ? new Response(JSON.stringify({ error: { code: "OUTLOOK_SEND_FORBIDDEN", message: "O Outlook autenticou, mas not autorizou o envio. Conceda Mail.Send." } }), { status: 502 })
+      ? new Response(JSON.stringify({ error: { code: "OUTLOOK_SEND_FORBIDDEN", message: "Outlook authenticated but did not authorize delivery. Grant Mail.Send." } }), { status: 502 })
       : new Response(JSON.stringify(settings), { status: 200 }));
     vi.stubGlobal("fetch", fetchMock);
     render(<EmailSettings />);
     const recipient = await screen.findByPlaceholderText("Test recipient");
     await userEvent.type(recipient, "dev@example.com");
-    await userEvent.click(screen.getByRole("button", { name: "Send email de teste" }));
+    await userEvent.click(screen.getByRole("button", { name: "Send test email" }));
     expect(await screen.findByText("Delivery permission required")).toBeInTheDocument();
     expect(screen.getByText(/Application permissions/)).toHaveTextContent("Mail.Send");
     expect(recipient).toHaveValue("dev@example.com");

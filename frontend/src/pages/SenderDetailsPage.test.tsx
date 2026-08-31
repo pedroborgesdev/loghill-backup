@@ -16,7 +16,7 @@ class EventSourceStub {
   close() {}
 }
 
-describe("seleção de instances", () => {
+describe("instance selection", () => {
   beforeEach(() => {
     queryClient.clear();
     vi.stubGlobal("EventSource", EventSourceStub);
@@ -46,7 +46,7 @@ describe("seleção de instances", () => {
     vi.unstubAllGlobals();
   });
 
-  it("abre em Active e separa as instances inactive na segunda aba", async () => {
+  it("opens on Active and separates inactive instances into the second tab", async () => {
     render(
       <ShellContext.Provider value={{ refreshToken: 0, refreshing: false, setRefreshing: vi.fn(), streamState: null, setStreamState: vi.fn(), openEmailSettings: vi.fn() }}>
         <MemoryRouter initialEntries={["/senders/worker"]}>
@@ -65,7 +65,7 @@ describe("seleção de instances", () => {
     expect(screen.queryByText("ins_11111111111111111111111111111111")).not.toBeInTheDocument();
   });
 
-  it("atualiza a tela pelo botão da tabela e pelo refresh global", async () => {
+  it("updates the screen from the table button and global refresh", async () => {
     const shellValue = (refreshToken: number) => ({
       refreshToken,
       refreshing: false,
@@ -87,7 +87,7 @@ describe("seleção de instances", () => {
     expect(screen.getByRole("button", { name: "Refresh interval" })).toHaveTextContent("30 seconds");
     const callsBeforeTableRefresh = vi.mocked(fetch).mock.calls.length;
 
-    await userEvent.click(screen.getByRole("button", { name: "Atualizar" }));
+    await userEvent.click(screen.getByRole("button", { name: "Refresh" }));
     await waitFor(() => expect(vi.mocked(fetch).mock.calls.length).toBeGreaterThan(callsBeforeTableRefresh));
 
     const callsBeforeGlobalRefresh = vi.mocked(fetch).mock.calls.length;

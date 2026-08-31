@@ -2,12 +2,12 @@ import { describe, expect, it } from "vitest";
 import { syncSearchParams } from "./query";
 
 describe("syncSearchParams", () => {
-  it("preserva a página quando uma busca vazia continua vazia", () => {
+  it("preserves the page when an empty search remains empty", () => {
     const result = syncSearchParams(new URLSearchParams("page=3"), "");
     expect(result.get("page")).toBe("3");
   });
 
-  it("volta à primeira página somente quando o texto muda", () => {
+  it("returns to the first page only when the text changes", () => {
     const result = syncSearchParams(
       new URLSearchParams("page=3&search=erro"),
       "fatal",

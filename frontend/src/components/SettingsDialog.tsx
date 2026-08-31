@@ -42,12 +42,12 @@ const defaultSettings: Omit<Settings, "updated_at"> = {
 };
 
 const unitOptions = [
-  { value: "lines" as const, label: "Linhas" },
+  { value: "lines" as const, label: "Lines" },
   { value: "mb" as const, label: "MB" },
 ];
 
 const unitLabel: Record<StorageUnit, string> = {
-  lines: "Linhas",
+  lines: "Lines",
   mb: "MB",
 };
 
@@ -108,8 +108,8 @@ function SettingsNumberInput({ value, min, max, label, disabled, error, onChange
   return <div className="relative mt-2">
     <input id={id} type="number" inputMode="numeric" min={min} max={max} step={1} value={value} disabled={disabled} aria-invalid={Boolean(error)} onChange={(event) => onChange(event.target.value)} onKeyDown={(event) => { if (event.key === "ArrowUp" || event.key === "ArrowDown") { event.preventDefault(); adjust(event.key === "ArrowUp" ? 1 : -1); } }} className={`themed-number-input h-10 w-full rounded-lg border px-3 pr-11 font-mono text-sm text-zinc-100 disabled:cursor-not-allowed disabled:opacity-60 ${CONTROL_SURFACE} ${error ? "border-red-800" : "border-zinc-700"}`} />
     <div className="absolute bottom-px right-px top-px flex w-8 flex-col overflow-hidden rounded-r-[7px] border-l border-zinc-700 bg-zinc-950">
-      <button type="button" aria-label={`Aumentar ${label}`} aria-controls={id} disabled={disabled || (valid && numericValue >= max)} onClick={() => adjust(1)} className="grid min-h-0 flex-1 place-items-center border-b border-zinc-800 text-zinc-500 hover:bg-zinc-800 hover:text-zinc-100 disabled:cursor-not-allowed disabled:text-zinc-700"><ChevronUp className="size-3" /></button>
-      <button type="button" aria-label={`Diminuir ${label}`} aria-controls={id} disabled={disabled || (valid && numericValue <= min)} onClick={() => adjust(-1)} className="grid min-h-0 flex-1 place-items-center text-zinc-500 hover:bg-zinc-800 hover:text-zinc-100 disabled:cursor-not-allowed disabled:text-zinc-700"><ChevronDown className="size-3" /></button>
+      <button type="button" aria-label={`Increase ${label}`} aria-controls={id} disabled={disabled || (valid && numericValue >= max)} onClick={() => adjust(1)} className="grid min-h-0 flex-1 place-items-center border-b border-zinc-800 text-zinc-500 hover:bg-zinc-800 hover:text-zinc-100 disabled:cursor-not-allowed disabled:text-zinc-700"><ChevronUp className="size-3" /></button>
+      <button type="button" aria-label={`Decrease ${label}`} aria-controls={id} disabled={disabled || (valid && numericValue <= min)} onClick={() => adjust(-1)} className="grid min-h-0 flex-1 place-items-center text-zinc-500 hover:bg-zinc-800 hover:text-zinc-100 disabled:cursor-not-allowed disabled:text-zinc-700"><ChevronDown className="size-3" /></button>
     </div>
   </div>;
 }
@@ -188,7 +188,7 @@ function NumberUnitInput({
         </div>
         {changed && (
           <span className="shrink-0 rounded-full border border-amber-900/80 bg-amber-950/30 px-2 py-1 text-[10px] text-amber-400">
-            Alterado
+            Changed
           </span>
         )}
       </div>
@@ -225,7 +225,7 @@ function NumberUnitInput({
             <div className="absolute bottom-px right-px top-px flex w-8 flex-col overflow-hidden rounded-r-[7px] border-l border-zinc-700 bg-zinc-950">
               <button
                 type="button"
-                aria-label={`Aumentar ${label}`}
+                aria-label={`Increase ${label}`}
                 aria-controls={id}
                 disabled={disabled || (hasValidInteger && numericValue >= 10_000)}
                 onClick={() => adjustValue(1)}
@@ -235,7 +235,7 @@ function NumberUnitInput({
               </button>
               <button
                 type="button"
-                aria-label={`Diminuir ${label}`}
+                aria-label={`Decrease ${label}`}
                 aria-controls={id}
                 disabled={disabled || (hasValidInteger && numericValue <= 0)}
                 onClick={() => adjustValue(-1)}
@@ -265,7 +265,7 @@ function NumberUnitInput({
         {helper} Use 0 to disable the corresponding automatic limit.
       </p>
       <p className="mt-1 text-[11px] text-zinc-500">
-        Value atual: {original.value.toLocaleString("en-US")} {unitLabel[original.unit]}
+        Current value: {original.value.toLocaleString("en-US")} {unitLabel[original.unit]}
       </p>
       {isLegacy && (
         <p className="mt-2 rounded-lg border border-amber-950 bg-amber-950/20 px-3 py-2 text-[11px] leading-5 text-amber-500">
@@ -539,7 +539,7 @@ export function SettingsDialog({
         <div className="min-h-0 flex-1 sm:grid sm:grid-cols-[184px_minmax(0,1fr)]">
           <aside className="hidden border-r border-zinc-800 bg-[#111113] p-3 sm:block">
             <p className="px-2 pb-2 text-[10px] font-medium uppercase tracking-wider text-zinc-600">
-              Categorias
+              Categories
             </p>
             <button
               type="button"

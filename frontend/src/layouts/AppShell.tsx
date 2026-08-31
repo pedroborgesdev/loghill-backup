@@ -10,7 +10,7 @@ import {
   Server,
   X,
   Zap,
-  Radar,
+  ScanSearch,
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
@@ -35,7 +35,7 @@ const navigation = [
   { to: "/senders", label: "Senders", icon: Server, end: false },
   { to: "/alerts", label: "Alerts", icon: Bell, end: false },
   { to: "/events", label: "Events", icon: Zap, end: false },
-  { to: "/monitoring", label: "Monitoring", icon: Radar, end: false },
+  { to: "/monitoring", label: "Monitoring", icon: ScanSearch, end: false },
   { to: "/status", label: "System status", icon: Activity, end: false },
 ];
 

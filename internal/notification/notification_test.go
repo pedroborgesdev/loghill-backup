@@ -131,10 +131,10 @@ func TestTemplateEscapesHTMLAndKeepsFullBody(t *testing.T) {
 	if !strings.Contains(message.Text, "<script>") || !strings.Contains(message.HTML, "/senders/worker-1?severity=ERROR") {
 		t.Fatal("plain body or link missing")
 	}
-	if strings.Contains(message.Subject, "[") || !strings.HasPrefix(message.Subject, "LogHill — Erro detectado em worker:") {
+	if strings.Contains(message.Subject, "[") || !strings.HasPrefix(message.Subject, "LogHill — Error detected on worker:") {
 		t.Fatalf("subject is not readable: %q", message.Subject)
 	}
-	for _, expected := range []string{`align="center"`, "Central de observabilidade", "An error was detected", "#f59e0b", "/loghill.png"} {
+	for _, expected := range []string{`align="center"`, "Observability center", "An error was detected", "#f59e0b", "/loghill.png"} {
 		if !strings.Contains(message.HTML, expected) {
 			t.Fatalf("themed email is missing %q", expected)
 		}
@@ -156,12 +156,12 @@ func TestTemplateRendersBeautifulProviderTestWithoutBracketedSubject(t *testing.
 	if len(message.To) != 1 || message.To[0] != "dev@example.com" {
 		t.Fatalf("unexpected recipients: %v", message.To)
 	}
-	for _, expected := range []string{"Your email is ready", "Microsoft 365 / Outlook", "Configuration validada", "Open LogHill", "https://logs.example.com/loghill.png"} {
+	for _, expected := range []string{"Your email is ready", "Microsoft 365 / Outlook", "Configuration validated", "Open LogHill", "https://logs.example.com/loghill.png"} {
 		if !strings.Contains(message.HTML, expected) {
 			t.Fatalf("provider test email is missing %q", expected)
 		}
 	}
-	if !strings.Contains(message.Text, "A integração do LogHill com o Outlook está funcionando") {
+	if !strings.Contains(message.Text, "The LogHill integration with Outlook is working") {
 		t.Fatal("provider test plain-text fallback is incomplete")
 	}
 }

@@ -101,10 +101,10 @@ func errBody(c *gin.Context, code, msg string) gin.H {
 	return gin.H{"error": gin.H{"code": code, "message": msg, "request_id": c.GetString("request_id")}}
 }
 func (a *APIController) fail(c *gin.Context, err error) {
-	status, code, msg := 500, "INTERNAL_ERROR", "Erro interno"
+	status, code, msg := 500, "INTERNAL_ERROR", "Internal error"
 	switch {
 	case errors.Is(err, domain.ErrNotFound):
-		status, code, msg = 404, "SENDER_NOT_FOUND", "Sender not encontrado"
+		status, code, msg = 404, "SENDER_NOT_FOUND", "Sender not found"
 	case errors.Is(err, domain.ErrExpired):
 		status, code, msg = 409, "SENDER_EXPIRED", "Sender expired; register a new sender"
 	case errors.Is(err, domain.ErrLogFileNotFound):
@@ -574,7 +574,7 @@ func (a *APIController) Ready(c *gin.Context) {
 }
 func (a *APIController) Spa(c *gin.Context) {
 	if strings.HasPrefix(c.Request.URL.Path, "/api/") || c.Request.URL.Path == "/health" || c.Request.URL.Path == "/ready" {
-		c.JSON(404, errBody(c, "NOT_FOUND", "Rota not encontrada"))
+		c.JSON(404, errBody(c, "NOT_FOUND", "Route not found"))
 		return
 	}
 	path := strings.TrimPrefix(c.Request.URL.Path, "/")

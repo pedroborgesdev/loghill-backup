@@ -161,7 +161,7 @@ export function NumberInput({
       <div className="absolute bottom-px right-px top-px flex w-8 flex-col overflow-hidden rounded-r-[7px] border-l border-zinc-700 bg-zinc-900">
         <button
           type="button"
-          aria-label={`Aumentar ${label}`}
+          aria-label={`Increase ${label}`}
           disabled={disabled || value >= max}
           onClick={() => adjust(1)}
           className="grid min-h-0 flex-1 place-items-center border-b border-zinc-700 text-zinc-500 hover:bg-zinc-800 hover:text-zinc-100 disabled:cursor-not-allowed disabled:text-zinc-700"
@@ -170,7 +170,7 @@ export function NumberInput({
         </button>
         <button
           type="button"
-          aria-label={`Diminuir ${label}`}
+          aria-label={`Decrease ${label}`}
           disabled={disabled || value <= min}
           onClick={() => adjust(-1)}
           className="grid min-h-0 flex-1 place-items-center text-zinc-500 hover:bg-zinc-800 hover:text-zinc-100 disabled:cursor-not-allowed disabled:text-zinc-700"

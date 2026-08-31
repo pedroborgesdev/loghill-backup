@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { isLogScrollKey, shouldFreezeLogViewport } from "./logScroll";
 
 describe("shouldFreezeLogViewport", () => {
-  it("mantém a lista congelada durante qualquer interação do usuário", () => {
+  it("keeps the list frozen during any user interaction", () => {
     expect(
       shouldFreezeLogViewport({
         autoScroll: true,
@@ -12,7 +12,7 @@ describe("shouldFreezeLogViewport", () => {
     ).toBe(true);
   });
 
-  it("só aplica imediatamente quando está ancorado e sem interação", () => {
+  it("applies immediately only when anchored and idle", () => {
     expect(
       shouldFreezeLogViewport({
         autoScroll: true,
@@ -22,7 +22,7 @@ describe("shouldFreezeLogViewport", () => {
     ).toBe(false);
   });
 
-  it("congela a janela quando o Follow esta desligado", () => {
+  it("freezes the viewport when Follow is off", () => {
     expect(
       shouldFreezeLogViewport({
         autoScroll: false,
@@ -32,7 +32,7 @@ describe("shouldFreezeLogViewport", () => {
     ).toBe(true);
   });
 
-  it("reconhece apenas teclas que movimentam a janela de logs", () => {
+  it("recognizes only keys that move the log viewport", () => {
     expect(isLogScrollKey("PageDown")).toBe(true);
     expect(isLogScrollKey("ArrowUp")).toBe(true);
     expect(isLogScrollKey("Enter")).toBe(false);

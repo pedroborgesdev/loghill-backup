@@ -9,6 +9,6 @@ it("lists events without replacing the page shell", async () => {
   render(<MemoryRouter initialEntries={["/events"]}><ShellContext.Provider value={{ refreshToken: 0, refreshing: false, setRefreshing: vi.fn(), streamState: null, setStreamState: vi.fn(), openEmailSettings: vi.fn() }}><EventsPage /></ShellContext.Provider></MemoryRouter>);
   await waitFor(() => expect(screen.getAllByText("Processing completed").length).toBeGreaterThan(0));
   expect(screen.getAllByText("processing_completed").length).toBeGreaterThan(0);
-  expect(screen.getByText(/matching usa a chave exata/i)).toBeInTheDocument();
+  expect(screen.getByText(/matching uses the exact key/i)).toBeInTheDocument();
   vi.unstubAllGlobals();
 });
