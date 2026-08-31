@@ -1,65 +1,86 @@
-# LogHill
+<div align="center">
+  <img src="./loghill.png" alt="Logo do LogHill" width="220" />
 
-Aplicação centralizada para receber, armazenar, consultar e acompanhar logs em tempo real. O backend Go serve a API, o stream SSE e o frontend React incorporado no mesmo executável.
+  # LogHill
 
-## Arquitetura
+  **Observabilidade leve, centralizada e em tempo real para aplicações e automações.**
 
-O projeto separa responsabilidades em camadas:
+  [![Go](https://img.shields.io/badge/Go-1.24+-00ADD8?logo=go&logoColor=white)](https://go.dev/)
+  [![React](https://img.shields.io/badge/React-19-61DAFB?logo=react&logoColor=111827)](https://react.dev/)
+  [![Docker](https://img.shields.io/badge/Docker-ready-2496ED?logo=docker&logoColor=white)](./Dockerfile)
+  [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](./LICENSE.md)
 
-- `internal/domain`: entidades, filtros e erros.
-- `internal/repository`: persistência atômica de `sender.json` e arquivos JSON Lines.
-- `internal/storage`: locks independentes por sender.
-- `internal/service`: regras de criação, atividade, inatividade, expiração e stream.
-- `internal/handler`: HTTP, validação, erros e fallback da SPA.
-- `internal/scheduler`: rotina periódica de manutenção.
-- `internal/alerts`: regras e persistência atômica de alertas.
-- `internal/events`: CRUD, persistência atômica e índice de eventos por sender/chave.
-- `internal/emailconfig`: configuração segura e criptografia opcional da credencial.
-- `internal/emailprovider`: autenticação e envio pelo Microsoft Graph.
-- `internal/notification`: matching, template e fila assíncrona de entrega.
-- `frontend`: React, TypeScript, Vite e Tailwind.
-- `web/dist`: build incorporado com `go:embed`.
+  [Instalação](./INSTALATION.md) · [API](./docs/openapi.yaml) · [Cliente Python](./docs/sender-client.md) · [Alertas](./docs/alerts.md) · [Eventos](./docs/events.md)
+</div>
 
-Cada sender é armazenado em `data/senders/{sender}/`. Seus metadados ficam em `sender.json`, enquanto os logs são separados fisicamente em `instances/{instance-id}/logs.txt`; o `logs.txt` da raiz é mantido apenas para dados legados sem instância.
+---
 
-## Decisões técnicas
+## Sobre o projeto
 
-- **Limite de armazenamento:** o limite é configurável entre 0 e 10.000 em linhas ou MB e vale integralmente para cada instância. A escrita continua append-only e só compacta após ultrapassar o limite, usando uma margem interna de 5% para evitar reescrita a cada entrada.
-- **Inatividade:** log ou healthcheck contam como atividade da instância. Após cinco minutos sem atividade, ela aparece como `inactive` durante o prazo de retenção configurado.
-- **Expiração:** ao completar o prazo de exclusão após a inativação, a instância, seus logs e o sender são removidos permanentemente quando não restar outra instância retida. Uma conexão futura com o mesmo nome cria um novo sender automaticamente.
-- **Concorrência:** cada sender possui um `sync.RWMutex`; senders distintos nunca disputam um lock global de escrita.
-- **Persistência segura:** metadados e compactações usam arquivo temporário, `Sync`, fechamento e rename.
-- **Configuração dinâmica:** `data/config.json` usa o mesmo fluxo atômico e um `RWMutex`. Alterações passam a valer no próximo log ou ciclo de manutenção, sem reinício.
-- **Consultas:** os filtros são aplicados no backend. Sem banco, buscas textuais têm custo linear no tamanho do arquivo.
-- **Tempo real:** cada subscriber SSE possui buffer limitado. Um consumidor lento perde eventos em vez de bloquear a ingestão.
-- **Produção:** o Vite grava em `web/dist`; `embed` incorpora os assets ao binário Go. A imagem final não contém Node.js.
+O LogHill recebe, armazena e apresenta logs de múltiplas aplicações em uma interface única. Cada inicialização de um processo é registrada como uma instância independente, permitindo acompanhar atividade, volume, erros e histórico sem misturar execuções diferentes do mesmo serviço.
 
-## Requisitos
+O backend é escrito em Go e entrega a API HTTP, streams SSE e o frontend React incorporado no mesmo binário. A persistência utiliza arquivos locais, sem exigir banco de dados ou infraestrutura adicional para começar.
 
-- Go 1.24+
-- Node.js 22+ e npm (somente desenvolvimento/build do frontend)
-- Docker e Docker Compose (opcional)
+O cliente Python disponível em [`examples/loghill.py`](./examples/loghill.py) também pode instrumentar `stdout` e `stderr`. Isso permite capturar mensagens produzidas por bibliotecas e runtimes, como Uvicorn, sem criar um adaptador específico para cada framework.
 
-## Desenvolvimento
+## Principais recursos
 
-Backend:
+- **Logs em tempo real:** atualização via Server-Sent Events, com reconexão automática.
+- **Captura de terminal:** instrumentação de `stdout`, `stderr` e logging padrão do Python.
+- **Senders e instâncias:** cada processo recebe uma identidade de instância própria.
+- **Severidades:** `UNDEFINED`, `TRACE`, `DEBUG`, `INFO`, `WARN`, `ERROR` e `FATAL`.
+- **Pesquisa e filtros:** mensagem, período, severidade, evento e metadata.
+- **Dashboard operacional:** instâncias ativas/inativas, volume e execuções recentes.
+- **Ciclo de vida automático:** inativação, compactação e exclusão definitiva após a retenção.
+- **Alertas:** regras por sender e severidade com envio assíncrono por Outlook ou Gmail.
+- **Eventos explícitos:** ações acionadas por uma chave de evento enviada junto ao log.
+- **Monitoramento:** regras compostas, condições e histórico unificado de execuções.
+- **Autenticação opcional:** login da interface e acesso administrativo por API key.
+- **Distribuição simples:** binário único ou container Docker executado sem privilégios.
+- **OpenAPI:** contrato disponível em `/openapi.yaml` e interface Swagger em `/docs`.
 
-```bash
-go mod tidy
-go run ./cmd/server
+## Como funciona
+
+```mermaid
+flowchart LR
+    A[Aplicações e automações] -->|logs e healthchecks| B[API LogHill]
+    P[Cliente Python] -->|stdout, stderr e logging| B
+    B --> C[(Arquivos em DATA_DIR)]
+    B -->|SSE| D[Interface React]
+    B --> E[Alertas e eventos]
+    E --> F[Outlook ou Gmail]
+    D --> G[Dashboard, Senders e Monitoramento]
 ```
 
-Frontend, em outro terminal:
+O fluxo recomendado para clientes é:
+
+1. A aplicação informa um `sender_name` ao iniciar.
+2. O LogHill cria ou localiza o sender e devolve `sender_id`, `instance_id` e uma credencial temporária da instância.
+3. Os logs e healthchecks usam a credencial dessa execução.
+4. A interface agrupa as instâncias sob o mesmo sender, sem misturar seus arquivos.
+5. Depois do período de inatividade e retenção, a instância é removida definitivamente. Se não restarem instâncias, o sender também desaparece.
+
+## Início rápido
+
+Consulte o guia completo em [INSTALATION.md](./INSTALATION.md).
+
+### Docker Compose
 
 ```bash
-cd frontend
-npm ci
-npm run dev
+git clone https://github.com/pedroborgesdev/loghill-backup.git
+cd loghill-backup
+docker compose up -d --build
 ```
 
-O Vite encaminha `/api`, `/health` e `/ready` para `localhost:8001`.
+Acesse:
 
-## Build de produção
+- Interface: <http://localhost:8001>
+- Swagger: <http://localhost:8001/docs>
+- Healthcheck: <http://localhost:8001/health>
+
+Os dados são persistidos em `./data` pelo arquivo [`docker-compose.yml`](./docker-compose.yml).
+
+### Binário local
 
 ```bash
 cd frontend
@@ -70,213 +91,227 @@ go build -o log-theater ./cmd/server
 ./log-theater
 ```
 
-A interface e a API ficam disponíveis em `http://localhost:8001`.
+Para Windows, use `go build -o log-theater.exe ./cmd/server` e execute `./log-theater.exe`.
 
-## Testes e lint
+## Integração com Python
 
-```bash
-go test -race ./...
-go vet ./...
-cd frontend
-npm run test:run
-npm run lint
+Copie [`examples/loghill.py`](./examples/loghill.py) para o projeto cliente e configure:
+
+```env
+LOGHILL_API_URL=http://localhost:8001
+LOGHILL_SENDER_NAME=minha-api
+LOGHILL_QUEUE_FILE=.loghill/fila.sqlite3
 ```
 
-## Docker
+Inicialize o LogHill no ponto de entrada da aplicação, antes de importar os módulos que escrevem logs:
 
-```bash
-docker compose up --build
+```python
+from loghill import instrument
+
+log = instrument(name="minha-api")
+
+log.info("Aplicação inicializada")
+print("Esta saída também será capturada")
 ```
 
-O volume `./data:/app/data` preserva os logs. O Dockerfile tem estágios separados para frontend, backend e runtime sem privilégios.
+`instrument()` é idempotente por PID. Chamadas posteriores reutilizam a mesma instância no processo. Saídas sem severidade reconhecida são armazenadas como `UNDEFINED`.
 
-### Publicação automática da imagem
+Consulte [docs/sender-client.md](./docs/sender-client.md) para configuração, eventos, metadata, filas locais e encerramento.
 
-O workflow `.github/workflows/publish-image.yml` testa, compila e publica a imagem no GitHub Container Registry usando o `GITHUB_TOKEN` do próprio repositório:
+## Exemplo pela API
 
-- push em `master`: publica `ghcr.io/pedroborgesdev/loghill-backup:latest` e uma tag baseada no commit;
-- tag Git `v*`, como `v1.2.0`: publica também `ghcr.io/pedroborgesdev/loghill-backup:v1.2.0`;
-- execução manual: disponível em **Actions > Publish container image > Run workflow**.
-
-Para publicar uma versão:
-
-```bash
-git tag v1.0.0
-git push origin v1.0.0
-```
-
-Para executar a imagem publicada:
-
-```bash
-docker pull ghcr.io/pedroborgesdev/loghill-backup:latest
-docker run -d --name loghill --restart unless-stopped -p 8001:8001 -v loghill-data:/app/data ghcr.io/pedroborgesdev/loghill-backup:latest
-```
-
-O pacote pode nascer privado. Para permitir pulls sem autenticação, altere sua visibilidade para pública nas configurações do package no GitHub.
-
-## API
-
-A especificação está em `docs/openapi.yaml` e a interface Swagger em `/docs`.
-O fluxo completo de configuração dos clientes está em [`docs/sender-client.md`](docs/sender-client.md).
-
-| Método | Caminho | Finalidade |
-|---|---|---|
-| `POST` | `/api/v1/senders` | Criar sender administrativamente e exibir a chave uma vez |
-| `GET` | `/api/v1/senders/check-id` | Verificar disponibilidade do ID |
-| `PUT/DELETE` | `/api/v1/senders/{sender}` | Editar informações ou excluir sender |
-| `POST` | `/api/v1/senders/{sender}/rotate-key` | Gerar uma nova chave |
-| `POST` | `/api/v1/senders/{sender}/revoke` | Revogar acesso |
-| `POST` | `/api/v1/senders/{sender}/reactivate` | Reativar com nova chave |
-| `POST` | `/api/v1/logs` | Receber log |
-| `POST` | `/api/v1/senders/{sender}/health` | Registrar healthcheck |
-| `GET` | `/api/v1/senders` | Listar senders |
-| `GET` | `/api/v1/senders/{sender}` | Detalhar sender |
-| `GET` | `/api/v1/senders/{sender}/logs` | Consultar logs |
-| `GET` | `/api/v1/senders/{sender}/logs/stream` | Stream SSE |
-| `GET` | `/api/v1/senders/{sender}/logs/download` | Exportar JSONL |
-| `GET` | `/api/v1/dashboard/summary` | Métricas |
-| `GET` | `/api/v1/settings` | Consultar limites atuais |
-| `PUT` | `/api/v1/settings` | Persistir e aplicar novos limites |
-| `GET/POST` | `/api/v1/alerts` | Listar ou criar alertas |
-| `GET/PUT/DELETE` | `/api/v1/alerts/{alertID}` | Consultar, editar ou excluir alerta |
-| `PATCH` | `/api/v1/alerts/{alertID}/status` | Ativar ou desativar alerta |
-| `POST` | `/api/v1/alerts/{alertID}/test` | Enfileirar teste do alerta |
-| `GET/POST` | `/api/v1/events` | Listar ou criar eventos |
-| `GET/PUT/DELETE` | `/api/v1/events/{eventID}` | Consultar, editar ou excluir evento |
-| `PATCH` | `/api/v1/events/{eventID}/status` | Ativar ou desativar evento |
-| `POST` | `/api/v1/events/{eventID}/test` | Enfileirar teste do evento |
-| `GET/PUT` | `/api/v1/settings/email` | Consultar ou configurar Outlook |
-| `POST` | `/api/v1/settings/email/test-connection` | Validar autenticação O365 |
-| `POST` | `/api/v1/settings/email/send-test` | Enviar e-mail de teste |
-| `GET` | `/health` | Liveness |
-| `GET` | `/ready` | Readiness |
-
-Criar um sender:
-
-```bash
-curl -X POST http://localhost:8001/api/v1/senders \
-  -H "Content-Type: application/json" \
-  -H "X-API-Key: $APP_PASSWORD" \
-  -d '{"name":"Automação Teste","description":"Processamento de exemplo"}'
-```
-
-Inicializar uma instância pelo nome do sender (o sender é criado automaticamente caso ainda não exista):
+Inicialize uma instância pelo nome; o sender é criado automaticamente quando ainda não existe:
 
 ```bash
 curl -X POST http://localhost:8001/api/v1/instances/init \
   -H "Content-Type: application/json" \
-  -d '{"sender_name":"automacao-teste"}'
+  -d '{"sender_name":"minha-api"}'
 ```
 
-A resposta fornece `instance_id` e `instance_token`. Use os dois valores durante a execução:
+A resposta contém as credenciais que devem acompanhar os logs dessa execução:
+
+```json
+{
+  "sender_id": "minha-api",
+  "instance_id": "ins_...",
+  "instance_token": "..."
+}
+```
+
+Envie um log:
 
 ```bash
 curl -X POST http://localhost:8001/api/v1/logs \
   -H "Content-Type: application/json" \
-  -H "X-Sender-Instance-ID: $LOGHILL_INSTANCE_ID" \
-  -H "X-Sender-Instance-Token: $LOGHILL_INSTANCE_TOKEN" \
-  -d '{"sender_id":"automacao-teste","severity":"ERROR","message":"Falha no login","metadata":{"step":"login"}}'
+  -H "X-Sender-Instance-ID: ins_..." \
+  -H "X-Sender-Instance-Token: ..." \
+  -d '{"sender_id":"minha-api","severity":"INFO","message":"Processamento iniciado"}'
 ```
 
-Enviar um log que chama um evento explicitamente:
+O contrato completo está em [`docs/openapi.yaml`](./docs/openapi.yaml).
 
-```bash
-curl -X POST http://localhost:8001/api/v1/logs \
-  -H "Content-Type: application/json" \
-  -H "X-Sender-Instance-ID: $LOGHILL_INSTANCE_ID" \
-  -H "X-Sender-Instance-Token: $LOGHILL_INSTANCE_TOKEN" \
-  -d '{"sender_id":"automacao-teste","severity":"INFO","message":"Processamento concluído","event":"processamento_finalizado","metadata":{"protocolo":"ABC-123"}}'
-```
+## Persistência e ciclo de vida
 
-Consultar:
-
-```bash
-curl "http://localhost:8001/api/v1/senders/automacao-teste/logs?severity=ERROR,WARN&search=login&page=1&page_size=100&order=desc"
-```
-
-## Configuração
-
-A infraestrutura é configurada por variáveis de ambiente e não depende de arquivo `.env`. Os valores editáveis da interface são persistidos em `data/config.json`; esse arquivo é criado automaticamente com 10.000 linhas de limite máximo, preservação de 2.000 linhas, inatividade após 300 segundos e exclusão após 7 dias.
-
-As unidades internas aceitas são `lines` e `mb`, considerando `1 MB = 1024 × 1024 bytes`. O valor `0` desativa o limite máximo; para preservação, `0` esvazia o arquivo quando o sender se torna inativo. Em MB, a leitura ocorre a partir do fim e somente entradas JSON Lines completas são mantidas. Quando ambas as opções usam a mesma unidade, a preservação não pode superar o limite máximo, exceto quando o máximo é `0`.
-
-As rotas de configuração são administrativas e exigem sessão autenticada (ou `X-API-Key` com `APP_PASSWORD`) quando a autenticação está habilitada. Consulte [`.env.example`](.env.example) para as variáveis de infraestrutura. O arquivo `.env` na raiz é carregado automaticamente na subida do servidor.
-
-As principais variáveis são:
-
-| Variável | Padrão | Descrição |
-|---|---:|---|
-| `APP_PORT` | `8001` | Porta HTTP |
-| `DATA_DIR` | `./data` | Diretório persistente |
-| `MAX_LOG_LINES` | `100000` | Limite do arquivo |
-| `LOG_COMPACT_TARGET_LINES` | `95000` | Alvo após exceder o limite |
-| `INACTIVE_AFTER` | `5m` | Prazo de inatividade |
-| `COMPACT_KEEP_LINES` | `2000` | Linhas mantidas ao inativar |
-| `DELETE_AFTER` | `168h` | Prazo para excluir instâncias inativas |
-| `APP_PASSWORD` | _(vazio)_ | Senha da interface. Se definida, o login é exigido |
-| `APP_AUTH_ENABLED` | _(auto)_ | Força auth on/off; por padrão segue `APP_PASSWORD` |
-| `EMAIL_SETTINGS_ENCRYPTION_KEY` | auto (`DATA_DIR/email-encryption.key`) | Base64 de 32 bytes para secrets salvos pela UI. Se vazio/inválido, é gerada e persistida automaticamente |
-
-Novos clientes conectam com `sender_name`; o handshake devolve uma credencial exclusiva da instância, cujo hash é persistido internamente. A fila do cliente associa cada log à instância que o originou, inclusive quando o envio ocorre depois de reiniciar o processo, sem persistir o token localmente. A compatibilidade com `X-Sender-Key` permanece para clientes antigos. A interface autentica com cookie de sessão (`APP_PASSWORD`); clientes não-browser podem enviar `X-API-Key` com a mesma senha.
-
-## Alertas por e-mail e Outlook
-
-Os alertas são persistidos separadamente em `data/alerts.json`. Cada regra aceita `sender_ids` com um ou mais senders; o matching usa um índice em memória por sender e severity. Regras antigas com `sender_id` são migradas durante a leitura sem renomear senders ou diretórios existentes.
-
-### Referência O365 analisada
-
-A integração de referência está em `repo_exemplo/worker_busca_acordos_santander/worker/infra/email_client.py`, apoiada por `worker/core/config.py`, `worker/schemas/config.py` e `tests/test_email_client.py`. Ela usa `O365.Account((client_id, client_secret), auth_flow_type="credentials", tenant_id=...)`, com as variáveis `EMAIL_PROVIDER=o365`, `O365_TENANT_ID`, `O365_CLIENT_ID`, `O365_CLIENT_SECRET` e `EMAIL_FROM_ADDR`/`EMAIL_USER`. A biblioteca O365 obtém e renova o token do fluxo client credentials.
-
-O cliente de exemplo é usado para ler a caixa postal durante autenticação de dois fatores e não possui método de envio, timeout de envio ou retry de entrega que pudesse ser importado diretamente. Por isso, esta aplicação Go preserva os nomes, o fluxo e o contrato de credenciais, mas implementa o transporte equivalente no próprio processo pelo Microsoft Graph, sem sidecar Python e sem duplicar autenticação dentro do projeto atual.
-
-O envio usa Microsoft Graph com OAuth 2.0 client credentials e a permissão de aplicação `Mail.Send`. Configure um registro de aplicativo no Microsoft Entra ID, conceda consentimento administrativo a essa permissão e informe:
-
-```env
-EMAIL_PROVIDER=outlook
-OUTLOOK_ENABLED=true
-OUTLOOK_TENANT_ID=seu-tenant
-OUTLOOK_CLIENT_ID=seu-client-id
-OUTLOOK_CLIENT_SECRET=seu-secret
-OUTLOOK_SENDER_EMAIL=logs@empresa.com
-OUTLOOK_SENDER_NAME=LogHill
-APP_PUBLIC_URL=https://logs.empresa.com
-```
-
-Também são aceitos os nomes legados do repositório de referência: `O365_TENANT_ID`, `O365_CLIENT_ID`, `O365_CLIENT_SECRET` e `EMAIL_FROM_ADDR`. Os nomes `OUTLOOK_*` têm prioridade. O access token permanece somente em memória e é renovado automaticamente antes de expirar.
-
-Quando a credencial é informada pela interface, o secret é persistido com AES-256-GCM em `data/email-settings.json`. A chave de criptografia vem de `EMAIL_SETTINGS_ENCRYPTION_KEY` ou, se estiver vazia/inválida, é gerada automaticamente em `DATA_DIR/email-encryption.key`. A chave nunca é salva no arquivo de settings e a API devolve apenas `client_secret_configured`. Se a configuração vier do ambiente, a interface a identifica como gerenciada e impede alterações.
-
-O endpoint de logs apenas tenta colocar a notificação em uma fila limitada e retorna sem aguardar o Outlook. Workers aplicam timeout e retry em background. A fila é somente em memória: tarefas pendentes não sobrevivem a um reinício. Tamanho, workers e retry são controlados por `EMAIL_ALERT_QUEUE_SIZE`, `EMAIL_ALERT_WORKERS`, `EMAIL_ALERT_SEND_TIMEOUT`, `EMAIL_ALERT_MAX_RETRIES` e `EMAIL_ALERT_RETRY_INTERVAL`.
-
-Na interface, abra **Configurações > E-mail**, salve ou consulte a configuração, use **Testar conexão** para validar o token e **Enviar e-mail de teste** para validar a entrega. Depois, acesse **Alertas**, clique em **Novo alerta**, escolha sender, severidades e destinatários.
-
-Se o Microsoft Graph responder HTTP 403, as credenciais foram aceitas, mas o aplicativo ou a mailbox não estão autorizados a enviar. Conceda a permissão de aplicação `Mail.Send` com consentimento administrativo e confira o escopo de Application RBAC/política de acesso do Exchange. Consulte [a solução de problemas](docs/alerts.md#solução-do-erro-http-403).
-
-## Eventos explícitos
-
-Eventos são persistidos em `data/events.json` e usam matching por sender e chave exata, sem considerar severity. O endpoint de logs persiste e publica o registro antes de enfileirar a ação, então falhas ou fila cheia não rejeitam o log. Alertas e eventos permanecem independentes e podem disparar juntos.
-
-Abra **Eventos**, crie uma chave imutável, selecione senders e configure destinatários, assunto e mensagem. Consulte [a documentação de eventos](docs/events.md) para variáveis de template, exemplos de Python/Go, envio de teste e limitações da primeira versão.
-
-## Estrutura
+Os dados ficam sob `DATA_DIR`, organizado por sender e instância:
 
 ```text
-cmd/server/             ponto de entrada
-internal/config/        variáveis de ambiente
-internal/domain/        modelos e filtros
-internal/repository/    persistência em arquivos
-internal/service/       regras de negócio e SSE
-internal/handler/       API e SPA
-internal/middleware/    segurança HTTP
-internal/scheduler/     inatividade e expiração
-internal/storage/       locks por sender
-frontend/src/           aplicação React
-web/dist/               assets incorporados
-docs/openapi.yaml       contrato da API
+data/
+├── config.json
+├── alerts.json
+├── events.json
+├── executions/
+└── senders/
+    └── meu-sender/
+        ├── sender.json
+        ├── instances.json
+        └── instances/
+            └── ins_.../
+                └── logs.txt
 ```
 
-## Limitações conhecidas
+- Logs e healthchecks contam como atividade da instância.
+- Uma instância sem atividade passa a inativa após o prazo configurado.
+- Na inativação, o histórico pode ser compactado até o limite de preservação.
+- Depois da retenção, instância e logs são excluídos permanentemente.
+- Quando a última instância expira, o sender também é removido.
+- Escritas de metadata usam arquivo temporário, sincronização e rename atômico.
+- Locks são isolados por sender para evitar contenção global durante ingestão.
 
-- Busca, métricas detalhadas por severidade e paginação exigem varredura linear dos arquivos; a solução prioriza simplicidade sem banco de dados.
-- Subscribers SSE lentos podem perder eventos quando seu buffer fica cheio; o arquivo continua sendo a fonte durável.
-- O endpoint de download respeita o limite máximo configurado de linhas do arquivo.
+Faça backup de `DATA_DIR` para preservar logs, configurações, regras, histórico e a chave usada para criptografar credenciais de e-mail.
+
+## Configuração essencial
+
+Copie [`.env.example`](./.env.example) para `.env`. O servidor carrega esse arquivo automaticamente quando iniciado no diretório do projeto.
+
+| Variável | Padrão | Finalidade |
+|---|---|---|
+| `APP_HOST` | `0.0.0.0` | Endereço de escuta HTTP |
+| `APP_PORT` | `8001` | Porta da aplicação |
+| `APP_PUBLIC_URL` | `http://localhost:8001` | URL usada em links externos |
+| `DATA_DIR` | `./data` | Diretório persistente |
+| `APP_PASSWORD` | vazio | Senha da interface e API administrativa |
+| `APP_AUTH_ENABLED` | automático | Força autenticação ligada ou desligada |
+| `INACTIVE_AFTER` | `5m` | Tempo sem atividade antes da inativação |
+| `DELETE_AFTER` | `168h` | Retenção antes da exclusão definitiva |
+| `CLEANUP_INTERVAL` | `1m` | Frequência do ciclo de manutenção |
+| `MAX_LOG_LINES` | `100000` | Limite legado inicial de linhas |
+| `MAX_BODY_SIZE` | `1048576` | Tamanho máximo do corpo HTTP |
+| `LOG_LEVEL` | `INFO` | Nível dos logs internos do servidor |
+| `SSE_HEARTBEAT_INTERVAL` | `20s` | Intervalo de heartbeat SSE |
+| `CORS_ENABLED` | `false` | Ativa política CORS configurável |
+| `RATE_LIMIT_ENABLED` | `false` | Ativa limitação de requisições |
+
+Limites de armazenamento, preservação e inatividade também podem ser alterados pela interface em **Configurações** e são persistidos em `data/config.json`.
+
+Consulte [`.env.example`](./.env.example) para todas as opções de e-mail, segurança, SSE e retenção de execuções.
+
+## Alertas, eventos e monitoramento
+
+### Alertas
+
+Alertas combinam senders, severidades e destinatários. A entrega ocorre em background para não bloquear a ingestão. Consulte [docs/alerts.md](./docs/alerts.md).
+
+### Eventos
+
+Eventos são acionados somente quando o cliente envia uma chave explícita no campo `event`. Consulte [docs/events.md](./docs/events.md).
+
+### Monitoramento
+
+Regras de monitoramento combinam condições de log, sender, evento, horário e metadata. As execuções de alertas, eventos e monitoramento compartilham um histórico pesquisável.
+
+## Desenvolvimento
+
+Requisitos:
+
+- Go 1.24 ou superior;
+- Node.js 22 ou superior;
+- npm;
+- Docker e Docker Compose, opcionais.
+
+Backend:
+
+```bash
+go run ./cmd/server
+```
+
+Frontend com hot reload, em outro terminal:
+
+```bash
+cd frontend
+npm ci
+npm run dev
+```
+
+O Vite encaminha `/api`, `/health` e `/ready` para `localhost:8001`.
+
+### Qualidade
+
+```bash
+go test -race ./...
+go vet ./...
+
+cd frontend
+npm run test:run
+npm run lint
+npm run build
+```
+
+Atalhos equivalentes estão disponíveis no [`Makefile`](./Makefile).
+
+## Imagem de container
+
+O [`Dockerfile`](./Dockerfile) usa estágios separados para frontend, backend e runtime. A imagem final:
+
+- contém apenas o executável e a especificação OpenAPI;
+- executa como usuário sem privilégios;
+- expõe a porta `8001`;
+- declara `/app/data` como volume;
+- possui healthcheck em `/health`.
+
+O workflow [`.github/workflows/publish-image.yml`](./.github/workflows/publish-image.yml) publica automaticamente:
+
+- `ghcr.io/pedroborgesdev/loghill-backup:latest` em pushes para `master`;
+- `ghcr.io/pedroborgesdev/loghill-backup:sha-*` por commit;
+- `ghcr.io/pedroborgesdev/loghill-backup:v*` para tags de versão.
+
+## Estrutura do repositório
+
+```text
+cmd/server/              entrada do servidor
+internal/app/            composição das dependências
+internal/controllers/    handlers HTTP
+internal/domain/         entidades e contratos internos
+internal/repositories/   persistência em arquivos
+internal/services/       regras de negócio e ciclo de vida
+internal/routes/         rotas da API
+internal/middlewares/    autenticação, CORS e rate limit
+internal/alerts/         regras de alertas
+internal/events/         eventos explícitos
+internal/monitoring/     motor de monitoramento
+internal/executions/     histórico unificado
+internal/emailprovider/  Outlook e Gmail
+frontend/                React, TypeScript, Vite e Tailwind
+web/dist/                frontend incorporado com go:embed
+examples/                cliente e projetos de exemplo
+docs/                    OpenAPI e guias adicionais
+```
+
+## Segurança
+
+- Defina `APP_PASSWORD` em qualquer ambiente acessível por rede.
+- Publique a aplicação atrás de TLS em produção.
+- Não versione `.env`, credenciais, filas locais ou `DATA_DIR`.
+- Use secrets do orquestrador para Outlook, Gmail e chave de criptografia.
+- A imagem Docker executa como usuário não-root.
+- A API nunca devolve secrets de provedores de e-mail já armazenados.
+
+## Contribuição
+
+1. Crie uma branch para a alteração.
+2. Mantenha o diff focado e adicione testes quando aplicável.
+3. Execute testes, lint e build antes de abrir o pull request.
+4. Descreva impacto, compatibilidade e forma de validação.
+
+## Licença
+
+Distribuído sob a licença MIT. Consulte [LICENSE.md](./LICENSE.md).
