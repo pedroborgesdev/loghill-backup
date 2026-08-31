@@ -12,9 +12,9 @@ describe("controles temáticos", () => {
         onChange={onChange}
         label="Intervalo"
         options={[
-          { value: 15, label: "15 segundos" },
-          { value: 30, label: "30 segundos" },
-          { value: 60, label: "1 minuto" },
+          { value: 15, label: "15 seconds" },
+          { value: 30, label: "30 seconds" },
+          { value: 60, label: "1 minute" },
         ]}
       />,
     );
@@ -24,21 +24,21 @@ describe("controles temáticos", () => {
     expect(screen.getByRole("listbox", { name: "Intervalo" })).toHaveClass(
       "z-[350]",
     );
-    await userEvent.click(screen.getByRole("option", { name: "1 minuto" }));
+    await userEvent.click(screen.getByRole("option", { name: "1 minute" }));
     expect(onChange).toHaveBeenCalledWith(60);
   });
 
   it("abre calendário próprio e aplica data e horário", async () => {
     const onChange = vi.fn();
     const { container } = render(
-      <DateTimePicker value="" onChange={onChange} label="Data inicial" />,
+      <DateTimePicker value="" onChange={onChange} label="Date inicial" />,
     );
 
     expect(container.querySelector('input[type="datetime-local"]')).toBeNull();
     await userEvent.click(
-      screen.getByRole("button", { name: "Data inicial" }),
+      screen.getByRole("button", { name: "Date inicial" }),
     );
-    expect(screen.getByRole("dialog", { name: "Data inicial" })).toBeVisible();
+    expect(screen.getByRole("dialog", { name: "Date inicial" })).toBeVisible();
     await userEvent.click(screen.getByRole("button", { name: "Agora" }));
     await userEvent.click(screen.getByRole("button", { name: "Aplicar" }));
     expect(onChange).toHaveBeenCalledWith(

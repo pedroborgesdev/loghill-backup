@@ -156,7 +156,7 @@ export function Listbox<T extends ControlValue>({
           size === "compact" ? "h-8 px-2 text-xs" : "h-9 px-3 text-sm"
         } ${className}`}
       >
-        <span className="truncate">{selected?.label ?? "Selecionar"}</span>
+        <span className="truncate">{selected?.label ?? "Select"}</span>
         <ChevronDown
           className={`size-3.5 shrink-0 text-zinc-600 transition-transform duration-150 ${
             open ? "rotate-180" : ""
@@ -212,20 +212,20 @@ export function Listbox<T extends ControlValue>({
 }
 
 const months = [
-  "Janeiro",
-  "Fevereiro",
-  "Março",
-  "Abril",
-  "Maio",
-  "Junho",
-  "Julho",
-  "Agosto",
-  "Setembro",
-  "Outubro",
-  "Novembro",
-  "Dezembro",
+  "January",
+  "February",
+  "March",
+  "April",
+  "May",
+  "June",
+  "July",
+  "August",
+  "September",
+  "October",
+  "November",
+  "December",
 ];
-const weekdays = ["Seg", "Ter", "Qua", "Qui", "Sex", "Sáb", "Dom"];
+const weekdays = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 
 function toLocalValue(date: Date, hour: string, minute: string) {
   const pad = (value: number | string) => String(value).padStart(2, "0");
@@ -241,7 +241,7 @@ export function DateTimePicker({
   value,
   onChange,
   label,
-  placeholder = "Selecionar data e hora",
+  placeholder = "Select data e hora",
 }: {
   value: string;
   onChange: (value: string) => void;
@@ -302,7 +302,7 @@ export function DateTimePicker({
   }, [visibleMonth]);
 
   const displayValue = value
-    ? new Intl.DateTimeFormat("pt-BR", {
+    ? new Intl.DateTimeFormat("en-US", {
         dateStyle: "short",
         timeStyle: "short",
       }).format(new Date(value))
@@ -334,7 +334,7 @@ export function DateTimePicker({
         {value && (
           <button
             type="button"
-            aria-label={`Limpar ${label}`}
+            aria-label={`Clear ${label}`}
             onClick={(event) => {
               event.stopPropagation();
               onChange("");
@@ -358,7 +358,7 @@ export function DateTimePicker({
             <div className="flex items-center justify-between">
               <button
                 type="button"
-                aria-label="Mês anterior"
+            aria-label="Previous month"
                 onClick={() => moveMonth(-1)}
                 className="grid size-8 place-items-center rounded-lg text-zinc-500 hover:bg-zinc-800 hover:text-zinc-200 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-white/50"
               >
@@ -369,7 +369,7 @@ export function DateTimePicker({
               </p>
               <button
                 type="button"
-                aria-label="Próximo mês"
+            aria-label="Next month"
                 onClick={() => moveMonth(1)}
                 className="grid size-8 place-items-center rounded-lg text-zinc-500 hover:bg-zinc-800 hover:text-zinc-200 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-white/50"
               >
@@ -388,7 +388,7 @@ export function DateTimePicker({
                   <button
                     key={day.toISOString()}
                     type="button"
-                    aria-label={day.toLocaleDateString("pt-BR")}
+                aria-label={day.toLocaleDateString("en-US")}
                     aria-pressed={
                       day.getFullYear() === draft.getFullYear() &&
                       day.getMonth() === draft.getMonth() &&
@@ -414,7 +414,7 @@ export function DateTimePicker({
             <div className="mt-3 flex items-center gap-2 border-t border-zinc-800 pt-3">
               <Clock3 className="size-4 text-zinc-600" />
               <input
-                aria-label="Hora"
+                aria-label="Hour"
                 inputMode="numeric"
                 maxLength={2}
                 value={hour}
@@ -425,7 +425,7 @@ export function DateTimePicker({
               />
               <span className="text-zinc-600">:</span>
               <input
-                aria-label="Minuto"
+                aria-label="Minute"
                 inputMode="numeric"
                 maxLength={2}
                 value={minute}
@@ -445,7 +445,7 @@ export function DateTimePicker({
                 }}
                 className="ml-auto rounded px-1 text-[11px] text-zinc-500 hover:text-zinc-200 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-white/50"
               >
-                Agora
+                Now
               </button>
             </div>
 
@@ -455,7 +455,7 @@ export function DateTimePicker({
                 onClick={() => setOpen(false)}
                 className="h-8 rounded-lg px-3 text-xs text-zinc-500 hover:bg-zinc-800 hover:text-zinc-200 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-white/50"
               >
-                Cancelar
+                Cancel
               </button>
               <button
                 type="button"
@@ -468,7 +468,7 @@ export function DateTimePicker({
                 }}
                 className="h-8 rounded-lg border border-zinc-500 bg-zinc-800 px-3 text-xs font-medium text-zinc-100 hover:border-zinc-400 hover:bg-zinc-700 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-white/50"
               >
-                Aplicar
+                Apply
               </button>
             </div>
           </div>,

@@ -33,10 +33,10 @@ func TestAdministrativeSenderCreationAndAuthenticatedIngestion(t *testing.T) {
 	if response := senderRequest(router, http.MethodPost, "/api/v1/senders/init", `{"name":"old"}`, "secret", ""); response.Code != http.StatusNotFound {
 		t.Fatalf("legacy init route status=%d body=%s", response.Code, response.Body.String())
 	}
-	if response := senderRequest(router, http.MethodPost, "/api/v1/senders", `{"name":"Automação Financeira"}`, "", ""); response.Code != http.StatusUnauthorized {
+	if response := senderRequest(router, http.MethodPost, "/api/v1/senders", `{"name":"Financial Automation"}`, "", ""); response.Code != http.StatusUnauthorized {
 		t.Fatalf("unprotected admin creation status=%d", response.Code)
 	}
-	response := senderRequest(router, http.MethodPost, "/api/v1/senders", `{"name":"Automação Financeira","description":"Boletos"}`, "secret", "")
+	response := senderRequest(router, http.MethodPost, "/api/v1/senders", `{"name":"Financial Automation","description":"Boletos"}`, "secret", "")
 	if response.Code != http.StatusCreated {
 		t.Fatalf("create status=%d body=%s", response.Code, response.Body.String())
 	}
@@ -47,16 +47,16 @@ func TestAdministrativeSenderCreationAndAuthenticatedIngestion(t *testing.T) {
 	if err := json.Unmarshal(response.Body.Bytes(), &created); err != nil {
 		t.Fatal(err)
 	}
-	if created.Sender.ID != "automacao-financeira" || created.Sender.Status != domain.StatusNeverConnected || !created.Credentials.DisplayedOnce {
+	if created.Sender.ID != "financial-automation" || created.Sender.Status != domain.StatusNeverConnected || !created.Credentials.DisplayedOnce {
 		t.Fatalf("unexpected creation response: %+v", created)
 	}
 
-	duplicate := senderRequest(router, http.MethodPost, "/api/v1/senders", `{"name":"Automação Financeira"}`, "secret", "")
+	duplicate := senderRequest(router, http.MethodPost, "/api/v1/senders", `{"name":"Financial Automation"}`, "secret", "")
 	if duplicate.Code != http.StatusConflict || !strings.Contains(duplicate.Body.String(), `"field":"name"`) || !strings.Contains(duplicate.Body.String(), "SENDER_ALREADY_EXISTS") {
 		t.Fatalf("duplicate status=%d body=%s", duplicate.Code, duplicate.Body.String())
 	}
 
-	logBody := `{"sender":"automacao-financeira","severity":"INFO","message":"teste"}`
+	logBody := `{"sender":"financial-automation","severity":"INFO","message":"teste"}`
 	for name, key := range map[string]string{"missing": "", "wrong": "snd_wrong"} {
 		unauthorized := senderRequest(router, http.MethodPost, "/api/v1/logs", logBody, "", key)
 		if unauthorized.Code != http.StatusUnauthorized || !strings.Contains(unauthorized.Body.String(), "INVALID_SENDER_KEY") {
@@ -66,15 +66,15 @@ func TestAdministrativeSenderCreationAndAuthenticatedIngestion(t *testing.T) {
 	if accepted := senderRequest(router, http.MethodPost, "/api/v1/logs", logBody, "", created.Credentials.SenderKey); accepted.Code != http.StatusAccepted {
 		t.Fatalf("valid log status=%d body=%s", accepted.Code, accepted.Body.String())
 	}
-	undefinedLog := `{"sender":"automacao-financeira","severity":"UNDEFINED","message":"INFO: Uvicorn running"}`
+	undefinedLog := `{"sender":"financial-automation","severity":"UNDEFINED","message":"INFO: Uvicorn running"}`
 	if accepted := senderRequest(router, http.MethodPost, "/api/v1/logs", undefinedLog, "", created.Credentials.SenderKey); accepted.Code != http.StatusAccepted {
 		t.Fatalf("undefined log status=%d body=%s", accepted.Code, accepted.Body.String())
 	}
-	undefinedLogs := senderRequest(router, http.MethodGet, "/api/v1/senders/automacao-financeira/logs?severity=UNDEFINED", "", "secret", "")
+	undefinedLogs := senderRequest(router, http.MethodGet, "/api/v1/senders/financial-automation/logs?severity=UNDEFINED", "", "secret", "")
 	if undefinedLogs.Code != http.StatusOK || !strings.Contains(undefinedLogs.Body.String(), "Uvicorn running") {
 		t.Fatalf("undefined log listing status=%d body=%s", undefinedLogs.Code, undefinedLogs.Body.String())
 	}
-	if health := senderRequest(router, http.MethodPost, "/api/v1/senders/automacao-financeira/health", `{}`, "", created.Credentials.SenderKey); health.Code != http.StatusOK {
+	if health := senderRequest(router, http.MethodPost, "/api/v1/senders/financial-automation/health", `{}`, "", created.Credentials.SenderKey); health.Code != http.StatusOK {
 		t.Fatalf("valid health status=%d body=%s", health.Code, health.Body.String())
 	}
 

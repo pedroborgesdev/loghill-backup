@@ -210,7 +210,7 @@ func (s *Service) RecordDelivery(id string, test bool, status domain.DeliverySta
 func (s *Service) validate(ctx context.Context, input domain.AlertInput) (domain.AlertInput, []domain.Sender, error) {
 	input.Name = strings.TrimSpace(input.Name)
 	if len([]rune(input.Name)) < 3 || len([]rune(input.Name)) > 100 {
-		return input, nil, invalid("name", "O nome deve possuir entre 3 e 100 caracteres.")
+		return input, nil, invalid("name", "The name must be between 3 and 100 characters.")
 	}
 	uniqueSenderIDs := make(map[string]bool)
 	senders := make([]domain.Sender, 0, len(input.SenderIDs))
@@ -219,28 +219,28 @@ func (s *Service) validate(ctx context.Context, input domain.AlertInput) (domain
 	for _, rawID := range rawSenderIDs {
 		id := strings.TrimSpace(rawID)
 		if id == "" {
-			return input, senders, invalid("sender_ids", "Os identificadores dos senders são obrigatórios.")
+			return input, senders, invalid("sender_ids", "Sender identifiers are required.")
 		}
 		if uniqueSenderIDs[id] {
-			return input, senders, invalid("sender_ids", "Um sender não pode ser selecionado mais de uma vez.")
+			return input, senders, invalid("sender_ids", "A sender cannot be selected more than once.")
 		}
 		uniqueSenderIDs[id] = true
 		sender, err := s.senders.Get(ctx, id)
 		if err != nil || sender.Status == domain.StatusExpired || sender.Status == domain.StatusRevoked {
-			return input, nil, &ValidationError{Code: "INVALID_ALERT", Field: "sender_ids", Message: fmt.Sprintf("O sender “%s” não está mais disponível.", id)}
+			return input, nil, &ValidationError{Code: "INVALID_ALERT", Field: "sender_ids", Message: fmt.Sprintf("Sender “%s” is no longer available.", id)}
 		}
 		input.SenderIDs = append(input.SenderIDs, id)
 		senders = append(senders, sender)
 	}
 	if len(input.Severities) == 0 {
-		return input, senders, invalid("severities", "Selecione ao menos uma severidade.")
+		return input, senders, invalid("severities", "Select at least one severity.")
 	}
 	severitySet := make(map[domain.LogSeverity]bool)
 	severities := make([]domain.LogSeverity, 0, len(input.Severities))
 	for _, raw := range input.Severities {
 		severity, parseErr := domain.ParseSeverity(string(raw))
 		if parseErr != nil {
-			return input, senders, invalid("severities", "Uma das severidades é inválida.")
+			return input, senders, invalid("severities", "One of the severities is invalid.")
 		}
 		if !severitySet[severity] {
 			severitySet[severity] = true
@@ -248,14 +248,14 @@ func (s *Service) validate(ctx context.Context, input domain.AlertInput) (domain
 		}
 	}
 	if len(input.Recipients) == 0 || len(input.Recipients) > 20 {
-		return input, senders, invalid("recipients", "Informe de 1 a 20 destinatários.")
+		return input, senders, invalid("recipients", "Enter between 1 and 20 recipients.")
 	}
 	recipientSet := make(map[string]bool)
 	recipients := make([]string, 0, len(input.Recipients))
 	for _, raw := range input.Recipients {
 		recipient, valid := validation.EmailAddress(raw)
 		if !valid {
-			return input, senders, invalid("recipients", "Informe apenas endereços de e-mail válidos.")
+			return input, senders, invalid("recipients", "Enter valid email addresses only.")
 		}
 		if !recipientSet[recipient] {
 			recipientSet[recipient] = true

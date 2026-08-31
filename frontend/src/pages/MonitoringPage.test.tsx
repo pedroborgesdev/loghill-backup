@@ -12,6 +12,6 @@ it("keeps the monitoring shell and presents the empty state", async () => {
   expect(screen.getByRole("button", { name: /nova regra/i })).toBeInTheDocument();
   await waitFor(() => expect(screen.getByText("Nenhuma regra de monitoramento")).toBeInTheDocument());
   await userEvent.click(screen.getByRole("button", { name: /nova regra/i }));
-  expect(screen.getByRole("dialog", { name: "Nova regra de monitoramento" })).toBeInTheDocument();
+  expect(screen.getByRole("dialog", { name: "New monitoring rule" })).toBeInTheDocument();
   vi.unstubAllGlobals();
 });

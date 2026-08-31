@@ -125,7 +125,7 @@ export function NumberInput({
   step = 1,
   className = "",
   disabled = false,
-  label = "valor",
+  label = "value",
   ...props
 }: Omit<InputHTMLAttributes<HTMLInputElement>, "type" | "value" | "onChange" | "min" | "max" | "step"> & {
   value: number;
@@ -185,7 +185,7 @@ export function NumberInput({
 export function SearchInput({
   value,
   onChange,
-  placeholder = "Buscar...",
+  placeholder = "Search...",
   className = "",
   blocked = false,
   onBlocked,
@@ -221,7 +221,7 @@ export function SearchInput({
       {value && (
         <button
           type="button"
-          aria-label="Limpar busca"
+        aria-label="Clear search"
           onClick={() => {
             if (blocked) onBlocked?.();
             else onChange("");
@@ -245,12 +245,12 @@ const statusStyle: Record<SenderStatus, string> = {
 };
 
 const statusLabel: Record<SenderStatus, string> = {
-  never_connected: "Nunca conectado",
+  never_connected: "Never connected",
   online: "Online",
-  inactive: "Inativo",
+  inactive: "Inactive",
   archived: "Arquivado",
-  expired: "Expirado",
-  revoked: "Revogado",
+  expired: "Expired",
+  revoked: "Revoked",
 };
 
 export function StatusBadge({ status }: { status: SenderStatus }) {
@@ -300,7 +300,7 @@ export function ErrorAlert({
       <span>{message}</span>
       {onRetry && (
         <Button onClick={onRetry} className="h-8 border-red-900 bg-transparent">
-          Tentar novamente
+          Try again
         </Button>
       )}
     </div>
@@ -342,7 +342,7 @@ export function ConfirmDialog({
     <div className="fixed inset-0 z-[120] grid place-items-center p-4">
       <button
         type="button"
-        aria-label="Fechar diálogo"
+        aria-label="Close dialog"
         className="absolute inset-0 bg-black/75"
         onClick={onClose}
       />
@@ -362,11 +362,11 @@ export function ConfirmDialog({
               {description}
             </p>
           </div>
-          <ModalCloseButton label="Fechar confirmação" onClick={onClose} />
+          <ModalCloseButton label="Close confirmation" onClick={onClose} />
         </div>
         <div className="mt-5 flex justify-end gap-2">
           <Button onClick={onClose} className="border-transparent bg-transparent">
-            Cancelar
+            Cancel
           </Button>
           <button
             type="button"
@@ -595,31 +595,31 @@ export function Pagination({
 }) {
   return (
     <nav
-      aria-label="Paginação"
+      aria-label="Pagination"
       className="flex min-h-14 shrink-0 flex-wrap items-center justify-between gap-3 border-t border-zinc-800 px-3 py-2 text-xs text-zinc-500"
     >
       <span className="min-w-32">
-        {typeof total === "number" ? `${total.toLocaleString("pt-BR")} registros` : ""}
-        {busy && <span className="ml-2 text-zinc-400">Atualizando...</span>}
+        {typeof total === "number" ? `${total.toLocaleString("en-US")} records` : ""}
+        {busy && <span className="ml-2 text-zinc-400">Refreshing...</span>}
       </span>
       <div className="flex items-center gap-2">
         {pageSize && onPageSizeChange && (
           <Listbox
             value={pageSize}
             onChange={onPageSizeChange}
-            label="Registros por página"
+            label="Records per page"
             size="compact"
             className="w-[112px]"
             options={[25, 50, 100, 250].map((size) => ({
               value: size,
-              label: `${size} / pág.`,
+              label: `${size} / page`,
             }))}
           />
         )}
         <button
           type="button"
-          aria-label="Página anterior"
-          title="Página anterior"
+          aria-label="Previous page"
+          title="Previous page"
           disabled={page <= 1 || busy}
           onClick={() => onChange(page - 1)}
           className="grid size-8 shrink-0 place-items-center rounded-lg border border-zinc-700 bg-zinc-950 text-zinc-400 transition-colors hover:border-zinc-600 hover:bg-zinc-800 hover:text-zinc-100 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-white/50 disabled:cursor-not-allowed disabled:opacity-40"
@@ -627,12 +627,12 @@ export function Pagination({
           <ChevronLeft className="size-4" />
         </button>
         <span className="min-w-24 text-center tabular-nums">
-          Página {page} de {Math.max(1, totalPages)}
+          Page {page} of {Math.max(1, totalPages)}
         </span>
         <button
           type="button"
-          aria-label="Próxima página"
-          title="Próxima página"
+          aria-label="Next page"
+          title="Next page"
           disabled={page >= totalPages || busy}
           onClick={() => onChange(page + 1)}
           className="grid size-8 shrink-0 place-items-center rounded-lg border border-zinc-700 bg-zinc-950 text-zinc-400 transition-colors hover:border-zinc-600 hover:bg-zinc-800 hover:text-zinc-100 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-white/50 disabled:cursor-not-allowed disabled:opacity-40"
@@ -646,7 +646,7 @@ export function Pagination({
 
 export function Loading() {
   return (
-    <div role="status" className="space-y-3 p-4" aria-label="Carregando">
+    <div role="status" className="space-y-3 p-4" aria-label="Loading">
       {Array.from({ length: 5 }, (_, index) => (
         <Skeleton key={index} className="h-12 w-full" />
       ))}

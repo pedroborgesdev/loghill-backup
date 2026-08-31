@@ -60,11 +60,11 @@ func TestReceiveLogPersistsAndStreamsEvent(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer cancel()
-	entry, _, err := svc.ReceiveLogWithEvent(context.Background(), sender.ID, credentials.SenderKey, "INFO", "concluído", "processamento_finalizado", "ocorrencia-123", nil, map[string]any{"protocolo": "ABC"})
+	entry, _, err := svc.ReceiveLogWithEvent(context.Background(), sender.ID, credentials.SenderKey, "INFO", "concluído", "processing_completed", "ocorrencia-123", nil, map[string]any{"protocol": "ABC"})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if entry.Event != "processamento_finalizado" || entry.SenderID != sender.ID {
+	if entry.Event != "processing_completed" || entry.SenderID != sender.ID {
 		t.Fatalf("unexpected entry: %+v", entry)
 	}
 	select {
@@ -408,7 +408,7 @@ func TestTickDeletesPreviouslyExpiredSender(t *testing.T) {
 	}
 	svc := New(repo, testConfig(dataDir), clock, store)
 	ctx := context.Background()
-	sender, _, err := svc.CreateSender(ctx, "Sender Expirado Antigo", "")
+	sender, _, err := svc.CreateSender(ctx, "Sender Expired Antigo", "")
 	if err != nil {
 		t.Fatal(err)
 	}

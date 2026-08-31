@@ -15,11 +15,11 @@ describe("componentes de interface", () => {
   it("só marca o mínimo inválido depois de editar e sair do campo", async () => {
     function Fixture() {
       const [value, setValue] = useState("");
-      return <Input aria-label="Nome" value={value} minLength={3} onChange={(event) => setValue(event.target.value)} />;
+      return <Input aria-label="Name" value={value} minLength={3} onChange={(event) => setValue(event.target.value)} />;
     }
     const user = userEvent.setup();
     render(<Fixture />);
-    const input = screen.getByRole("textbox", { name: "Nome" });
+    const input = screen.getByRole("textbox", { name: "Name" });
 
     expect(input).not.toHaveAttribute("aria-invalid");
     await user.click(input);
@@ -134,9 +134,9 @@ describe("componentes de interface", () => {
     expect(screen.getByText("Segunda descrição")).toBeInTheDocument();
   });
 
-  it("não reabre a descrição ao restaurar o foco depois de um modal", () => {
-    render(<IconButton label="Editar regra">A</IconButton>);
-    const button = screen.getByRole("button", { name: "Editar regra" });
+  it("not reabre a descrição ao restaurar o foco depois de um modal", () => {
+    render(<IconButton label="Edit rule">A</IconButton>);
+    const button = screen.getByRole("button", { name: "Edit rule" });
     fireEvent.focus(button);
     expect(screen.getByRole("tooltip")).toBeInTheDocument();
     fireEvent.blur(button);

@@ -13,16 +13,16 @@ describe("EmailSettings", () => {
     render(<EmailSettings />);
     expect(await screen.findByText("Microsoft 365 / O365")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /Gmail/ })).toBeEnabled();
-    const secret = screen.getByPlaceholderText("Credencial configurada — digite apenas para substituir");
+    const secret = screen.getByPlaceholderText("Credential configured — type only to replace it");
     expect(secret).toHaveValue("");
-    expect(screen.getByText(/O valor salvo nunca é exibido/)).toBeInTheDocument();
+    expect(screen.getByText(/O value salvo nunca é exibido/)).toBeInTheDocument();
   });
 
   it("tests the connection without losing fields", async () => {
     const fetchMock = vi.fn(async (input: RequestInfo | URL) => String(input).includes("test-connection") ? new Response(JSON.stringify({ success: true, message: "Conexão validada." }), { status: 200 }) : new Response(JSON.stringify(settings), { status: 200 }));
     vi.stubGlobal("fetch", fetchMock);
     render(<EmailSettings />);
-    await userEvent.click(await screen.findByRole("button", { name: "Testar conexão" }));
+    await userEvent.click(await screen.findByRole("button", { name: "Test connection" }));
     expect(await screen.findByText("Conexão validada.")).toBeInTheDocument();
     expect(screen.getAllByDisplayValue("tenant")).toHaveLength(1);
   });
@@ -32,20 +32,20 @@ describe("EmailSettings", () => {
     await userEvent.click(await screen.findByRole("button", { name: /Gmail/ }));
     expect(screen.getByDisplayValue("smtp.gmail.com")).toBeInTheDocument();
     expect(screen.getByDisplayValue("587")).toBeInTheDocument();
-    expect(screen.getAllByPlaceholderText("seuemail@gmail.com")).toHaveLength(2);
-    expect(screen.getByPlaceholderText("Senha de aplicativo do Google")).toHaveValue("");
+    expect(screen.getAllByPlaceholderText("your-email@gmail.com")).toHaveLength(2);
+    expect(screen.getByPlaceholderText("Google app password")).toHaveValue("");
   });
 
   it("explains how to fix a forbidden Outlook send", async () => {
     const fetchMock = vi.fn(async (input: RequestInfo | URL) => String(input).includes("send-test")
-      ? new Response(JSON.stringify({ error: { code: "OUTLOOK_SEND_FORBIDDEN", message: "O Outlook autenticou, mas não autorizou o envio. Conceda Mail.Send." } }), { status: 502 })
+      ? new Response(JSON.stringify({ error: { code: "OUTLOOK_SEND_FORBIDDEN", message: "O Outlook autenticou, mas not autorizou o envio. Conceda Mail.Send." } }), { status: 502 })
       : new Response(JSON.stringify(settings), { status: 200 }));
     vi.stubGlobal("fetch", fetchMock);
     render(<EmailSettings />);
-    const recipient = await screen.findByPlaceholderText("Destinatário do teste");
+    const recipient = await screen.findByPlaceholderText("Test recipient");
     await userEvent.type(recipient, "dev@example.com");
-    await userEvent.click(screen.getByRole("button", { name: "Enviar e-mail de teste" }));
-    expect(await screen.findByText("Permissão de envio necessária")).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "Send email de teste" }));
+    expect(await screen.findByText("Delivery permission required")).toBeInTheDocument();
     expect(screen.getByText(/Application permissions/)).toHaveTextContent("Mail.Send");
     expect(recipient).toHaveValue("dev@example.com");
   });

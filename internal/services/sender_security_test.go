@@ -34,7 +34,7 @@ func newSenderSecurityService(t *testing.T) (*Service, *fakeClock, string) {
 
 func TestSenderIDNormalizationHasNoGeneratedSuffix(t *testing.T) {
 	cases := map[string]string{
-		"  Automação   Financeira  ": "automacao-financeira",
+		"  Automação   Financeira  ": "financial-automation",
 		"Consulta PJe - TRF3":        "consulta-pje-trf3",
 		"Cobrança / Santander":       "cobranca-santander",
 		"---Robô___de@@Consulta---":  "robo-de-consulta",
@@ -46,11 +46,11 @@ func TestSenderIDNormalizationHasNoGeneratedSuffix(t *testing.T) {
 		}
 	}
 	svc, _, _ := newSenderSecurityService(t)
-	item, _, err := svc.CreateSender(context.Background(), "Automação Financeira", "")
+	item, _, err := svc.CreateSender(context.Background(), "Financial Automation", "")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if item.ID != "automacao-financeira" || strings.Contains(item.ID, "-") && strings.HasSuffix(item.ID, "-2") {
+	if item.ID != "financial-automation" || strings.Contains(item.ID, "-") && strings.HasSuffix(item.ID, "-2") {
 		t.Fatalf("unexpected generated ID: %q", item.ID)
 	}
 }
@@ -83,7 +83,7 @@ func TestSenderCreationIsAtomicAndRejectsDuplicateID(t *testing.T) {
 
 func TestSenderKeyIsOnlyReturnedOnceAndNeverPersistedInPlaintext(t *testing.T) {
 	svc, _, dataDir := newSenderSecurityService(t)
-	item, credentials, err := svc.CreateSender(context.Background(), "Worker Seguro", "Descrição")
+	item, credentials, err := svc.CreateSender(context.Background(), "Worker Seguro", "Description")
 	if err != nil {
 		t.Fatal(err)
 	}

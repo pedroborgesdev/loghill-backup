@@ -8,7 +8,7 @@ import { normalizeEvent } from "../../api/events";
 import type { EventDefinition } from "../../types/event";
 
 it("validates stable event keys", () => {
-  expect(isValidEventKey("processamento_finalizado")).toBe(true);
+  expect(isValidEventKey("processing_completed")).toBe(true);
   expect(isValidEventKey("boleto-gerado")).toBe(true);
   expect(isValidEventKey("../segredo")).toBe(false);
   expect(isValidEventKey("Com Espaço")).toBe(false);
@@ -25,7 +25,7 @@ it("copies an event badge without painting the whole log row", () => {
 
 it("keeps an existing event key immutable", () => {
   render(<EventKeyField value="evento_existente" onChange={vi.fn()} immutable />);
-  expect(screen.getByLabelText("Chave do evento")).toHaveAttribute("readonly");
+  expect(screen.getByLabelText("Event key")).toHaveAttribute("readonly");
   expect(screen.getByText(/imutável depois da criação/i)).toBeInTheDocument();
 });
 

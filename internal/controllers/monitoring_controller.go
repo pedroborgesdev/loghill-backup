@@ -15,7 +15,7 @@ func (a *APIController) monitoringError(c *gin.Context, err error) {
 	case errors.As(err, &validation):
 		c.JSON(http.StatusUnprocessableEntity, errorBodyWithField(c, "INVALID_MONITORING_RULE", validation.Message, validation.Field))
 	case errors.Is(err, monitoring.ErrNotFound):
-		c.JSON(http.StatusNotFound, errBody(c, "MONITORING_RULE_NOT_FOUND", "Regra de monitoramento não encontrada."))
+		c.JSON(http.StatusNotFound, errBody(c, "MONITORING_RULE_NOT_FOUND", "Monitoring rule not found."))
 	default:
 		a.fail(c, err)
 	}
@@ -115,7 +115,7 @@ func (a *APIController) TestMonitoringRule(c *gin.Context) {
 		return
 	}
 	if in.ExecuteActions && c.GetHeader("X-Monitoring-Execute-Actions") != "confirm" {
-		c.JSON(http.StatusForbidden, errBody(c, "MONITORING_ACTION_CONFIRMATION_REQUIRED", "Confirme explicitamente a execução das ações."))
+		c.JSON(http.StatusForbidden, errBody(c, "MONITORING_ACTION_CONFIRMATION_REQUIRED", "Explicitly confirm action execution."))
 		return
 	}
 	result, err := a.monitoring.Test(c.Request.Context(), rule, in)

@@ -56,13 +56,13 @@ describe("configurações do sistema", () => {
     const { rerender } = render(
       <SettingsButton collapsed={false} onOpen={onOpen} />,
     );
-    expect(screen.getByText("Configurações")).toBeInTheDocument();
+    expect(screen.getByText("Settings")).toBeInTheDocument();
 
     rerender(<SettingsButton collapsed onOpen={onOpen} />);
-    const button = screen.getByRole("button", { name: "Abrir configurações" });
-    expect(screen.queryByText("Configurações")).not.toBeInTheDocument();
+    const button = screen.getByRole("button", { name: "Open settings" });
+    expect(screen.queryByText("Settings")).not.toBeInTheDocument();
     await userEvent.hover(button);
-    expect(screen.getByRole("tooltip")).toHaveTextContent("Configurações");
+    expect(screen.getByRole("tooltip")).toHaveTextContent("Settings");
     await userEvent.click(button);
     expect(onOpen).toHaveBeenCalledWith(button);
   });
@@ -82,10 +82,10 @@ describe("configurações do sistema", () => {
 
     expect(await screen.findByDisplayValue("10000")).toBeInTheDocument();
     expect(screen.queryByRole("tooltip")).not.toBeInTheDocument();
-    await userEvent.click(screen.getAllByRole("button", { name: "Geral" })[0]);
-    expect(screen.getByRole("heading", { name: "Geral" })).toBeInTheDocument();
-    expect(screen.getByText("Limite máximo atual")).toBeInTheDocument();
-    await userEvent.click(screen.getAllByRole("button", { name: "Inatividade" })[0]);
+    await userEvent.click(screen.getAllByRole("button", { name: "General" })[0]);
+    expect(screen.getByRole("heading", { name: "General" })).toBeInTheDocument();
+    expect(screen.getByText("Current maximum limit")).toBeInTheDocument();
+    await userEvent.click(screen.getAllByRole("button", { name: "Inactivity" })[0]);
     expect(screen.getByDisplayValue("2000")).toBeInTheDocument();
   });
 
@@ -93,36 +93,36 @@ describe("configurações do sistema", () => {
     const user = userEvent.setup();
     renderDialog();
     let maximum = await screen.findByRole("spinbutton", {
-      name: "Limite máximo de logs",
+      name: "Maximum log limit",
     });
 
     await user.click(
-      screen.getByRole("button", { name: "Diminuir Limite máximo de logs" }),
+      screen.getByRole("button", { name: "Diminuir Maximum log limit" }),
     );
     expect(maximum).toHaveValue(9_999);
     await user.click(
-      screen.getByRole("button", { name: "Aumentar Limite máximo de logs" }),
+      screen.getByRole("button", { name: "Aumentar Maximum log limit" }),
     );
     expect(maximum).toHaveValue(10_000);
 
     await user.clear(maximum);
     await user.type(maximum, "1000");
-    await user.click(screen.getAllByRole("button", { name: "Inatividade" })[0]);
+    await user.click(screen.getAllByRole("button", { name: "Inactivity" })[0]);
     expect(
-      screen.getByText("A quantidade preservada não pode ser maior que o limite máximo."),
+      screen.getByText("The retained amount cannot exceed the maximum limit."),
     ).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Salvar alterações" })).toBeDisabled();
 
     await user.click(
-      screen.getAllByRole("button", { name: "Armazenamento de logs" })[0],
+      screen.getAllByRole("button", { name: "Log storage" })[0],
     );
-    maximum = screen.getByRole("spinbutton", { name: "Limite máximo de logs" });
+    maximum = screen.getByRole("spinbutton", { name: "Maximum log limit" });
     await user.clear(maximum);
     await user.type(maximum, "0");
     expect(screen.getByText(/Sem limite: o arquivo poderá continuar crescendo/)).toBeInTheDocument();
 
     await user.click(
-      screen.getByRole("button", { name: "Unidade de Limite máximo de logs" }),
+      screen.getByRole("button", { name: "Unidade de Maximum log limit" }),
     );
     await user.click(screen.getByRole("option", { name: "MB" }));
     expect(maximum).toHaveValue(0);
@@ -130,20 +130,20 @@ describe("configurações do sistema", () => {
 
     await user.clear(maximum);
     await user.type(maximum, "10001");
-    expect(screen.getByText("Informe um valor entre 0 e 10.000.")).toBeInTheDocument();
+    expect(screen.getByText("Enter a value between 0 and 10,000.")).toBeInTheDocument();
 
     fireEvent.change(maximum, { target: { value: "1.5" } });
-    expect(screen.getByText("O valor deve ser um número inteiro.")).toBeInTheDocument();
+    expect(screen.getByText("The value must be an integer.")).toBeInTheDocument();
 
     await user.clear(maximum);
     await user.type(maximum, "-1");
-    expect(screen.getByText("Informe um valor entre 0 e 10.000.")).toBeInTheDocument();
+    expect(screen.getByText("Enter a value between 0 and 10,000.")).toBeInTheDocument();
   });
 
   it("protege alterações, fecha com Escape e restaura o foco", async () => {
     const user = userEvent.setup();
     const trigger = document.createElement("button");
-    trigger.textContent = "Origem";
+    trigger.textContent = "Source";
     document.body.appendChild(trigger);
     trigger.focus();
     const onClose = vi.fn();
@@ -161,7 +161,7 @@ describe("configurações do sistema", () => {
     }
     render(<ClosingHarness />);
     const maximum = await screen.findByRole("spinbutton", {
-      name: "Limite máximo de logs",
+      name: "Maximum log limit",
     });
     await user.clear(maximum);
     await user.type(maximum, "9000");
@@ -176,17 +176,17 @@ describe("configurações do sistema", () => {
     const saveButton = screen.getByRole("button", { name: "Salvar alterações" });
     saveButton.focus();
     await user.tab();
-    expect(screen.getAllByRole("button", { name: "Fechar configurações" })[1]).toHaveFocus();
+    expect(screen.getAllByRole("button", { name: "Close settings" })[1]).toHaveFocus();
 
     await user.keyboard("{Escape}");
     expect(screen.getByRole("alertdialog", { name: "Descartar alterações?" })).toBeInTheDocument();
-    await user.click(screen.getByRole("button", { name: "Continuar editando" }));
+    await user.click(screen.getByRole("button", { name: "Continue editando" }));
     expect(onClose).not.toHaveBeenCalled();
 
     await user.click(screen.getByRole("button", { name: "Cancelar" }));
     await user.click(screen.getByRole("button", { name: "Descartar" }));
     expect(onClose).toHaveBeenCalledOnce();
-    expect(screen.queryByRole("dialog", { name: "Configurações" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("dialog", { name: "Settings" })).not.toBeInTheDocument();
     expect(trigger).toHaveFocus();
     trigger.remove();
   });
@@ -195,7 +195,7 @@ describe("configurações do sistema", () => {
     const user = userEvent.setup();
     renderDialog();
     const maximum = await screen.findByRole("spinbutton", {
-      name: "Limite máximo de logs",
+      name: "Maximum log limit",
     });
     await user.clear(maximum);
     await user.type(maximum, "9000");
@@ -211,25 +211,25 @@ describe("configurações do sistema", () => {
       delete_inactive_after_days: 7,
     });
     expect(maximum).toBeInTheDocument();
-    expect(await screen.findByText("Configurações salvas com sucesso.")).toBeInTheDocument();
+    expect(await screen.findByText("Settings saved successfully.")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Salvar alterações" })).toBeDisabled();
   });
 
-  it("preserva o valor digitado quando a API rejeita o salvamento", async () => {
+  it("preserva o value digitado quando a API rejeita o salvamento", async () => {
     const user = userEvent.setup();
     updateMock.mockRejectedValue(
-      new APIError(422, "INVALID_SETTINGS", "Valor rejeitado pelo servidor.", "log_limit.value"),
+      new APIError(422, "INVALID_SETTINGS", "Value rejeitado pelo servidor.", "log_limit.value"),
     );
     renderDialog();
     const maximum = await screen.findByRole("spinbutton", {
-      name: "Limite máximo de logs",
+      name: "Maximum log limit",
     });
     await user.clear(maximum);
     await user.type(maximum, "9000");
     await user.click(screen.getByRole("button", { name: "Salvar alterações" }));
 
-    await waitFor(() => expect(screen.getAllByText("Valor rejeitado pelo servidor.")).not.toHaveLength(0));
+    await waitFor(() => expect(screen.getAllByText("Value rejeitado pelo servidor.")).not.toHaveLength(0));
     expect(maximum).toHaveValue(9000);
-    expect(screen.getByRole("dialog", { name: "Configurações" })).toBeInTheDocument();
+    expect(screen.getByRole("dialog", { name: "Settings" })).toBeInTheDocument();
   });
 });

@@ -173,14 +173,14 @@ func ValidateSettings(value Settings) error {
 		value.InactivePreservation.Value > value.LogLimit.Value {
 		return &SettingsValidationError{
 			Field:   "inactive_preservation.value",
-			Message: "A quantidade preservada não pode ser maior que o limite máximo.",
+			Message: "The retained amount cannot exceed the maximum limit.",
 		}
 	}
 	if value.InactiveAfterSeconds < 1 || value.InactiveAfterSeconds > 86_400 {
-		return &SettingsValidationError{Field: "inactive_after_seconds", Message: "Informe um tempo entre 1 e 86.400 segundos."}
+		return &SettingsValidationError{Field: "inactive_after_seconds", Message: "Enter a duration between 1 and 86,400 seconds."}
 	}
 	if value.DeleteInactiveDays < 1 || value.DeleteInactiveDays > 3_650 {
-		return &SettingsValidationError{Field: "delete_inactive_after_days", Message: "Informe um prazo entre 1 e 3.650 dias."}
+		return &SettingsValidationError{Field: "delete_inactive_after_days", Message: "Enter a period between 1 and 3,650 days."}
 	}
 	return nil
 }
@@ -199,7 +199,7 @@ func ValidateStoredSettings(value Settings) error {
 		value.InactivePreservation.Value > value.LogLimit.Value {
 		return &SettingsValidationError{
 			Field:   "inactive_preservation.value",
-			Message: "A quantidade preservada não pode ser maior que o limite máximo.",
+			Message: "The retained amount cannot exceed the maximum limit.",
 		}
 	}
 	return nil
@@ -207,12 +207,12 @@ func ValidateStoredSettings(value Settings) error {
 
 func validateNumberUnit(field string, value NumberUnitValue, allowLegacy bool) error {
 	if value.Unit != StorageLines && value.Unit != StorageMB {
-		return &SettingsValidationError{Field: field + ".unit", Message: "Unidade inválida."}
+		return &SettingsValidationError{Field: field + ".unit", Message: "Invalid unit."}
 	}
 	if value.Value < 0 || (!allowLegacy && value.Value > 10_000) {
 		return &SettingsValidationError{
 			Field:   field + ".value",
-			Message: fmt.Sprintf("Informe um valor entre 0 e %s.", "10.000"),
+			Message: fmt.Sprintf("Enter a value between 0 and %s.", "10.000"),
 		}
 	}
 	return nil

@@ -34,7 +34,7 @@ func (e *fakeExecutor) ExecuteMonitoringAction(context.Context, Rule, Action, do
 }
 func raw(v any) json.RawMessage { b, _ := json.Marshal(v); return b }
 func baseInput() RuleInput {
-	return RuleInput{Name: "Erro de conexão", SenderIDs: []string{"sender-a"}, Enabled: true, Expression: ExpressionGroup{Operator: LogicalAnd, Nodes: []ExpressionNode{{Condition: &Condition{Type: ConditionSeverity, Operator: "equals", Value: raw(map[string]any{"severity": "ERROR"})}}, {Connector: LogicalAnd, Condition: &Condition{Type: ConditionMessage, Operator: "contains", Value: raw(map[string]any{"text": "ECONNRESET"}), Negated: false}}}}, Actions: []Action{{Type: ActionEmail, Config: raw(map[string]any{"recipients": []string{"ops@example.com"}, "subject": "Falha", "message": "Falha detectada"})}}}
+	return RuleInput{Name: "Erro de conexão", SenderIDs: []string{"sender-a"}, Enabled: true, Expression: ExpressionGroup{Operator: LogicalAnd, Nodes: []ExpressionNode{{Condition: &Condition{Type: ConditionSeverity, Operator: "equals", Value: raw(map[string]any{"severity": "ERROR"})}}, {Connector: LogicalAnd, Condition: &Condition{Type: ConditionMessage, Operator: "contains", Value: raw(map[string]any{"text": "ECONNRESET"}), Negated: false}}}}, Actions: []Action{{Type: ActionEmail, Config: raw(map[string]any{"recipients": []string{"ops@example.com"}, "subject": "Failed", "message": "Failed detectada"})}}}
 }
 func testService(t *testing.T) (*Service, *fakeClock, *fakeExecutor) {
 	t.Helper()

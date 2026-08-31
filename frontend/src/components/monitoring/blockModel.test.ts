@@ -20,7 +20,7 @@ describe("monitoring block model", () => {
     const action = createBlock("send_email");
     const blocks = insertBlock(insertBlock([], trigger).blocks, action).blocks;
     const problems = validateBlocks(blocks);
-    expect(problems.get(trigger.id)).toBe("Selecione um evento.");
+    expect(problems.get(trigger.id)).toBe("Select an event.");
     expect(problems.get(action.id)).toMatch(/destinatário/i);
     expect(trigger.id).not.toBe(action.id);
   });

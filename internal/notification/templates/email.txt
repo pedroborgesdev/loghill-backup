@@ -3,19 +3,19 @@ LOGHILL — {{.Kicker}}
 {{.Headline}}
 {{.Description}}
 
-MENSAGEM
+MESSAGE
 {{.Message}}
 
-{{if .ProviderTest}}Provedor{{else}}Sender{{end}}: {{.SenderName}}
-{{if .ProviderTest}}Integração{{else}}Identificador{{end}}: {{.SenderID}}
+{{if .ProviderTest}}Provider{{else}}Sender{{end}}: {{.SenderName}}
+{{if .ProviderTest}}Integration{{else}}Identifier{{end}}: {{.SenderID}}
 Status: {{.SenderStatus}}
 {{if not .ProviderTest}}Severidade: {{.Severity}}
-Horário do log: {{.Timestamp}}
-{{end}}Enviado em: {{.SentAt}}
+Time do log: {{.Timestamp}}
+{{end}}Sent em: {{.SentAt}}
 
 {{if .HasMetadata}}METADADOS
 {{.Metadata}}
 
 {{end}}{{.ButtonLabel}}: {{.Link}}
 
-Enviado automaticamente pelo LogHill.
+Sent automaticamente pelo LogHill.

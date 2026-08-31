@@ -34,7 +34,7 @@ func RateLimit(cfg config.Config) gin.HandlerFunc {
 		blocked := current.count > cfg.RateRequests
 		mu.Unlock()
 		if blocked {
-			c.AbortWithStatusJSON(429, errorBody(c, "RATE_LIMIT_EXCEEDED", "Limite de requisições excedido"))
+			c.AbortWithStatusJSON(429, errorBody(c, "RATE_LIMIT_EXCEEDED", "Request limit exceeded"))
 			return
 		}
 		c.Next()

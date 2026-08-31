@@ -66,7 +66,7 @@ describe("LogViewer Follow", () => {
     });
     expect(onAutoScrollChange).toHaveBeenCalledTimes(1);
 
-    fireEvent.click(screen.getByRole("button", { name: "Ir para os logs mais recentes" }));
+    fireEvent.click(screen.getByRole("button", { name: "Go to newest logs" }));
     expect(onAutoScrollChange).toHaveBeenLastCalledWith(true);
   });
 
@@ -155,7 +155,7 @@ describe("LogViewer Follow", () => {
         onAutoScrollChange={vi.fn()}
       />,
     );
-    fireEvent.click(screen.getByRole("button", { name: /Recentes embaixo/i }));
+    fireEvent.click(screen.getByRole("button", { name: /Newest at bottom/i }));
     const logWindow = screen.getByRole("log", { name: "Logs" });
     logWindow.scrollTop = 29;
     fireEvent.scroll(logWindow);

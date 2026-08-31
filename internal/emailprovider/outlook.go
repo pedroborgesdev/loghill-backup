@@ -71,7 +71,7 @@ func (o *Outlook) Provider() domain.EmailProviderType { return domain.EmailProvi
 func (o *Outlook) TestConnection(ctx context.Context) error {
 	runtime, err := o.settings.Runtime()
 	if err != nil {
-		return &Error{Code: "OUTLOOK_CONFIGURATION_ERROR", Message: "Não foi possível ler a configuração segura do Outlook."}
+		return &Error{Code: "OUTLOOK_CONFIGURATION_ERROR", Message: "Unable to read the secure Outlook configuration."}
 	}
 	if !complete(runtime) {
 		return ErrNotConfigured
@@ -89,7 +89,7 @@ func (o *Outlook) TestConnection(ctx context.Context) error {
 func (o *Outlook) Send(ctx context.Context, message domain.EmailMessage) error {
 	runtime, err := o.settings.Runtime()
 	if err != nil {
-		return &Error{Code: "OUTLOOK_CONFIGURATION_ERROR", Message: "Não foi possível ler a configuração segura do Outlook."}
+		return &Error{Code: "OUTLOOK_CONFIGURATION_ERROR", Message: "Unable to read the secure Outlook configuration."}
 	}
 	if !runtime.Enabled || !complete(runtime) {
 		return ErrNotConfigured
@@ -112,9 +112,9 @@ func (o *Outlook) Send(ctx context.Context, message domain.EmailMessage) error {
 	response, err := o.client.Do(request)
 	if err != nil {
 		if timedOut(err) {
-			return &Error{Code: "OUTLOOK_TIMEOUT", Message: "O serviço de e-mail não respondeu dentro do tempo esperado."}
+			return &Error{Code: "OUTLOOK_TIMEOUT", Message: "The email service did not respond within the expected time."}
 		}
-		return &Error{Code: "OUTLOOK_REQUEST_FAILED", Message: "O Outlook não respondeu à tentativa de envio."}
+		return &Error{Code: "OUTLOOK_REQUEST_FAILED", Message: "Outlook did not respond to the delivery attempt."}
 	}
 	defer response.Body.Close()
 	_, _ = io.Copy(io.Discard, io.LimitReader(response.Body, 64*1024))
@@ -124,13 +124,13 @@ func (o *Outlook) Send(ctx context.Context, message domain.EmailMessage) error {
 		}
 		switch response.StatusCode {
 		case http.StatusForbidden:
-			return &Error{Code: "OUTLOOK_SEND_FORBIDDEN", Message: "O Outlook autenticou, mas não autorizou o envio. Conceda a permissão de aplicativo Mail.Send com consentimento administrativo e confirme que a mailbox remetente está no escopo permitido do Exchange."}
+			return &Error{Code: "OUTLOOK_SEND_FORBIDDEN", Message: "Outlook authenticated but did not authorize delivery. Grant the Mail.Send application permission with administrator consent and confirm that the sender mailbox is within the allowed Exchange scope."}
 		case http.StatusNotFound:
-			return &Error{Code: "OUTLOOK_MAILBOX_NOT_FOUND", Message: "A mailbox remetente não foi encontrada no Microsoft 365. Confirme o e-mail e se ele possui uma caixa do Exchange Online."}
+			return &Error{Code: "OUTLOOK_MAILBOX_NOT_FOUND", Message: "The sender mailbox was not found in Microsoft 365. Confirm the email address and that it has an Exchange Online mailbox."}
 		case http.StatusTooManyRequests:
-			return &Error{Code: "OUTLOOK_THROTTLED", Message: "O Microsoft 365 limitou temporariamente os envios. Aguarde alguns instantes e tente novamente."}
+			return &Error{Code: "OUTLOOK_THROTTLED", Message: "Microsoft 365 temporarily throttled deliveries. Wait a few moments and try again."}
 		default:
-			return &Error{Code: "OUTLOOK_SEND_FAILED", Message: fmt.Sprintf("O Outlook recusou o envio (HTTP %d).", response.StatusCode)}
+			return &Error{Code: "OUTLOOK_SEND_FAILED", Message: fmt.Sprintf("Outlook rejected delivery (HTTP %d).", response.StatusCode)}
 		}
 	}
 	return nil
@@ -139,13 +139,13 @@ func (o *Outlook) Send(ctx context.Context, message domain.EmailMessage) error {
 func buildMIME(runtime emailconfig.Runtime, message domain.EmailMessage) ([]byte, error) {
 	sender, valid := validation.EmailAddress(runtime.SenderEmail)
 	if !valid || strings.ContainsAny(runtime.SenderName, "\r\n") || strings.ContainsAny(message.Subject, "\r\n") || len(message.To) == 0 {
-		return nil, &Error{Code: "OUTLOOK_INVALID_MESSAGE", Message: "A mensagem de e-mail contém cabeçalhos inválidos."}
+		return nil, &Error{Code: "OUTLOOK_INVALID_MESSAGE", Message: "The email message contains invalid headers."}
 	}
 	recipients := make([]string, 0, len(message.To))
 	for _, raw := range message.To {
 		recipient, recipientValid := validation.EmailAddress(raw)
 		if !recipientValid {
-			return nil, &Error{Code: "OUTLOOK_INVALID_MESSAGE", Message: "A mensagem possui um destinatário inválido."}
+			return nil, &Error{Code: "OUTLOOK_INVALID_MESSAGE", Message: "The message has an invalid recipient."}
 		}
 		recipients = append(recipients, recipient)
 	}
@@ -206,21 +206,21 @@ func (o *Outlook) accessToken(ctx context.Context, runtime emailconfig.Runtime) 
 	response, err := o.client.Do(request)
 	if err != nil {
 		if timedOut(err) {
-			return "", &Error{Code: "OUTLOOK_TIMEOUT", Message: "O Microsoft 365 não respondeu dentro do tempo esperado."}
+			return "", &Error{Code: "OUTLOOK_TIMEOUT", Message: "Microsoft 365 did not respond within the expected time."}
 		}
-		return "", &Error{Code: "OUTLOOK_AUTH_FAILED", Message: "Não foi possível autenticar no Microsoft 365."}
+		return "", &Error{Code: "OUTLOOK_AUTH_FAILED", Message: "Unable to authenticate with Microsoft 365."}
 	}
 	defer response.Body.Close()
 	data, readErr := io.ReadAll(io.LimitReader(response.Body, 64*1024))
 	if readErr != nil {
-		return "", &Error{Code: "OUTLOOK_AUTH_FAILED", Message: "A resposta de autenticação do Microsoft 365 é inválida."}
+		return "", &Error{Code: "OUTLOOK_AUTH_FAILED", Message: "The Microsoft 365 authentication response is invalid."}
 	}
 	if response.StatusCode < 200 || response.StatusCode >= 300 {
 		return "", &Error{Code: "OUTLOOK_AUTH_FAILED", Message: fmt.Sprintf("O Microsoft 365 recusou as credenciais (HTTP %d).", response.StatusCode)}
 	}
 	var value tokenValue
 	if json.Unmarshal(data, &value) != nil || value.AccessToken == "" || value.ExpiresIn < 1 {
-		return "", &Error{Code: "OUTLOOK_AUTH_FAILED", Message: "A resposta de autenticação do Microsoft 365 é inválida."}
+		return "", &Error{Code: "OUTLOOK_AUTH_FAILED", Message: "The Microsoft 365 authentication response is invalid."}
 	}
 	o.token = value.AccessToken
 	o.signature = signature
@@ -258,7 +258,7 @@ func validateMailSendRole(token string) error {
 			return nil
 		}
 	}
-	return &Error{Code: "OUTLOOK_MAIL_SEND_PERMISSION_MISSING", Message: "As credenciais são válidas, mas o aplicativo não possui a permissão de aplicativo Mail.Send no token. Adicione a permissão no Microsoft Graph e conceda o consentimento do administrador."}
+	return &Error{Code: "OUTLOOK_MAIL_SEND_PERMISSION_MISSING", Message: "The credentials are valid, but the application token does not include the Mail.Send application permission. Add the permission in Microsoft Graph and grant administrator consent."}
 }
 
 func (o *Outlook) invalidateToken() {

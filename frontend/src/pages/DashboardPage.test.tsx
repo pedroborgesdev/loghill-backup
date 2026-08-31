@@ -15,18 +15,18 @@ describe("entrada reutilizável de cadastro", () => {
   afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
 
   for (const path of ["/", "/senders"]) {
-    it(`mostra Novo sender em ${path}`, async () => {
+    it(`mostra New sender em ${path}`, async () => {
       render(<MemoryRouter initialEntries={[path]}><ShellContext.Provider value={{ refreshToken: 0, refreshing: false, setRefreshing: vi.fn(), streamState: null, setStreamState: vi.fn(), openEmailSettings: vi.fn() }}><DashboardPage /></ShellContext.Provider></MemoryRouter>);
-      expect(await screen.findByRole("button", { name: "Novo sender" })).toBeInTheDocument();
+      expect(await screen.findByRole("button", { name: "New sender" })).toBeInTheDocument();
     });
   }
 
-  it("mostra contadores de instâncias em vez de status de senders", async () => {
+  it("mostra contadores de instances em vez de status de senders", async () => {
     render(<MemoryRouter initialEntries={["/"]}><ShellContext.Provider value={{ refreshToken: 0, refreshing: false, setRefreshing: vi.fn(), streamState: null, setStreamState: vi.fn(), openEmailSettings: vi.fn() }}><DashboardPage /></ShellContext.Provider></MemoryRouter>);
-    const active = await screen.findByText("Instâncias");
-    const inactive = screen.getByText("Inativas");
+    const active = await screen.findByText("Instances");
+    const inactive = screen.getByText("Inactive");
     await waitFor(() => expect(active.parentElement?.parentElement).toHaveTextContent("3"));
     expect(inactive.parentElement?.parentElement).toHaveTextContent("2");
-    expect(screen.queryByText("Expirados")).not.toBeInTheDocument();
+    expect(screen.queryByText("Expireds")).not.toBeInTheDocument();
   });
 });

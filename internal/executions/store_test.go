@@ -70,6 +70,6 @@ func TestCleanupPreservesRunningExecutions(t *testing.T) {
 		t.Fatal("execução em andamento foi removida")
 	}
 	if _, ok := store.Get(finished.ID); ok {
-		t.Fatal("execução expirada não foi removida")
+		t.Fatal("execução expirada not foi removida")
 	}
 }

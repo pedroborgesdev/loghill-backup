@@ -89,7 +89,7 @@ func (s *Store) loadRules() error {
 }
 
 // migrateLogReceived converte o gatilho genérico antigo, gravado como
-// "severity in [todas as severities]", no tipo dedicado log_received.
+// "severity in [all severities]", no tipo dedicado log_received.
 func migrateLogReceived(g *ExpressionGroup) bool {
 	changed := false
 	for i := range g.Nodes {

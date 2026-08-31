@@ -15,7 +15,7 @@ export function SeveritySelector({ value, onChange, disabled = false }: { value:
   const toggle = (severity: LogSeverity) => onChange(value.includes(severity) ? value.filter((item) => item !== severity) : [...value, severity]);
   return (
     <fieldset disabled={disabled}>
-      <legend className="mb-2 text-xs font-medium text-zinc-300">Níveis de log</legend>
+      <legend className="mb-2 text-xs font-medium text-zinc-300">Log levels</legend>
       <div className="flex flex-wrap gap-2">
         {severities.map((severity) => {
           const selected = value.includes(severity);

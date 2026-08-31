@@ -27,7 +27,7 @@ function groupStatus(items: Sender[]): SenderStatus {
 export function groupSenders(items: Sender[]): SenderGroup[] {
   const groups = new Map<string, Sender[]>();
   for (const sender of items) {
-    const key = sender.name.trim().toLocaleLowerCase("pt-BR");
+    const key = sender.name.trim().toLocaleLowerCase("en-US");
     const current = groups.get(key);
     if (current) current.push(sender);
     else groups.set(key, [sender]);

@@ -131,7 +131,7 @@ func TestAlertAndEmailSettingsEndpoints(t *testing.T) {
 func TestDeleteSenderReportsAndRemovesAlertDependencies(t *testing.T) {
 	fixture := newAlertHTTPFixture(t, false)
 	defer fixture.dispatcher.Shutdown(context.Background())
-	body := `{"name":"Regra dependente","sender_ids":["` + fixture.sender.ID + `"],"severities":["ERROR"],"recipients":["dev@example.com"],"provider":"outlook","enabled":true}`
+	body := `{"name":"Rule dependente","sender_ids":["` + fixture.sender.ID + `"],"severities":["ERROR"],"recipients":["dev@example.com"],"provider":"outlook","enabled":true}`
 	createdResponse := alertRequest(fixture.router, http.MethodPost, "/api/v1/alerts", body, "")
 	if createdResponse.Code != http.StatusCreated {
 		t.Fatalf("create=%d %s", createdResponse.Code, createdResponse.Body.String())

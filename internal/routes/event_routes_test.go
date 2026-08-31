@@ -94,7 +94,7 @@ func eventRequest(router http.Handler, method, path, body, adminKey, senderKey s
 func TestEventEndpointsAndLogIngestion(t *testing.T) {
 	fixture := newEventHTTPFixture(t, false)
 	defer fixture.dispatcher.Shutdown(context.Background())
-	body := `{"name":"Processamento finalizado","key":"processamento_finalizado","sender_ids":["` + fixture.sender.ID + `"],"action_type":"email","recipients":["dev@example.com"],"subject_template":"Finalizado — {{sender.name}}","message_template":"Protocolo: {{metadata.protocolo}}\n{{log.message}}","enabled":true}`
+	body := `{"name":"Processing completed","key":"processing_completed","sender_ids":["` + fixture.sender.ID + `"],"action_type":"email","recipients":["dev@example.com"],"subject_template":"Finalizado — {{sender.name}}","message_template":"Protocol: {{metadata.protocol}}\n{{log.message}}","enabled":true}`
 	response := eventRequest(fixture.router, http.MethodPost, "/api/v1/events", body, "", "")
 	if response.Code != http.StatusCreated {
 		t.Fatalf("create=%d %s", response.Code, response.Body.String())
@@ -106,14 +106,14 @@ func TestEventEndpointsAndLogIngestion(t *testing.T) {
 	if response = eventRequest(fixture.router, http.MethodPost, "/api/v1/events", body, "", ""); response.Code != http.StatusConflict {
 		t.Fatalf("duplicate=%d %s", response.Code, response.Body.String())
 	}
-	if response = eventRequest(fixture.router, http.MethodGet, "/api/v1/events/check-key?key=processamento_finalizado", "", "", ""); response.Code != http.StatusOK || !bytes.Contains(response.Body.Bytes(), []byte(`"available":false`)) {
+	if response = eventRequest(fixture.router, http.MethodGet, "/api/v1/events/check-key?key=processing_completed", "", "", ""); response.Code != http.StatusOK || !bytes.Contains(response.Body.Bytes(), []byte(`"available":false`)) {
 		t.Fatalf("check=%d %s", response.Code, response.Body.String())
 	}
 	updatedBody := `{"name":"Outro nome","key":"outra_chave","sender_ids":["` + fixture.sender.ID + `"],"action_type":"email","recipients":["dev@example.com"],"subject_template":"Finalizado","message_template":"Mensagem","enabled":true}`
 	if response = eventRequest(fixture.router, http.MethodPut, "/api/v1/events/"+created.ID, updatedBody, "", ""); response.Code != http.StatusConflict {
 		t.Fatalf("immutable=%d %s", response.Code, response.Body.String())
 	}
-	validLog := `{"sender":"` + fixture.sender.ID + `","severity":"INFO","message":"concluído","event":"processamento_finalizado","metadata":{"protocolo":"ABC-123"}}`
+	validLog := `{"sender":"` + fixture.sender.ID + `","severity":"INFO","message":"concluído","event":"processing_completed","metadata":{"protocol":"ABC-123"}}`
 	if response = eventRequest(fixture.router, http.MethodPost, "/api/v1/logs", validLog, "", fixture.senderKey); response.Code != http.StatusAccepted {
 		t.Fatalf("log=%d %s", response.Code, response.Body.String())
 	}

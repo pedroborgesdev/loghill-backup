@@ -49,20 +49,20 @@ describe("agrupamento de senders", () => {
     );
 
     const groupRows = screen.getAllByRole("button", {
-      name: "Abrir grupo simulador-teste com 2 instâncias",
+      name: "Abrir grupo simulador-teste com 2 instances",
     });
     await userEvent.click(groupRows[0]);
 
-    expect(screen.getByText("Escolha uma das 2 instâncias")).toBeInTheDocument();
+    expect(screen.getByText("Escolha uma das 2 instances")).toBeInTheDocument();
     expect(screen.getAllByText("simulador-teste-a1")).not.toHaveLength(0);
     expect(screen.getAllByText("simulador-teste-b2")).not.toHaveLength(0);
 
     await userEvent.click(
-      screen.getByRole("button", { name: "Voltar aos grupos" }),
+      screen.getByRole("button", { name: "Back to groups" }),
     );
     expect(
       screen.getAllByRole("button", {
-        name: "Abrir grupo simulador-teste com 2 instâncias",
+        name: "Abrir grupo simulador-teste com 2 instances",
       }),
     ).not.toHaveLength(0);
   });
@@ -78,7 +78,7 @@ describe("agrupamento de senders", () => {
     );
 
     await userEvent.click(
-      screen.getAllByRole("link", { name: "Abrir sender worker" })[0],
+      screen.getAllByRole("link", { name: "Open sender worker" })[0],
     );
 
     expect(screen.getByText("Detalhes do sender")).toBeInTheDocument();

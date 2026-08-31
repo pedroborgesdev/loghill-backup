@@ -13,7 +13,7 @@ func (a *APIController) OpenAPISpec(c *gin.Context) {
 }
 
 func (a *APIController) DocsRedirect(c *gin.Context) {
-	c.Redirect(http.StatusTemporaryRedirect, "/docs/index.html")
+	c.Redirect(http.StatusTimeraryRedirect, "/docs/index.html")
 }
 
 func (a *APIController) Docs(c *gin.Context) {

@@ -58,13 +58,13 @@ func (e *Executor) ExecuteMonitoringAction(ctx context.Context, rule Rule, actio
 			return err
 		}
 		if len(cfg.Recipients) == 0 {
-			return errors.New("ação de e-mail sem destinatários")
+			return errors.New("email action without recipients")
 		}
 		if strings.TrimSpace(cfg.Subject) == "" {
-			cfg.Subject = "Monitoramento: " + rule.Name
+			cfg.Subject = "Monitoring: " + rule.Name
 		}
 		if strings.TrimSpace(cfg.Message) == "" {
-			cfg.Message = "A regra de monitoramento foi atendida."
+			cfg.Message = "The monitoring rule matched."
 		}
 		event := domain.EventDefinition{ID: "evt_monitoring_" + rule.ID, Name: rule.Name, Key: "monitoring_" + rule.ID, Recipients: cfg.Recipients, SubjectTemplate: cfg.Subject, MessageTemplate: cfg.Message, Enabled: true}
 		return e.dispatcher.Dispatch(ctx, domain.Notification{SourceType: domain.NotificationSourceMonitoring, SourceID: rule.ID, Event: event, Sender: sender, Entry: entry, Recipients: cfg.Recipients})
@@ -93,6 +93,6 @@ func (e *Executor) ExecuteMonitoringAction(ctx context.Context, rule Rule, actio
 		e.service.notify(ctx, sender, generated, "", correlation, depth)
 		return nil
 	default:
-		return errors.New("tipo de ação de monitoramento inválido")
+		return errors.New("invalid monitoring action type")
 	}
 }

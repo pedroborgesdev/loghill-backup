@@ -110,12 +110,12 @@ const LogRow = memo(function LogRow({
               aria-expanded={messageExpanded}
             >
               {messageExpanded ? <ChevronUp className="size-3" /> : <ChevronDown className="size-3" />}
-              {messageExpanded ? "Recolher" : "Expandir"}
+              {messageExpanded ? "Collapse" : "Expandir"}
             </button>
           )}
         </div>
         <IconButton
-          label={hasMetadata ? "Exibir metadata" : "Sem metadata"}
+          label={hasMetadata ? "Show metadata" : "No metadata"}
           className={compact ? "!size-6 !rounded" : "!size-7"}
           disabled={!hasMetadata}
           aria-expanded={metadataExpanded}
@@ -124,7 +124,7 @@ const LogRow = memo(function LogRow({
           <Braces className={compact ? "size-3" : "size-3.5"} />
         </IconButton>
         <IconButton
-          label="Copiar mensagem"
+          label="Copy message"
           className={compact ? "!size-6 !rounded" : "!size-7"}
           onClick={() => void navigator.clipboard.writeText(entry.message)}
         >
@@ -137,7 +137,7 @@ const LogRow = memo(function LogRow({
             <span className="text-[10px] uppercase tracking-wider text-zinc-600">Metadata</span>
             <div className="flex items-center gap-1">
               <IconButton
-                label="Copiar metadata"
+                label="Copy metadata"
                 className="size-7"
                 onClick={() =>
                   void navigator.clipboard.writeText(
@@ -148,7 +148,7 @@ const LogRow = memo(function LogRow({
                 <Clipboard className="size-3.5" />
               </IconButton>
               <IconButton
-                label="Copiar JSON completo"
+                label="Copy full JSON"
                 className="size-7"
                 onClick={() =>
                   void navigator.clipboard.writeText(JSON.stringify(entry, null, 2))
@@ -414,11 +414,11 @@ export function LogViewer({
 
   const connection = useMemo(
     () => ({
-      connected: { status: "online" as const, label: "Ao vivo" },
+      connected: { status: "online" as const, label: "Live" },
       reconnecting: { status: "warning" as const, label: "Reconectando" },
       paused: { status: "neutral" as const, label: "Pausado" },
       disconnected: { status: "offline" as const, label: "Offline" },
-      error: { status: "offline" as const, label: "Erro no stream" },
+      error: { status: "offline" as const, label: "Error no stream" },
     })[streamState],
     [streamState],
   );
@@ -433,10 +433,10 @@ export function LogViewer({
         <Button
           onClick={toggleDirection}
           className="h-8 rounded-md px-3 text-xs"
-          title={newestAtBottom ? "Os logs mais recentes aparecem embaixo" : "Os logs mais recentes aparecem no topo"}
+          title={newestAtBottom ? "Newest logs appear at the bottom" : "Newest logs appear at the top"}
         >
           <ArrowUpDown className="size-3.5" />
-          {newestAtBottom ? "Recentes embaixo" : "Recentes no topo"}
+          {newestAtBottom ? "Newest at bottom" : "Newest at top"}
         </Button>
         <Button
           aria-pressed={autoScroll}
@@ -459,8 +459,8 @@ export function LogViewer({
       <div className="flex h-full min-h-0 flex-col">
         {consoleToolbar}
         <EmptyState
-          title="Nenhum log para os filtros selecionados"
-          description="Limpe os filtros ou escolha outro período."
+          title="No logs for the selected filters"
+          description="Clear the filters or choose another period."
         />
       </div>
     );
@@ -476,8 +476,8 @@ export function LogViewer({
             : "h-8 grid-cols-[64px_68px_minmax(0,1fr)_32px_32px] gap-2 px-3 text-[10px] sm:grid-cols-[86px_68px_minmax(0,1fr)_32px_32px]"
         }`}
       >
-        <span>Horário</span><span>Severity</span><span>Mensagem</span>
-        <span className="sr-only">Metadata</span><span className="sr-only">Ações</span>
+        <span>Time</span><span>Severity</span><span>Message</span>
+        <span className="sr-only">Metadata</span><span className="sr-only">Actions</span>
       </div>
       <div
         ref={scrollElement}
@@ -549,7 +549,7 @@ export function LogViewer({
           </button>
         )}
         <IconButton
-          label="Ir para os logs mais recentes"
+          label="Go to newest logs"
           className="pointer-events-auto border-zinc-700 bg-zinc-900 shadow-lg shadow-black/30"
           onClick={() => goToLatest(true)}
         >

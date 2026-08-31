@@ -115,7 +115,7 @@ func normalizeDisplayName(value string) (string, error) {
 	value = strings.Join(strings.Fields(strings.TrimSpace(value)), " ")
 	length := len([]rune(value))
 	if length < 3 || length > 80 {
-		return "", &SenderValidationError{Field: "name", Message: "O nome deve possuir entre 3 e 80 caracteres."}
+		return "", &SenderValidationError{Field: "name", Message: "The name must be between 3 and 80 characters."}
 	}
 	return value, nil
 }
@@ -173,11 +173,11 @@ func (s *Service) CreateSender(ctx context.Context, name, description string) (d
 	}
 	id, err := NormalizeName(displayName)
 	if err != nil {
-		return domain.Sender{}, SenderCredentials{}, &SenderValidationError{Field: "name", Message: "O nome não gera um identificador válido."}
+		return domain.Sender{}, SenderCredentials{}, &SenderValidationError{Field: "name", Message: "The name does not produce a valid identifier."}
 	}
 	description = strings.TrimSpace(description)
 	if len([]rune(description)) > 250 {
-		return domain.Sender{}, SenderCredentials{}, &SenderValidationError{Field: "description", Message: "A descrição deve possuir no máximo 250 caracteres."}
+		return domain.Sender{}, SenderCredentials{}, &SenderValidationError{Field: "description", Message: "The description must be at most 250 characters."}
 	}
 	key, hash, prefix, err := generateSenderKey()
 	if err != nil {
@@ -217,7 +217,7 @@ func (s *Service) UpdateSender(ctx context.Context, id, name, description string
 	}
 	description = strings.TrimSpace(description)
 	if len([]rune(description)) > 250 {
-		return domain.Sender{}, &SenderValidationError{Field: "description", Message: "A descrição deve possuir no máximo 250 caracteres."}
+		return domain.Sender{}, &SenderValidationError{Field: "description", Message: "The description must be at most 250 characters."}
 	}
 	lock := s.locks.Get(id)
 	lock.Lock()

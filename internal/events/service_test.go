@@ -70,7 +70,7 @@ func eventFixture(t *testing.T) (*Service, string, string, string) {
 }
 
 func validInput(key string, senders ...string) domain.EventInput {
-	return domain.EventInput{Name: "Processamento finalizado", Key: key, SenderIDs: senders, ActionType: domain.EventActionEmail, Recipients: []string{"dev@example.com"}, SubjectTemplate: "Finalizado — {{sender.name}}", MessageTemplate: "Protocolo: {{metadata.protocolo}}\n{{log.message}}", Enabled: true}
+	return domain.EventInput{Name: "Processing completed", Key: key, SenderIDs: senders, ActionType: domain.EventActionEmail, Recipients: []string{"dev@example.com"}, SubjectTemplate: "Finalizado — {{sender.name}}", MessageTemplate: "Protocol: {{metadata.protocol}}\n{{log.message}}", Enabled: true}
 }
 
 func TestEventWithoutEmailCanBeActive(t *testing.T) {
@@ -87,7 +87,7 @@ func TestEventWithoutEmailCanBeActive(t *testing.T) {
 func TestEventCRUDMatchingAndKeyRules(t *testing.T) {
 	service, _, senderA, senderB := eventFixture(t)
 	ctx := context.Background()
-	event, err := service.Create(ctx, validInput("processamento_finalizado", senderA, senderB))
+	event, err := service.Create(ctx, validInput("processing_completed", senderA, senderB))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -119,7 +119,7 @@ func TestEventCRUDMatchingAndKeyRules(t *testing.T) {
 func TestEventValidationPersistenceAndSenderRemoval(t *testing.T) {
 	service, dir, senderA, _ := eventFixture(t)
 	ctx := context.Background()
-	if _, err := service.Create(ctx, validInput("Chave Inválida", senderA)); err == nil {
+	if _, err := service.Create(ctx, validInput("Key Inválida", senderA)); err == nil {
 		t.Fatal("invalid key accepted")
 	}
 	if _, err := service.Create(ctx, validInput("revogado_evento", "revoked")); err == nil {

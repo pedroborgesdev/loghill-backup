@@ -45,24 +45,24 @@ func (t *Template) Render(value domain.Notification) (domain.EmailMessage, error
 	}
 	theme := themeFor(value.Entry.Severity)
 	link := t.publicURL + "/senders/" + url.PathEscape(value.Sender.ID) + "?severity=" + url.QueryEscape(string(value.Entry.Severity))
-	description := fmt.Sprintf("A regra “%s” encontrou um novo registro que merece sua atenção.", value.Alert.Name)
-	kicker := "ALERTA DE LOG"
+	description := fmt.Sprintf("Rule “%s” found a new record that requires your attention.", value.Alert.Name)
+	kicker := "LOG ALERT"
 	if value.Test {
-		kicker = "TESTE DE ALERTA"
-		description = fmt.Sprintf("Este é um envio de teste da regra “%s”. Nenhuma ocorrência real foi registrada.", value.Alert.Name)
+		kicker = "ALERT TEST"
+		description = fmt.Sprintf("This is a test delivery for rule “%s”. No real occurrence was recorded.", value.Alert.Name)
 	}
 	data := templateData{
 		AlertName: value.Alert.Name, SenderName: value.Sender.Name, SenderID: value.Sender.ID,
 		SenderStatus: statusLabel(value.Sender.Status), Severity: string(value.Entry.Severity),
 		Message: value.Entry.Message, Timestamp: formatEmailTime(value.Entry.Timestamp), SentAt: formatEmailTime(time.Now()),
 		Metadata: string(metadata), Link: link, LogoURL: t.publicURL + "/loghill.png",
-		Kicker: kicker, Headline: theme.Headline, Description: description, ButtonLabel: "Abrir logs do sender",
+		Kicker: kicker, Headline: theme.Headline, Description: description, ButtonLabel: "Open sender logs",
 		SeverityColor: theme.Color, SeverityBackground: theme.Background, SeverityBorder: theme.Border,
 		Test: value.Test, HasMetadata: len(value.Entry.Metadata) > 0,
 	}
 	subjectPrefix := "LogHill"
 	if value.Test {
-		subjectPrefix = "Teste do LogHill"
+		subjectPrefix = "LogHill test"
 	}
 	subject := cleanSubject(fmt.Sprintf("%s — %s em %s: %s", subjectPrefix, theme.Subject, data.SenderName, data.Message))
 	return renderMessage(value.Alert.Recipients, subject, data)
@@ -79,18 +79,18 @@ func (t *Template) renderEvent(value domain.Notification) (domain.EmailMessage, 
 	subject := cleanSubject(renderEventValue(value.Event.SubjectTemplate, value, t.publicURL))
 	link := t.publicURL + "/senders/" + url.PathEscape(value.Sender.ID) + "?event_key=" + url.QueryEscape(value.Event.Key)
 	theme := themeFor(value.Entry.Severity)
-	description := fmt.Sprintf("O evento “%s” foi informado explicitamente pelo sender.", value.Event.Name)
-	kicker := "EVENTO DO LOG"
+	description := fmt.Sprintf("Event “%s” was explicitly reported by the sender.", value.Event.Name)
+	kicker := "LOG EVENT"
 	if value.Test {
-		kicker = "TESTE DE EVENTO"
-		description = fmt.Sprintf("Este é um teste do evento “%s”. Nenhuma ocorrência real foi registrada.", value.Event.Name)
+		kicker = "EVENT TEST"
+		description = fmt.Sprintf("This is a test for event “%s”. No real occurrence was recorded.", value.Event.Name)
 	}
 	data := templateData{
 		AlertName: value.Event.Name, SenderName: value.Sender.Name, SenderID: value.Sender.ID,
 		SenderStatus: statusLabel(value.Sender.Status), Severity: string(value.Entry.Severity),
 		Message: messageText, Timestamp: formatEmailTime(value.Entry.Timestamp), SentAt: formatEmailTime(time.Now()),
 		Metadata: string(metadata), Link: link, LogoURL: t.publicURL + "/loghill.png",
-		Kicker: kicker, Headline: value.Event.Name, Description: description, ButtonLabel: "Abrir logs do sender",
+		Kicker: kicker, Headline: value.Event.Name, Description: description, ButtonLabel: "Open sender logs",
 		SeverityColor: theme.Color, SeverityBackground: theme.Background, SeverityBorder: theme.Border,
 		Test: value.Test, HasMetadata: len(value.Entry.Metadata) > 0,
 	}
@@ -144,25 +144,25 @@ func (t *Template) RenderProviderTest(recipient string, provider domain.EmailPro
 	now := formatEmailTime(time.Now())
 	providerName := "Microsoft 365 / Outlook"
 	integrationName := "Microsoft Graph"
-	message := "Esta mensagem confirma que o LogHill conseguiu autenticar e enviar e-mails pelo Microsoft 365."
-	description := "A integração do LogHill com o Outlook está funcionando e pronta para entregar seus alertas."
+	message := "This message confirms that LogHill successfully authenticated and sent email through Microsoft 365."
+	description := "The LogHill integration with Outlook is working and ready to deliver your alerts."
 	if provider == domain.EmailProviderGmail {
 		providerName = "Gmail"
-		integrationName = "SMTP com STARTTLS"
-		message = "Esta mensagem confirma que o LogHill conseguiu autenticar e enviar e-mails pelo Gmail via SMTP."
-		description = "A integração do LogHill com o Gmail está funcionando e pronta para entregar seus alertas."
+		integrationName = "SMTP with STARTTLS"
+		message = "This message confirms that LogHill successfully authenticated and sent email through Gmail via SMTP."
+		description = "The LogHill integration with Gmail is working and ready to deliver your alerts."
 	}
 	data := templateData{
-		AlertName: "Configuração de e-mail", SenderName: providerName, SenderID: integrationName,
-		SenderStatus: "Configuração validada", Severity: "SUCESSO",
+		AlertName: "Configuration de e-mail", SenderName: providerName, SenderID: integrationName,
+		SenderStatus: "Configuration validada", Severity: "SUCCESS",
 		Message:   message,
 		Timestamp: now, SentAt: now, Link: t.publicURL, LogoURL: t.publicURL + "/loghill.png",
-		Kicker: "TESTE DE E-MAIL", Headline: "Tudo certo com o seu e-mail",
+		Kicker: "EMAIL TEST", Headline: "Your email is ready",
 		Description: description,
-		ButtonLabel: "Abrir o LogHill", SeverityColor: "#34d399", SeverityBackground: "#052e2b", SeverityBorder: "#065f46",
+		ButtonLabel: "Open LogHill", SeverityColor: "#34d399", SeverityBackground: "#052e2b", SeverityBorder: "#065f46",
 		Test: true, ProviderTest: true,
 	}
-	return renderMessage([]string{recipient}, "Teste de e-mail do LogHill — configuração concluída", data)
+	return renderMessage([]string{recipient}, "LogHill email test — configuration complete", data)
 }
 
 func renderMessage(recipients []string, subject string, data templateData) (domain.EmailMessage, error) {
@@ -187,7 +187,7 @@ func cleanSubject(value string) string {
 }
 
 func formatEmailTime(value time.Time) string {
-	return value.Format("02/01/2006 às 15:04:05 MST")
+	return value.Format("01/02/2006 03:04:05 PM MST")
 }
 
 func statusLabel(status domain.SenderStatus) string {
@@ -195,11 +195,11 @@ func statusLabel(status domain.SenderStatus) string {
 	case domain.StatusOnline:
 		return "Online"
 	case domain.StatusInactive:
-		return "Inativo"
+		return "Inactive"
 	case domain.StatusArchived:
 		return "Arquivado"
 	case domain.StatusExpired:
-		return "Expirado"
+		return "Expired"
 	default:
 		return string(status)
 	}
@@ -208,19 +208,19 @@ func statusLabel(status domain.SenderStatus) string {
 func themeFor(severity domain.LogSeverity) severityTheme {
 	switch severity {
 	case domain.Undefined:
-		return severityTheme{Headline: "Novo log do sistema registrado", Subject: "Log do sistema registrado", Color: "#a1a1aa", Background: "#18181b", Border: "#3f3f46"}
+		return severityTheme{Headline: "New system log recorded", Subject: "System log recorded", Color: "#a1a1aa", Background: "#18181b", Border: "#3f3f46"}
 	case domain.Trace:
-		return severityTheme{Headline: "Novo rastreamento registrado", Subject: "Rastreamento registrado", Color: "#d4d4d8", Background: "#27272a", Border: "#52525b"}
+		return severityTheme{Headline: "New trace recorded", Subject: "Rastreamento registrado", Color: "#d4d4d8", Background: "#27272a", Border: "#52525b"}
 	case domain.Debug:
-		return severityTheme{Headline: "Novo diagnóstico disponível", Subject: "Diagnóstico registrado", Color: "#c4b5fd", Background: "#2e1065", Border: "#5b21b6"}
+		return severityTheme{Headline: "New diagnostics available", Subject: "Diagnostics recorded", Color: "#c4b5fd", Background: "#2e1065", Border: "#5b21b6"}
 	case domain.Info:
-		return severityTheme{Headline: "Nova informação registrada", Subject: "Informação registrada", Color: "#7dd3fc", Background: "#082f49", Border: "#075985"}
+		return severityTheme{Headline: "New information recorded", Subject: "Information recorded", Color: "#7dd3fc", Background: "#082f49", Border: "#075985"}
 	case domain.Warn:
-		return severityTheme{Headline: "Um evento precisa de atenção", Subject: "Atenção necessária", Color: "#fbbf24", Background: "#451a03", Border: "#92400e"}
+		return severityTheme{Headline: "An event requires attention", Subject: "Attention required", Color: "#fbbf24", Background: "#451a03", Border: "#92400e"}
 	case domain.Fatal:
-		return severityTheme{Headline: "Uma falha crítica foi detectada", Subject: "Falha crítica detectada", Color: "#fda4af", Background: "#4c0519", Border: "#9f1239"}
+		return severityTheme{Headline: "A critical failure was detected", Subject: "Critical failure detected", Color: "#fda4af", Background: "#4c0519", Border: "#9f1239"}
 	default:
-		return severityTheme{Headline: "Um erro foi detectado", Subject: "Erro detectado", Color: "#fca5a5", Background: "#450a0a", Border: "#991b1b"}
+		return severityTheme{Headline: "An error was detected", Subject: "Erro detectado", Color: "#fca5a5", Background: "#450a0a", Border: "#991b1b"}
 	}
 }
 

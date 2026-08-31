@@ -134,7 +134,7 @@ func (d *Dispatcher) Shutdown(ctx context.Context) error {
 func (d *Dispatcher) rejectionWorker() {
 	defer d.workerWG.Done()
 	for value := range d.rejections {
-		message := "A fila de notificações está cheia; o log foi preservado, mas o e-mail não foi enfileirado."
+		message := "The notification queue is full; the log was preserved, but the email was not queued."
 		_ = d.recorder.RecordDelivery(notificationID(value), value.Test, domain.DeliveryFailed, message)
 		if recorder, ok := d.recorder.(executionDeliveryRecorder); ok {
 			recorder.RecordExecutionDelivery(value, domain.DeliveryFailed, message, 0)
@@ -152,7 +152,7 @@ func (d *Dispatcher) worker() {
 func (d *Dispatcher) deliverSafely(value domain.Notification) {
 	defer func() {
 		if recovered := recover(); recovered != nil {
-			message := "Falha interna ao preparar a notificação."
+			message := "Internal failure while preparing the notification."
 			_ = d.recorder.RecordDelivery(notificationID(value), value.Test, domain.DeliveryFailed, message)
 			if recorder, ok := d.recorder.(executionDeliveryRecorder); ok {
 				recorder.RecordExecutionDelivery(value, domain.DeliveryFailed, message, 1)
@@ -168,9 +168,9 @@ func (d *Dispatcher) deliverSafely(value domain.Notification) {
 	}
 	message, err := d.renderer.Render(value)
 	if err != nil {
-		_ = d.recorder.RecordDelivery(notificationID(value), value.Test, domain.DeliveryFailed, "Não foi possível renderizar o e-mail.")
+		_ = d.recorder.RecordDelivery(notificationID(value), value.Test, domain.DeliveryFailed, "Unable to render the email.")
 		if recorder, ok := d.recorder.(executionDeliveryRecorder); ok {
-			recorder.RecordExecutionDelivery(value, domain.DeliveryFailed, "Não foi possível renderizar o e-mail.", 1)
+			recorder.RecordExecutionDelivery(value, domain.DeliveryFailed, "Unable to render the email.", 1)
 		}
 		return
 	}
@@ -231,10 +231,10 @@ func safeDeliveryError(err error) string {
 		return providerError.Message
 	}
 	if errors.Is(err, emailprovider.ErrNotConfigured) {
-		return "O provedor Outlook não está configurado ou habilitado."
+		return "The Outlook provider is not configured or enabled."
 	}
 	if err == nil {
-		return "Falha desconhecida no envio."
+		return "Unknown delivery failure."
 	}
 	message := strings.TrimSpace(err.Error())
 	if len(message) > 240 {

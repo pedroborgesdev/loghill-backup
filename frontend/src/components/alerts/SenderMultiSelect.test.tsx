@@ -27,26 +27,26 @@ describe("alertas com múltiplos senders", () => {
     expect(screen.getByRole("checkbox", { name: "Selecionar Revogado" })).toBeDisabled();
     await userEvent.click(screen.getByRole("checkbox", { name: "Selecionar todos os resultados visíveis" }));
     expect(screen.getByText("2 selecionados")).toBeInTheDocument();
-    expect(screen.getByRole("checkbox", { name: "Remover Financeiro" })).toHaveAttribute("aria-checked", "true");
-    expect(screen.getByText("Senders inativos podem ser monitorados, mas talvez não enviem novos logs.")).toBeInTheDocument();
+    expect(screen.getByRole("checkbox", { name: "Remove Financeiro" })).toHaveAttribute("aria-checked", "true");
+    expect(screen.getByText("Inactive senders can be monitored, but may not send new logs.")).toBeInTheDocument();
     await userEvent.type(screen.getByPlaceholderText("Buscar sender pelo nome"), "financeiro");
     expect(screen.getByText("2 selecionados")).toBeInTheDocument();
   });
 
   it("mostra tabela compacta e abre o drawer de detalhes", async () => {
-    const alert: EmailAlert = { id: "alert-1", name: "Erros financeiros", sender_ids: ["financeiro", "acordos"], sender_names: ["Financeiro", "Acordos"], severities: ["ERROR", "FATAL"], recipients: ["dev@example.com", "ops@example.com"], provider: "outlook", enabled: true, created_at: "2026-07-31T10:00:00Z", updated_at: "2026-07-31T11:00:00Z", last_triggered_at: null, last_delivery_at: null, last_delivery_status: null, last_delivery_error: null, delivery_count: 0, failure_count: 0, test_delivery_count: 0 };
+    const alert: EmailAlert = { id: "alert-1", name: "Errors financeiros", sender_ids: ["financeiro", "acordos"], sender_names: ["Financeiro", "Acordos"], severities: ["ERROR", "FATAL"], recipients: ["dev@example.com", "ops@example.com"], provider: "outlook", enabled: true, created_at: "2026-07-31T10:00:00Z", updated_at: "2026-07-31T11:00:00Z", last_triggered_at: null, last_delivery_at: null, last_delivery_status: null, last_delivery_error: null, delivery_count: 0, failure_count: 0, test_delivery_count: 0 };
     const details = vi.fn();
     const props = { items: [alert], busyId: "", onDetails: details, onEdit: vi.fn(), onToggle: vi.fn(), onTest: vi.fn(), onDelete: vi.fn() };
     render(<CompactAlertTable {...props} />);
-    expect(screen.getAllByText("Erros financeiros")).not.toHaveLength(0);
+    expect(screen.getAllByText("Errors financeiros")).not.toHaveLength(0);
     expect(screen.queryByText("Criado:")).not.toBeInTheDocument();
-    await userEvent.click(screen.getAllByText("Erros financeiros")[0]);
+    await userEvent.click(screen.getAllByText("Errors financeiros")[0]);
     expect(details).toHaveBeenCalledWith(alert);
     cleanup();
     render(<AlertDetailsDrawer alert={alert} onClose={vi.fn()} onEdit={vi.fn()} onTest={vi.fn()} />);
-    expect(screen.getByRole("dialog", { name: "Erros financeiros" })).toBeInTheDocument();
+    expect(screen.getByRole("dialog", { name: "Errors financeiros" })).toBeInTheDocument();
     expect(screen.getByText("Financeiro")).toBeInTheDocument();
     expect(screen.getByText("Acordos")).toBeInTheDocument();
-    expect(screen.getByText("Última alteração")).toBeInTheDocument();
+    expect(screen.getByText("Last updated")).toBeInTheDocument();
   });
 });
