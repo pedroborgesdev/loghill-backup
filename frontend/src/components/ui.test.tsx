@@ -11,15 +11,15 @@ import {
 } from "./ui";
 import { restoreFocusWithoutTooltip } from "../utils/tooltipFocus";
 
-describe("componentes de interface", () => {
-  it("só marca o mínimo inválido depois de editar e sair do campo", async () => {
+describe("interface components", () => {
+  it("marks an invalid minimum only after editing and leaving the field", async () => {
     function Fixture() {
       const [value, setValue] = useState("");
-      return <Input aria-label="Nome" value={value} minLength={3} onChange={(event) => setValue(event.target.value)} />;
+      return <Input aria-label="Name" value={value} minLength={3} onChange={(event) => setValue(event.target.value)} />;
     }
     const user = userEvent.setup();
     render(<Fixture />);
-    const input = screen.getByRole("textbox", { name: "Nome" });
+    const input = screen.getByRole("textbox", { name: "Name" });
 
     expect(input).not.toHaveAttribute("aria-invalid");
     await user.click(input);
@@ -37,25 +37,25 @@ describe("componentes de interface", () => {
     expect(input).not.toHaveAttribute("aria-invalid");
   });
 
-  it("exibe o status com texto acessível", () => {
+  it("displays the status with accessible text", () => {
     render(<StatusBadge status="online" />);
     expect(screen.getByText("Online")).toBeInTheDocument();
   });
 
-  it("permite limpar uma busca sem alterar a largura do campo", async () => {
+  it("clears a search without changing the field width", async () => {
     const onChange = vi.fn();
     render(
       <SearchInput
         value="worker"
         onChange={onChange}
-        placeholder="Buscar sender"
+        placeholder="Search sender"
       />,
     );
-    await userEvent.click(screen.getByRole("button", { name: "Limpar busca" }));
+    await userEvent.click(screen.getByRole("button", { name: "Clear search" }));
     expect(onChange).toHaveBeenCalledWith("");
   });
 
-  it("bloqueia a busca ao vivo e solicita uma ação antes da edição", async () => {
+  it("blocks live search and requests an action before editing", async () => {
     const onChange = vi.fn();
     const onBlocked = vi.fn();
     render(
@@ -64,44 +64,44 @@ describe("componentes de interface", () => {
         onChange={onChange}
         blocked
         onBlocked={onBlocked}
-        placeholder="Buscar logs"
+        placeholder="Search logs"
       />,
     );
-    const input = screen.getByRole("textbox", { name: "Buscar logs" });
+    const input = screen.getByRole("textbox", { name: "Search logs" });
     await userEvent.click(input);
-    await userEvent.type(input, "erro");
+    await userEvent.type(input, "error");
     expect(onBlocked).toHaveBeenCalled();
     expect(onChange).not.toHaveBeenCalled();
   });
 
-  it("confirma a pausa por um diálogo acessível", async () => {
+  it("confirms pausing through an accessible dialog", async () => {
     const onConfirm = vi.fn();
     render(
       <ConfirmDialog
         open
-        title="Pause os logs"
-        description="A lista precisa estar estável."
-        confirmLabel="Pausar e continuar"
+        title="Pause logs"
+        description="The list must remain stable."
+        confirmLabel="Pause and continue"
         onClose={vi.fn()}
         onConfirm={onConfirm}
       />,
     );
-    expect(screen.getByRole("dialog", { name: "Pause os logs" })).toBeVisible();
+    expect(screen.getByRole("dialog", { name: "Pause logs" })).toBeVisible();
     await userEvent.click(
-      screen.getByRole("button", { name: "Pausar e continuar" }),
+      screen.getByRole("button", { name: "Pause and continue" }),
     );
     expect(onConfirm).toHaveBeenCalledOnce();
   });
 
-  it("fecha a descrição do botão no clique e limita-a à tela", async () => {
+  it("closes the button description on click and constrains it to the viewport", async () => {
     const user = userEvent.setup();
     render(
-      <IconButton label="Uma descrição de botão muito longa">
+      <IconButton label="A very long button description">
         A
       </IconButton>,
     );
     const button = screen.getByRole("button", {
-      name: "Uma descrição de botão muito longa",
+      name: "A very long button description",
     });
 
     await user.hover(button);
@@ -114,29 +114,29 @@ describe("componentes de interface", () => {
     expect(screen.queryByRole("tooltip")).not.toBeInTheDocument();
   });
 
-  it("mantém somente uma descrição de botão aberta", () => {
+  it("keeps only one button description open", () => {
     render(
       <>
-        <IconButton label="Primeira descrição">A</IconButton>
-        <IconButton label="Segunda descrição">B</IconButton>
+        <IconButton label="First description">A</IconButton>
+        <IconButton label="Second description">B</IconButton>
       </>,
     );
 
     fireEvent.mouseEnter(
-      screen.getByRole("button", { name: "Primeira descrição" }),
+      screen.getByRole("button", { name: "First description" }),
     );
-    expect(screen.getByText("Primeira descrição")).toBeInTheDocument();
+    expect(screen.getByText("First description")).toBeInTheDocument();
 
     fireEvent.focus(
-      screen.getByRole("button", { name: "Segunda descrição" }),
+      screen.getByRole("button", { name: "Second description" }),
     );
-    expect(screen.queryByText("Primeira descrição")).not.toBeInTheDocument();
-    expect(screen.getByText("Segunda descrição")).toBeInTheDocument();
+    expect(screen.queryByText("First description")).not.toBeInTheDocument();
+    expect(screen.getByText("Second description")).toBeInTheDocument();
   });
 
-  it("não reabre a descrição ao restaurar o foco depois de um modal", () => {
-    render(<IconButton label="Editar regra">A</IconButton>);
-    const button = screen.getByRole("button", { name: "Editar regra" });
+  it("does not reopen the description when restoring focus after a modal", () => {
+    render(<IconButton label="Edit rule">A</IconButton>);
+    const button = screen.getByRole("button", { name: "Edit rule" });
     fireEvent.focus(button);
     expect(screen.getByRole("tooltip")).toBeInTheDocument();
     fireEvent.blur(button);

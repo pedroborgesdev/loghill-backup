@@ -83,7 +83,7 @@ func (s *NotificationService) EnqueueAlertTest(ctx context.Context, id string) (
 	if len(alert.Severities) > 0 {
 		severity = alert.Severities[0]
 	}
-	value := domain.Notification{Alert: alert, Sender: sender, Test: true, Entry: domain.LogEntry{Timestamp: time.Now(), Severity: severity, Message: "Mensagem de teste do alerta de e-mail do LogHill.", Metadata: map[string]any{"test": true}}}
+	value := domain.Notification{Alert: alert, Sender: sender, Test: true, Entry: domain.LogEntry{Timestamp: time.Now(), Severity: severity, Message: "LogHill email alert test message.", Metadata: map[string]any{"test": true}}}
 	return alert, sender, s.dispatcher.Enqueue(value)
 }
 
@@ -106,7 +106,7 @@ func (s *NotificationService) EnqueueEventTest(ctx context.Context, id, rawRecip
 	if err != nil {
 		return event, sender, recipient, err
 	}
-	entry := domain.LogEntry{Timestamp: time.Now(), SenderID: sender.ID, Severity: domain.Info, Message: "Mensagem fictícia de teste do evento LogHill.", Event: event.Key, Metadata: map[string]any{"destinatario": "cliente@exemplo.com", "protocolo": "TESTE-123", "test": true}}
+	entry := domain.LogEntry{Timestamp: time.Now(), SenderID: sender.ID, Severity: domain.Info, Message: "Sample LogHill event test message.", Event: event.Key, Metadata: map[string]any{"recipient": "customer@example.com", "protocol": "TEST-123", "test": true}}
 	value := domain.Notification{SourceType: domain.NotificationSourceEvent, SourceID: event.ID, Event: event, Sender: sender, Recipients: []string{recipient}, Test: true, Entry: entry}
 	return event, sender, recipient, s.dispatcher.Enqueue(value)
 }
@@ -120,10 +120,10 @@ func providerErrorMessage(err error) string {
 		return providerError.Message
 	}
 	if errors.Is(err, emailprovider.ErrNotConfigured) {
-		return "O provedor de e-mail não está configurado."
+		return "The email provider is not configured."
 	}
 	if errors.Is(err, context.DeadlineExceeded) {
-		return "O serviço de e-mail não respondeu dentro do tempo esperado."
+		return "The email service did not respond within the expected time."
 	}
-	return "Não foi possível concluir a operação com o provedor de e-mail."
+	return "Unable to complete the operation with the email provider."
 }

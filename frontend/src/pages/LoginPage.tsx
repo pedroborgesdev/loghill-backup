@@ -20,9 +20,9 @@ export function LoginPage() {
       await login(password);
     } catch (requestError) {
       if (requestError instanceof APIError && requestError.status === 401) {
-        setError("Senha inválida. Tente novamente.");
+        setError("Invalid password. Please try again.");
       } else {
-        setError(requestError instanceof Error ? requestError.message : "Não foi possível entrar.");
+        setError(requestError instanceof Error ? requestError.message : "Unable to sign in.");
       }
     } finally {
       setSubmitting(false);
@@ -40,7 +40,7 @@ export function LoginPage() {
           />
           <h1 className="mt-5 text-2xl font-semibold tracking-tight text-zinc-100">LogHill</h1>
           <p className="mt-2 max-w-sm text-sm text-zinc-500">
-            Central de observabilidade. Entre com a senha configurada no ambiente para continuar.
+            Observability center. Sign in with the password configured in the environment to continue.
           </p>
         </div>
 
@@ -49,7 +49,7 @@ export function LoginPage() {
           className="rounded-xl border border-zinc-800 bg-[#161618] p-6"
         >
           <label className="block text-xs font-medium text-zinc-300" htmlFor="app-password">
-            Senha de acesso
+            Access password
           </label>
           <div className="relative mt-2">
             <Lock className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-zinc-600" />
@@ -64,13 +64,13 @@ export function LoginPage() {
                 setPassword(change.target.value);
                 setError("");
               }}
-              placeholder="Digite a senha"
+              placeholder="Enter the password"
               className="w-full pl-10 pr-11"
               aria-invalid={Boolean(error) || undefined}
             />
             <button
               type="button"
-              aria-label={showPassword ? "Ocultar senha" : "Mostrar senha"}
+              aria-label={showPassword ? "Hide password" : "Show password"}
               className="absolute right-1.5 top-1/2 grid size-8 -translate-y-1/2 place-items-center rounded-md text-zinc-500 transition-colors duration-150 hover:bg-zinc-800 hover:text-zinc-200 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-white/50"
               onClick={() => setShowPassword((current) => !current)}
             >
@@ -86,7 +86,7 @@ export function LoginPage() {
 
           <Button type="submit" disabled={submitting || !password.trim()} className="mt-5 h-10 w-full text-white">
             <LogIn className="size-4" />
-            {submitting ? "Entrando..." : "Entrar"}
+            {submitting ? "Signing in..." : "Sign in"}
           </Button>
         </form>
       </div>

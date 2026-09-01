@@ -22,7 +22,7 @@ func Session(manager *auth.Manager, enabled bool, password string) gin.HandlerFu
 			c.Next()
 			return
 		}
-		c.AbortWithStatusJSON(http.StatusUnauthorized, errorBody(c, "UNAUTHORIZED", "Credencial inválida"))
+		c.AbortWithStatusJSON(http.StatusUnauthorized, errorBody(c, "UNAUTHORIZED", "Invalid credential"))
 	}
 }
 

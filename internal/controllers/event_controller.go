@@ -18,14 +18,14 @@ func (a *APIController) ListEvents(c *gin.Context) {
 	if raw := c.Query("enabled"); raw != "" {
 		value, err := strconv.ParseBool(raw)
 		if err != nil {
-			c.JSON(http.StatusUnprocessableEntity, eventErrorBody(c, "INVALID_EVENT_FILTER", "O filtro enabled é inválido.", "enabled"))
+			c.JSON(http.StatusUnprocessableEntity, eventErrorBody(c, "INVALID_EVENT_FILTER", "The enabled filter is invalid.", "enabled"))
 			return
 		}
 		enabled = &value
 	}
 	action := domain.EventActionType(c.Query("action_type"))
 	if action != "" && action != domain.EventActionEmail && action != domain.EventActionNone {
-		c.JSON(http.StatusUnprocessableEntity, eventErrorBody(c, "INVALID_EVENT_FILTER", "O filtro action_type é inválido.", "action_type"))
+		c.JSON(http.StatusUnprocessableEntity, eventErrorBody(c, "INVALID_EVENT_FILTER", "The action_type filter is invalid.", "action_type"))
 		return
 	}
 	page := a.events.List(domain.EventFilters{Search: c.Query("search"), SenderName: c.Query("sender_name"), ActionType: action, Enabled: enabled, Page: positive(c, "page", 1, 1_000_000), PageSize: positive(c, "page_size", 20, a.cfg.MaxPageSize)})
@@ -83,7 +83,7 @@ func (a *APIController) UpdateEventStatus(c *gin.Context) {
 		return
 	}
 	if input.Enabled == nil {
-		c.JSON(http.StatusBadRequest, eventErrorBody(c, "INVALID_REQUEST", "Informe o estado do evento.", "enabled"))
+		c.JSON(http.StatusBadRequest, eventErrorBody(c, "INVALID_REQUEST", "Provide the event state.", "enabled"))
 		return
 	}
 	event, err := a.events.SetEnabled(c.Request.Context(), c.Param("eventID"), *input.Enabled)
@@ -99,7 +99,7 @@ func (a *APIController) DeleteEvent(c *gin.Context) {
 	id := c.Param("eventID")
 	if a.monitoring != nil {
 		if usage := a.monitoring.EventUsageCount(id); usage > 0 {
-			body := errBody(c, "EVENT_USED_BY_MONITORING", "O evento está associado a regras de monitoramento.")
+			body := errBody(c, "EVENT_USED_BY_MONITORING", "The event is associated with monitoring rules.")
 			body["monitoring_rules"] = usage
 			c.JSON(http.StatusConflict, body)
 			return
@@ -122,15 +122,15 @@ func (a *APIController) TestEvent(c *gin.Context) {
 	}
 	event, sender, recipient, err := a.notifications.EnqueueEventTest(c.Request.Context(), c.Param("eventID"), input.Recipient)
 	if errors.Is(err, services.ErrInvalidEmailRecipient) {
-		c.JSON(http.StatusUnprocessableEntity, eventErrorBody(c, "INVALID_EMAIL", "Informe um destinatário válido.", "recipient"))
+		c.JSON(http.StatusUnprocessableEntity, eventErrorBody(c, "INVALID_EMAIL", "Enter a valid recipient.", "recipient"))
 		return
 	}
 	if errors.Is(err, services.ErrNotificationWithoutSenders) {
-		c.JSON(http.StatusConflict, eventErrorBody(c, "EVENT_WITHOUT_SENDERS", "O evento não possui senders disponíveis.", "sender_ids"))
+		c.JSON(http.StatusConflict, eventErrorBody(c, "EVENT_WITHOUT_SENDERS", "The event has no available senders.", "sender_ids"))
 		return
 	}
 	if errors.Is(err, notification.ErrQueueFull) || errors.Is(err, notification.ErrQueueClosed) {
-		c.JSON(http.StatusServiceUnavailable, eventErrorBody(c, "EMAIL_QUEUE_FULL", "Não foi possível enfileirar o teste agora.", ""))
+		c.JSON(http.StatusServiceUnavailable, eventErrorBody(c, "EMAIL_QUEUE_FULL", "Unable to queue the test right now.", ""))
 		return
 	}
 	if err != nil {
@@ -145,11 +145,11 @@ func (a *APIController) failEvent(c *gin.Context, err error) {
 	var validationError *events.ValidationError
 	switch {
 	case errors.Is(err, events.ErrNotFound):
-		c.JSON(http.StatusNotFound, eventErrorBody(c, "EVENT_NOT_FOUND", "Evento não encontrado.", ""))
+		c.JSON(http.StatusNotFound, eventErrorBody(c, "EVENT_NOT_FOUND", "Event not found.", ""))
 	case errors.Is(err, events.ErrAlreadyExists):
-		c.JSON(http.StatusConflict, eventErrorBody(c, "EVENT_ALREADY_EXISTS", "Já existe um evento com esta chave.", "key"))
+		c.JSON(http.StatusConflict, eventErrorBody(c, "EVENT_ALREADY_EXISTS", "An event with this key already exists.", "key"))
 	case errors.Is(err, events.ErrEmailNotConfigured):
-		c.JSON(http.StatusConflict, eventErrorBody(c, "EMAIL_NOT_CONFIGURED", "Configure e habilite um e-mail antes de ativar o evento.", "provider"))
+		c.JSON(http.StatusConflict, eventErrorBody(c, "EMAIL_NOT_CONFIGURED", "Configure and enable email before activating the event.", "provider"))
 	case errors.As(err, &validationError):
 		status := http.StatusUnprocessableEntity
 		if validationError.Code == "EVENT_KEY_IMMUTABLE" {

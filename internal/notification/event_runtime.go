@@ -59,10 +59,10 @@ func (r *EventRuntime) NotifyEvent(ctx context.Context, sender domain.Sender, en
 				reported = true
 			}
 			if !reported {
-				_ = r.events.RecordDelivery(event.ID, false, domain.DeliveryFailed, "A fila de notificações está cheia; o log foi preservado, mas o e-mail não foi enfileirado.")
+				_ = r.events.RecordDelivery(event.ID, false, domain.DeliveryFailed, "The notification queue is full; the log was preserved, but the email was not queued.")
 			}
 			if r.executions != nil && executionID != "" {
-				message := "A fila de notificações está cheia."
+				message := "The notification queue is full."
 				code := "QUEUE_FULL"
 				_, _ = r.executions.Update(executionID, func(v *executions.Record) {
 					v.Status = executions.StatusFailed

@@ -35,7 +35,7 @@ import {
 } from "../utils/senders";
 import { EmptyState, IconButton, Skeleton, StatusBadge } from "./ui";
 
-// Prefetch só do cabeçalho (sender + instâncias). Logs ficam de fora de propósito.
+// Prefetch only the header (sender + instances). Logs are intentionally excluded.
 function prefetchSenderHeader(id: string) {
   void queryClient.prefetchQuery({
     queryKey: ["view", "sender", id, "details"],
@@ -95,7 +95,7 @@ function Actions({ sender, onAction }: { sender: Sender; onAction?: (sender: Sen
       onKeyDown={(event) => event.stopPropagation()}
     >
       <IconButton
-        label={`Ações de ${sender.id}`}
+        label={`Actions for ${sender.id}`}
         className="size-8"
         aria-expanded={open}
         onClick={() => setOpen((value) => !value)}
@@ -115,18 +115,18 @@ function Actions({ sender, onAction }: { sender: Sender; onAction?: (sender: Sen
             className="flex items-center gap-2 rounded-md px-3 py-2 text-zinc-300 hover:bg-zinc-800"
           >
             <ExternalLink className="size-3.5" />
-            Abrir logs
+            Open logs
           </Link>
-          <button type="button" role="menuitem" onClick={() => { void navigator.clipboard.writeText(sender.id); setOpen(false); }} className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-zinc-300 hover:bg-zinc-800"><Copy className="size-3.5" />Copiar ID</button>
-          <button type="button" role="menuitem" onClick={() => { setOpen(false); onAction?.(sender, "edit"); }} className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-zinc-300 hover:bg-zinc-800"><Edit3 className="size-3.5" />Editar informações</button>
+          <button type="button" role="menuitem" onClick={() => { void navigator.clipboard.writeText(sender.id); setOpen(false); }} className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-zinc-300 hover:bg-zinc-800"><Copy className="size-3.5" />Copy ID</button>
+          <button type="button" role="menuitem" onClick={() => { setOpen(false); onAction?.(sender, "edit"); }} className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-zinc-300 hover:bg-zinc-800"><Edit3 className="size-3.5" />Edit information</button>
           {sender.status === "revoked" ? (
-            <button type="button" role="menuitem" onClick={() => { setOpen(false); onAction?.(sender, "reactivate"); }} className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-zinc-300 hover:bg-zinc-800"><KeyRound className="size-3.5" />Reativar acesso</button>
+            <button type="button" role="menuitem" onClick={() => { setOpen(false); onAction?.(sender, "reactivate"); }} className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-zinc-300 hover:bg-zinc-800"><KeyRound className="size-3.5" />Reactivate acesso</button>
           ) : sender.status !== "expired" ? (
             <>
-              <button type="button" role="menuitem" onClick={() => { setOpen(false); onAction?.(sender, "revoke"); }} className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-amber-300 hover:bg-zinc-800"><ShieldOff className="size-3.5" />Revogar acesso</button>
+              <button type="button" role="menuitem" onClick={() => { setOpen(false); onAction?.(sender, "revoke"); }} className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-amber-300 hover:bg-zinc-800"><ShieldOff className="size-3.5" />Revoke access</button>
             </>
           ) : null}
-          <button type="button" role="menuitem" onClick={() => { setOpen(false); onAction?.(sender, "delete"); }} className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-red-400 hover:bg-zinc-800"><Trash2 className="size-3.5" />Excluir sender</button>
+          <button type="button" role="menuitem" onClick={() => { setOpen(false); onAction?.(sender, "delete"); }} className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-red-400 hover:bg-zinc-800"><Trash2 className="size-3.5" />Delete sender</button>
         </div>
       , document.body)}
     </div>
@@ -168,7 +168,7 @@ function InstanceChooser({
   return (
     <>
       <div className="flex min-h-12 items-center gap-2 border-b border-zinc-800 bg-[#18181b] px-3">
-        <IconButton label="Voltar aos grupos" className="size-8" onClick={onBack}>
+        <IconButton label="Back to groups" className="size-8" onClick={onBack}>
           <ArrowLeft className="size-4" />
         </IconButton>
         <div className="min-w-0">
@@ -176,7 +176,7 @@ function InstanceChooser({
             {group.name}
           </p>
           <p className="text-[11px] text-zinc-600">
-            Escolha uma das {group.items.length} instâncias
+            Choose one of {group.items.length} instances
           </p>
         </div>
       </div>
@@ -186,12 +186,12 @@ function InstanceChooser({
           <thead className="sticky top-0 z-10 bg-[#1c1c1f] text-zinc-500">
             <tr className="h-10 border-b border-zinc-800">
               <th className="w-[150px] px-3 font-medium">Status</th>
-              <th className="px-3 font-medium">Instância</th>
-              <th className="w-[150px] px-3 font-medium">Última atividade</th>
+              <th className="px-3 font-medium">Instance</th>
+              <th className="w-[150px] px-3 font-medium">Last activity</th>
               <th className="w-[100px] px-3 text-right font-medium">Logs</th>
-              <th className="w-[100px] px-3 text-right font-medium">Erros recentes</th>
+              <th className="w-[100px] px-3 text-right font-medium">Recent errors</th>
               <th className="w-12 px-2">
-                <span className="sr-only">Ações</span>
+                <span className="sr-only">Actions</span>
               </th>
             </tr>
           </thead>
@@ -201,7 +201,7 @@ function InstanceChooser({
                 key={sender.id}
                 role="link"
                 tabIndex={0}
-                aria-label={`Abrir instância ${sender.id}`}
+                aria-label={`Open instance ${sender.id}`}
                 onMouseEnter={() => prefetchSenderHeader(sender.id)}
                 onFocus={() => prefetchSenderHeader(sender.id)}
                 onClick={() => navigate(`/senders/${sender.id}`)}
@@ -221,7 +221,7 @@ function InstanceChooser({
                     {sender.id}
                   </span>
                   <span className="block truncate text-[10px] text-zinc-600">
-                    Criado em {formatDate(sender.created_at)}
+                    Created on {formatDate(sender.created_at)}
                   </span>
                 </td>
                 <td
@@ -251,7 +251,7 @@ function InstanceChooser({
             key={sender.id}
             role="link"
             tabIndex={0}
-            aria-label={`Abrir instância ${sender.id}`}
+            aria-label={`Open instance ${sender.id}`}
             onMouseEnter={() => prefetchSenderHeader(sender.id)}
             onFocus={() => prefetchSenderHeader(sender.id)}
             onClick={() => navigate(`/senders/${sender.id}`)}
@@ -281,7 +281,7 @@ function InstanceChooser({
                 </p>
               </div>
               <div>
-                <p className="text-zinc-600">Erros recentes</p>
+                <p className="text-zinc-600">Recent errors</p>
                 <p className="mt-0.5 font-mono">
                   {formatNumber(sender.recent_error_count ?? 0)}
                 </p>
@@ -307,8 +307,8 @@ export function SenderTable({ items, onAction }: { items: Sender[]; onAction?: (
   if (!items.length) {
     return (
       <EmptyState
-        title="Nenhum sender encontrado"
-        description="Tente alterar os filtros ou a busca."
+        title="No senders found"
+        description="Try changing the filters or search."
       />
     );
   }
@@ -331,12 +331,12 @@ export function SenderTable({ items, onAction }: { items: Sender[]; onAction?: (
             <tr className="h-10 border-b border-zinc-800">
               <th className="w-[150px] px-3 font-medium">Status</th>
               <th className="px-3 font-medium">Sender</th>
-              <th className="w-[150px] px-3 font-medium">Última atividade</th>
+              <th className="w-[150px] px-3 font-medium">Last activity</th>
               <th className="w-[100px] px-3 text-right font-medium">Logs</th>
-              <th className="w-[100px] px-3 text-right font-medium">Erros recentes</th>
-              <th className="w-[130px] px-3 text-right font-medium">Instâncias</th>
+              <th className="w-[100px] px-3 text-right font-medium">Recent errors</th>
+              <th className="w-[130px] px-3 text-right font-medium">Instances</th>
               <th className="w-12 px-2">
-                <span className="sr-only">Ações</span>
+                <span className="sr-only">Actions</span>
               </th>
             </tr>
           </thead>
@@ -359,8 +359,8 @@ export function SenderTable({ items, onAction }: { items: Sender[]; onAction?: (
                   tabIndex={0}
                   aria-label={
                     multiple
-                      ? `Abrir grupo ${group.name} com ${group.items.length} instâncias`
-                      : `Abrir sender ${sender.name}`
+                      ? `Open ${group.name} group with ${group.items.length} instances`
+                      : `Open sender ${sender.name}`
                   }
                   onMouseEnter={prefetchGroup}
                   onFocus={prefetchGroup}
@@ -379,7 +379,7 @@ export function SenderTable({ items, onAction }: { items: Sender[]; onAction?: (
                         </span>
                         <span className="inline-flex items-center gap-1 text-[10px] text-cyan-600">
                           <Layers3 className="size-3" />
-                          {group.items.length} instâncias
+                          {group.items.length} instances
                         </span>
                       </div>
                     ) : (
@@ -413,9 +413,9 @@ export function SenderTable({ items, onAction }: { items: Sender[]; onAction?: (
                   </td>
                   <td className="px-3 text-right">
                     {instanceCount > 1 ? (
-                      <span className="ml-auto inline-flex items-center gap-1.5 rounded-full border border-sky-900/80 bg-sky-950/25 px-2 py-1 text-[10px] font-medium text-sky-400" title={`${instanceCount} instâncias conectadas a este sender`}>
+                      <span className="ml-auto inline-flex items-center gap-1.5 rounded-full border border-sky-900/80 bg-sky-950/25 px-2 py-1 text-[10px] font-medium text-sky-400" title={`${instanceCount} instances connected to this sender`}>
                         <Layers3 className="size-3" />
-                        {formatNumber(instanceCount)} instâncias
+                        {formatNumber(instanceCount)} instances
                       </span>
                     ) : (
                       <span className="font-mono tabular-nums text-zinc-500">{formatNumber(instanceCount)}</span>
@@ -459,8 +459,8 @@ export function SenderTable({ items, onAction }: { items: Sender[]; onAction?: (
               tabIndex={0}
               aria-label={
                 multiple
-                  ? `Abrir grupo ${group.name} com ${group.items.length} instâncias`
-                  : `Abrir sender ${sender.name}`
+                  ? `Open ${group.name} group with ${group.items.length} instances`
+                  : `Open sender ${sender.name}`
               }
               onMouseEnter={prefetchGroup}
               onFocus={prefetchGroup}
@@ -477,7 +477,7 @@ export function SenderTable({ items, onAction }: { items: Sender[]; onAction?: (
                       </span>
                       <span className="inline-flex items-center gap-1 text-[10px] text-cyan-600">
                           <Layers3 className="size-3" />
-                          {group.items.length} instâncias
+                          {group.items.length} instances
                         </span>
                     </div>
                   ) : (
@@ -497,7 +497,7 @@ export function SenderTable({ items, onAction }: { items: Sender[]; onAction?: (
               </div>
               <div className="mt-3 grid grid-cols-4 gap-2 text-xs">
                 <div>
-                  <p className="text-zinc-600">Atividade</p>
+                  <p className="text-zinc-600">Activity</p>
                   <p className="mt-0.5 text-zinc-400">
                     {relativeDate(group.lastActivityAt)}
                   </p>
@@ -509,12 +509,12 @@ export function SenderTable({ items, onAction }: { items: Sender[]; onAction?: (
                   </p>
                 </div>
                 <div>
-                  <p className="text-zinc-600">Erros recentes</p>
+                  <p className="text-zinc-600">Recent errors</p>
                   <p className="mt-0.5 font-mono">
                     {formatNumber(group.recentErrorCount)}
                   </p>
                 </div>
-                <div><p className="text-zinc-600">Instâncias</p>{instanceCount > 1 ? <p className="mt-0.5 inline-flex items-center gap-1 text-sky-400"><Layers3 className="size-3" />{formatNumber(instanceCount)}</p> : <p className="mt-0.5 font-mono">{formatNumber(instanceCount)}</p>}</div>
+                <div><p className="text-zinc-600">Instances</p>{instanceCount > 1 ? <p className="mt-0.5 inline-flex items-center gap-1 text-sky-400"><Layers3 className="size-3" />{formatNumber(instanceCount)}</p> : <p className="mt-0.5 font-mono">{formatNumber(instanceCount)}</p>}</div>
               </div>
             </article>
           );

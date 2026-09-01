@@ -17,21 +17,21 @@ function mockFetch() {
   );
 }
 
-it("shows Monitoramento in the persistent sidebar with active state", async () => {
+it("shows Monitoring in the persistent sidebar with active state", async () => {
   mockFetch();
   render(
     <AuthProvider>
       <MemoryRouter initialEntries={["/monitoring"]}>
         <Routes>
           <Route element={<AppShell />}>
-            <Route path="monitoring" element={<div>Conteúdo de monitoramento</div>} />
+            <Route path="monitoring" element={<div>Monitoring content</div>} />
           </Route>
         </Routes>
       </MemoryRouter>
     </AuthProvider>,
   );
-  const links = await screen.findAllByRole("link", { name: "Monitoramento" });
+  const links = await screen.findAllByRole("link", { name: "Monitoring" });
   expect(links[0]).toHaveAttribute("aria-current", "page");
-  expect(screen.getByText("Conteúdo de monitoramento")).toBeInTheDocument();
+  expect(screen.getByText("Monitoring content")).toBeInTheDocument();
   vi.unstubAllGlobals();
 });

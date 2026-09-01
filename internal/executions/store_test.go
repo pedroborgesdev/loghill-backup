@@ -33,18 +33,18 @@ func TestExecutionLifecycleFiltersAndRestore(t *testing.T) {
 		t.Fatal(err)
 	}
 	if record.DurationMs == nil || *record.DurationMs != 840 || record.ErrorMessage == nil || *record.ErrorMessage != "falha sanitizada sem stack" {
-		t.Fatalf("registro final inválido: %#v", record)
+		t.Fatalf("invalid final record: %#v", record)
 	}
 	page := store.List(Filters{SourceType: SourceAlert, Statuses: map[Status]bool{StatusFailed: true}, Recent: true, Page: 1, PageSize: 20})
 	if len(page.Items) != 1 || page.Pagination.Total != 1 {
-		t.Fatalf("filtro inválido: %#v", page)
+		t.Fatalf("invalid filter: %#v", page)
 	}
 	restored, err := Open(dir, clock)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if value, ok := restored.Get(record.ID); !ok || value.Status != StatusFailed {
-		t.Fatalf("restauração inválida: %#v %v", value, ok)
+		t.Fatalf("invalid restoration: %#v %v", value, ok)
 	}
 }
 
@@ -67,9 +67,9 @@ func TestCleanupPreservesRunningExecutions(t *testing.T) {
 		t.Fatal(err)
 	}
 	if _, ok := store.Get(running.ID); !ok {
-		t.Fatal("execução em andamento foi removida")
+		t.Fatal("running execution was removed")
 	}
 	if _, ok := store.Get(finished.ID); ok {
-		t.Fatal("execução expirada não foi removida")
+		t.Fatal("expired execution was not removed")
 	}
 }

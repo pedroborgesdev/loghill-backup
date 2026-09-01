@@ -195,7 +195,7 @@ func (s *Service) Update(ctx context.Context, id string, input domain.EventInput
 		return domain.EventDefinition{}, err
 	}
 	if input.Key != "" && input.Key != existing.Key {
-		return domain.EventDefinition{}, &ValidationError{Code: "EVENT_KEY_IMMUTABLE", Field: "key", Message: "A chave do evento não pode ser alterada."}
+		return domain.EventDefinition{}, &ValidationError{Code: "EVENT_KEY_IMMUTABLE", Field: "key", Message: "The event key cannot be changed."}
 	}
 	input.Key = existing.Key
 	input, err = s.validate(ctx, input, false)
@@ -321,24 +321,24 @@ func (s *Service) RemoveSender(senderID string) (int, error) {
 func (s *Service) validate(ctx context.Context, input domain.EventInput, requireKey bool) (domain.EventInput, error) {
 	input.Name = strings.TrimSpace(input.Name)
 	if length := len([]rune(input.Name)); length < 3 || length > MaxEventName {
-		return input, invalid("name", "O nome deve possuir entre 3 e 100 caracteres.")
+		return input, invalid("name", "The name must be between 3 and 100 characters.")
 	}
 	if requireKey && input.Key == "" || !ValidKey(input.Key) {
-		return input, &ValidationError{Code: "INVALID_EVENT_KEY", Field: "key", Message: "O identificador do evento é inválido."}
+		return input, &ValidationError{Code: "INVALID_EVENT_KEY", Field: "key", Message: "The event identifier is invalid."}
 	}
 	if len(input.SenderIDs) > MaxEventSenders {
-		return input, invalid("sender_ids", "Selecione no máximo 100 senders.")
+		return input, invalid("sender_ids", "Select at most 100 senders.")
 	}
 	seenSenders := make(map[string]bool)
 	cleanSenders := make([]string, 0, len(input.SenderIDs))
 	for _, raw := range input.SenderIDs {
 		id := strings.TrimSpace(raw)
 		if id == "" || seenSenders[id] {
-			return input, invalid("sender_ids", "Os senders devem ser válidos e não podem se repetir.")
+			return input, invalid("sender_ids", "Senders must be valid and cannot be duplicated.")
 		}
 		sender, err := s.senders.Get(ctx, id)
 		if err != nil || sender.Status == domain.StatusExpired || sender.Status == domain.StatusRevoked {
-			return input, invalid("sender_ids", fmt.Sprintf("O sender “%s” não está disponível.", id))
+			return input, invalid("sender_ids", fmt.Sprintf("Sender “%s” is not available.", id))
 		}
 		seenSenders[id] = true
 		cleanSenders = append(cleanSenders, id)
@@ -348,7 +348,7 @@ func (s *Service) validate(ctx context.Context, input domain.EventInput, require
 		input.ActionType = domain.EventActionEmail
 	}
 	if input.ActionType != domain.EventActionEmail && input.ActionType != domain.EventActionNone {
-		return input, &ValidationError{Code: "EVENT_ACTION_NOT_AVAILABLE", Field: "action_type", Message: "A ação selecionada não está disponível."}
+		return input, &ValidationError{Code: "EVENT_ACTION_NOT_AVAILABLE", Field: "action_type", Message: "The selected action is not available."}
 	}
 	if input.ActionType == domain.EventActionNone {
 		input.Recipients = []string{}
@@ -358,14 +358,14 @@ func (s *Service) validate(ctx context.Context, input domain.EventInput, require
 		return input, nil
 	}
 	if len(input.Recipients) == 0 || len(input.Recipients) > MaxEventRecipients {
-		return input, invalid("recipients", "Informe de 1 a 20 destinatários.")
+		return input, invalid("recipients", "Enter between 1 and 20 recipients.")
 	}
 	seenRecipients := make(map[string]bool)
 	recipients := make([]string, 0, len(input.Recipients))
 	for _, raw := range input.Recipients {
 		recipient, ok := validation.EmailAddress(raw)
 		if !ok {
-			return input, invalid("recipients", "Informe apenas endereços de e-mail válidos.")
+			return input, invalid("recipients", "Enter valid email addresses only.")
 		}
 		if !seenRecipients[recipient] {
 			seenRecipients[recipient] = true
@@ -375,14 +375,14 @@ func (s *Service) validate(ctx context.Context, input domain.EventInput, require
 	input.Recipients = recipients
 	input.SubjectTemplate = strings.TrimSpace(input.SubjectTemplate)
 	if len([]rune(input.SubjectTemplate)) == 0 || len([]rune(input.SubjectTemplate)) > MaxEventSubject || strings.ContainsAny(input.SubjectTemplate, "\r\n") {
-		return input, invalid("subject_template", "O assunto é obrigatório, deve ter até 200 caracteres e não pode conter quebras de linha.")
+		return input, invalid("subject_template", "The subject is required, must be at most 200 characters, and cannot contain line breaks.")
 	}
 	input.MessageTemplate = strings.TrimSpace(input.MessageTemplate)
 	if len([]rune(input.MessageTemplate)) == 0 || len([]rune(input.MessageTemplate)) > MaxEventMessage {
-		return input, invalid("message_template", "A mensagem é obrigatória e deve ter até 10.000 caracteres.")
+		return input, invalid("message_template", "The message is required and must be at most 10,000 characters.")
 	}
 	if variable := unsupportedVariable(input.SubjectTemplate + "\n" + input.MessageTemplate); variable != "" {
-		return input, invalid("message_template", fmt.Sprintf("A variável {{%s}} não é suportada.", variable))
+		return input, invalid("message_template", fmt.Sprintf("The {{%s}} variable is not supported.", variable))
 	}
 	if input.Enabled && !s.emailConfig.IsReady() {
 		return input, ErrEmailNotConfigured

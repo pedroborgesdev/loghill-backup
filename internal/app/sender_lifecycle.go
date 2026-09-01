@@ -73,13 +73,13 @@ func (l *SenderLifecycle) Delete(ctx context.Context, senderID string, opts Dele
 	deps := l.Dependencies(senderID)
 	if (deps.AlertRules > 0 && !opts.RemoveFromAlerts) || (deps.Events > 0 && !opts.RemoveFromEvents) || (deps.MonitoringRules > 0 && !opts.RemoveFromMonitoring) {
 		code := "SENDER_HAS_DEPENDENCIES"
-		message := fmt.Sprintf("Este sender está associado a %d regras de alerta e %d eventos.", deps.AlertRules, deps.Events)
+		message := fmt.Sprintf("This sender is associated with %d alert rules and %d events.", deps.AlertRules, deps.Events)
 		if deps.Events == 0 && deps.MonitoringRules == 0 {
 			code = "SENDER_HAS_ALERTS"
-			message = fmt.Sprintf("Este sender está associado a %d regras de alerta.", deps.AlertRules)
+			message = fmt.Sprintf("This sender is associated with %d alert rules.", deps.AlertRules)
 		} else if deps.AlertRules == 0 && deps.MonitoringRules == 0 {
 			code = "SENDER_HAS_EVENTS"
-			message = fmt.Sprintf("Este sender está associado a %d eventos.", deps.Events)
+			message = fmt.Sprintf("This sender is associated with %d events.", deps.Events)
 		}
 		return &DependencyConflictError{Code: code, Message: message, Dependencies: deps}
 	}

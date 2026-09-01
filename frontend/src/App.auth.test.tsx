@@ -1,4 +1,4 @@
-import { render, waitFor } from "@testing-library/react";
+import { render, screen, waitFor } from "@testing-library/react";
 import { afterEach, expect, it, vi } from "vitest";
 import App from "./App";
 
@@ -14,7 +14,9 @@ it("redirects an anonymous session to the login URL", async () => {
   )));
   window.history.replaceState({}, "", "/senders");
 
-  render(<App />);
+  const view = render(<App />);
 
   await waitFor(() => expect(window.location.pathname).toBe("/login"));
+  await screen.findByRole("heading", { name: "LogHill" });
+  view.unmount();
 });

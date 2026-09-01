@@ -30,7 +30,7 @@ describe("useLogStream", () => {
     vi.unstubAllGlobals();
   });
 
-  it("agrupa eventos antes de renderizar e preserva fila pausada", () => {
+  it("batches events before rendering and preserves the paused queue", () => {
     const { result, rerender } = renderHook(
       ({ paused }) => useLogStream("worker-12345678", [], paused),
       { initialProps: { paused: false } },

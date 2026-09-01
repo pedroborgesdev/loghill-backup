@@ -3,7 +3,7 @@ import {
   Archive,
   Bell,
   Database,
-  Radar,
+  ScanSearch,
   Radio,
   RefreshCw,
   ShieldAlert,
@@ -52,7 +52,7 @@ const emptySummary: Summary = {
     fatal_last_24_hours: 0,
   },
 };
-const executionSourceLabels = { alert: "Alerta", event: "Evento", monitoring: "Monitoramento" } as const;
+const executionSourceLabels = { alert: "Alert", event: "Event", monitoring: "Monitoring" } as const;
 
 async function visibleActivityCounts() {
   const now = new Date();
@@ -113,7 +113,7 @@ export function DashboardPage() {
       setSummary({ ...nextSummary, executions: nextSummary.executions ? { ...nextSummary.executions, ...activity } : undefined });
       setRecentExecutions(executions.items);
     } catch {
-      // Mantém os últimos dados válidos quando uma atualização silenciosa falhar.
+      // Keeps the latest valid data when a silent refresh fails.
     }
   }, [setRecentExecutions, setSummary]);
 
@@ -148,7 +148,7 @@ export function DashboardPage() {
       setError(
         requestError instanceof Error
           ? requestError.message
-          : "Não foi possível carregar os senders.",
+          : "Unable to load senders.",
       );
     } finally {
       setLoading(false);
@@ -176,19 +176,19 @@ export function DashboardPage() {
   }, [debounced, setParams]);
 
   const metrics = [
-    { label: "Instâncias", value: summary.instances?.active ?? 0, hint: "ativas", icon: <Radio className="size-4 text-emerald-500" /> },
-    { label: "Inativas", value: summary.instances?.inactive ?? 0, hint: "aguardando exclusão", icon: <Archive className="size-4 text-amber-500" /> },
-    { label: "Total de logs", value: summary.logs.total, hint: "linhas armazenadas", icon: <Database className="size-4" /> },
-    { label: "Últimas 24h", value: summary.logs.last_24_hours, hint: "novas entradas", icon: <Activity className="size-4" /> },
-    { label: "Erros 24h", value: summary.logs.errors_last_24_hours, hint: "severity ERROR", icon: <ShieldAlert className="size-4 text-red-500" /> },
-    { label: "Fatais 24h", value: summary.logs.fatal_last_24_hours, hint: "severity FATAL", icon: <ShieldAlert className="size-4 text-rose-500" /> },
+    { label: "Instances", value: summary.instances?.active ?? 0, hint: "active", icon: <Radio className="size-4 text-emerald-500" /> },
+    { label: "Inactive", value: summary.instances?.inactive ?? 0, hint: "awaiting deletion", icon: <Archive className="size-4 text-amber-500" /> },
+    { label: "Total logs", value: summary.logs.total, hint: "stored lines", icon: <Database className="size-4" /> },
+    { label: "Last 24h", value: summary.logs.last_24_hours, hint: "new entries", icon: <Activity className="size-4" /> },
+    { label: "Errors 24h", value: summary.logs.errors_last_24_hours, hint: "severity ERROR", icon: <ShieldAlert className="size-4 text-red-500" /> },
+    { label: "Fatal 24h", value: summary.logs.fatal_last_24_hours, hint: "severity FATAL", icon: <ShieldAlert className="size-4 text-rose-500" /> },
   ];
   const activityMetrics = summary.executions ? [
-    { label: "Alertas", value: summary.executions.alerts_last_24_hours, to: "/alerts?tab=executions&period=24h", icon: Bell },
-    { label: "Eventos", value: summary.executions.events_last_24_hours, to: "/events?tab=executions&period=24h", icon: Zap },
-    { label: "Monitoramentos", value: summary.executions.monitoring_last_24_hours, to: "/monitoring?tab=executions&period=24h", icon: Radar },
-    { label: "Falhas 1h", value: summary.executions.failed_last_hour, to: "/monitoring?tab=executions&period=1h&status=failed", icon: ShieldAlert },
-    { label: "Em andamento", value: summary.executions.running, to: "/monitoring?tab=executions&status=processing", icon: RefreshCw },
+    { label: "Alerts", value: summary.executions.alerts_last_24_hours, to: "/alerts?tab=executions&period=24h", icon: Bell },
+    { label: "Events", value: summary.executions.events_last_24_hours, to: "/events?tab=executions&period=24h", icon: Zap },
+    { label: "Monitorings", value: summary.executions.monitoring_last_24_hours, to: "/monitoring?tab=executions&period=24h", icon: ScanSearch },
+    { label: "Failures 1h", value: summary.executions.failed_last_hour, to: "/monitoring?tab=executions&period=1h&status=failed", icon: ShieldAlert },
+    { label: "In progress", value: summary.executions.running, to: "/monitoring?tab=executions&status=processing", icon: RefreshCw },
   ] : [];
   const visibleRecentExecutions = (recentExecutions ?? []).filter((record) => record.status !== "skipped");
 
@@ -205,35 +205,35 @@ export function DashboardPage() {
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <h2 className="text-xl font-semibold">
-            {showMetrics ? "Visão geral" : "Senders"}
+            {showMetrics ? "Overview" : "Senders"}
           </h2>
           <p className="mt-1 text-sm text-zinc-500">
             {showMetrics
-              ? "Saúde e volume dos serviços conectados."
-              : "Inventário de origens de logs registradas."}
+              ? "Health and volume of connected services."
+              : "Inventory of registered log sources."}
           </p>
         </div>
         <div className="flex flex-wrap items-center justify-end gap-2">
           <label className="flex items-center gap-2 text-xs text-zinc-500">
-            Atualização
+            Refresh
             <Listbox
             value={autoRefresh}
             onChange={setAutoRefresh}
-            label="Intervalo de atualização"
+            label="Refresh interval"
             size="compact"
             className="w-28"
             options={[
               { value: 0, label: "Manual" },
-              { value: 15, label: "15 segundos" },
-              { value: 30, label: "30 segundos" },
-              { value: 60, label: "1 minuto" },
+              { value: 15, label: "15 seconds" },
+              { value: 30, label: "30 seconds" },
+              { value: 60, label: "1 minute" },
             ]}
             />
           </label>
         </div>
       </div>
 
-      {showMetrics && <section className="grid shrink-0 gap-3 xl:grid-cols-[minmax(0,3fr)_minmax(22rem,2fr)]"><div className="grid grid-cols-2 gap-2 lg:grid-cols-4">{metrics.map(metric=><MetricCard key={metric.label} label={metric.label} value={formatNumber(metric.value)} hint={metric.hint} icon={metric.icon} loading={!data&&loading} compact/>)}</div><Panel className="flex min-h-0 flex-col overflow-hidden"><div className="flex shrink-0 items-center justify-between border-b border-zinc-800 px-3 py-1"><h3 className="text-xs font-medium">Atividade recente</h3><IconButton label="Atualizar página" className="size-7" onClick={()=>void load()} disabled={loading}><RefreshCw className={`size-3.5 ${loading?"animate-spin":""}`}/></IconButton></div><div className="grid min-h-0 flex-1 grid-cols-2 grid-rows-3 gap-2 overflow-hidden p-2">{summary.executions ? activityMetrics.map(item=>{const Icon=item.icon;return <Link key={item.label} to={item.to} className={`flex min-h-8 items-center gap-2 rounded-lg border bg-[#111113] px-2.5 py-1 hover:bg-zinc-900 ${CONTROL_OUTLINE}`}><Icon className="size-3.5 shrink-0 text-zinc-500"/><span className="min-w-0 flex-1 truncate text-[11px] text-zinc-400">{item.label}</span><strong className="font-mono text-base tabular-nums">{formatNumber(item.value)}</strong></Link>}) : [1,2,3,4].map(item=><div key={item} className="p-1.5"><Skeleton className="h-full"/></div>)}</div></Panel></section>}
+      {showMetrics && <section className="grid shrink-0 gap-3 xl:grid-cols-[minmax(0,3fr)_minmax(22rem,2fr)]"><div className="grid grid-cols-2 gap-2 lg:grid-cols-4">{metrics.map(metric=><MetricCard key={metric.label} label={metric.label} value={formatNumber(metric.value)} hint={metric.hint} icon={metric.icon} loading={!data&&loading} compact/>)}</div><Panel className="flex min-h-0 flex-col overflow-hidden"><div className="flex shrink-0 items-center justify-between border-b border-zinc-800 px-3 py-1"><h3 className="text-xs font-medium">Recent activity</h3><IconButton label="Refresh page" className="size-7" onClick={()=>void load()} disabled={loading}><RefreshCw className={`size-3.5 ${loading?"animate-spin":""}`}/></IconButton></div><div className="grid min-h-0 flex-1 grid-cols-2 grid-rows-3 gap-2 overflow-hidden p-2">{summary.executions ? activityMetrics.map(item=>{const Icon=item.icon;return <Link key={item.label} to={item.to} className={`flex min-h-8 items-center gap-2 rounded-lg border bg-[#111113] px-2.5 py-1 hover:bg-zinc-900 ${CONTROL_OUTLINE}`}><Icon className="size-3.5 shrink-0 text-zinc-500"/><span className="min-w-0 flex-1 truncate text-[11px] text-zinc-400">{item.label}</span><strong className="font-mono text-base tabular-nums">{formatNumber(item.value)}</strong></Link>}) : [1,2,3,4].map(item=><div key={item} className="p-1.5"><Skeleton className="h-full"/></div>)}</div></Panel></section>}
 
       <div className={`grid min-h-0 flex-1 gap-3 ${showMetrics ? "xl:grid-cols-[minmax(0,3fr)_minmax(22rem,2fr)]" : ""}`}>
       <Panel className="flex min-h-0 flex-col overflow-hidden">
@@ -242,7 +242,7 @@ export function DashboardPage() {
             <div>
               <h3 className="text-sm font-medium text-zinc-200">Senders</h3>
               <p className="hidden text-[11px] text-zinc-600 lg:block">
-                Status, atividade e volume armazenado
+                Status, activity, and stored volume
               </p>
             </div>
           </div>
@@ -250,25 +250,25 @@ export function DashboardPage() {
           <SearchInput
             value={search}
             onChange={setSearch}
-            placeholder="Buscar sender pelo nome"
+            placeholder="Search sender by name"
             className="w-full sm:w-72"
           />
           <Listbox
             value={status}
             onChange={(value) => updateParam("status", value)}
-            label="Filtrar por status"
+            label="Filter by status"
             className="w-full sm:w-44"
             options={[
-              { value: "", label: "Todos os status" },
-              { value: "never_connected", label: "Nunca conectado" },
+              { value: "", label: "All statuses" },
+              { value: "never_connected", label: "Never connected" },
               { value: "online", label: "Online" },
-              { value: "inactive", label: "Inativo" },
-              { value: "revoked", label: "Revogado" },
+              { value: "inactive", label: "Inactive" },
+              { value: "revoked", label: "Revoked" },
             ]}
           />
           <Button onClick={() => void load()} disabled={loading} className="sm:px-2.5">
             <RefreshCw className={`size-4 ${loading ? "animate-spin" : ""}`} />
-            <span className="sm:hidden xl:inline">Atualizar</span>
+            <span className="sm:hidden xl:inline">Refresh</span>
           </Button>
         </div>
 
@@ -300,7 +300,7 @@ export function DashboardPage() {
           }}
         />
       </Panel>
-      {showMetrics && <Panel className="flex min-h-0 flex-col overflow-hidden"><div className="flex min-h-14 shrink-0 items-center justify-between border-b border-zinc-800 px-4"><div><h3 className="text-sm font-medium">Últimas execuções</h3><p className="text-[11px] text-zinc-600">Atividade mais recente do sistema</p></div><div className="flex items-center gap-2"><Link to="/monitoring?tab=executions" className="text-[10px] text-zinc-500 hover:text-zinc-200">Ver histórico</Link><IconButton label="Atualizar página" className="size-7" onClick={()=>void load()} disabled={loading}><RefreshCw className={`size-3.5 ${loading?"animate-spin":""}`}/></IconButton></div></div><div className="min-h-0 flex-1 overflow-y-auto">{recentExecutions === undefined ? <div className="space-y-2 p-3">{[1,2,3,4,5].map(item=><Skeleton key={item} className="h-12"/>)}</div> : visibleRecentExecutions.length ? visibleRecentExecutions.map(record=><button key={record.id} onClick={()=>setSelectedExecution(record)} className="flex w-full items-center gap-2 border-b border-zinc-800/70 px-3 py-1.5 text-left text-xs hover:bg-zinc-900/50"><ExecutionStatusBadge status={record.status}/><span className="min-w-0 flex-1"><span className="block truncate font-medium">{record.source_name}</span><span className="mt-0.5 flex items-center gap-1.5 text-[9px] text-zinc-600"><span className="rounded border border-zinc-700 px-1 py-0.5 text-zinc-400">{executionSourceLabels[record.source_type]}</span><span className="truncate">{record.sender_name||record.sender_id}</span></span></span>{isRecentExecution(record.started_at)&&<RecentBadge startedAt={record.started_at}/>}<time className="whitespace-nowrap text-[10px] text-zinc-600">{new Date(record.started_at).toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"})}</time></button>) : <p className="grid h-full place-items-center p-6 text-center text-xs text-zinc-600">Nenhuma execução registrada.</p>}</div></Panel>}
+      {showMetrics && <Panel className="flex min-h-0 flex-col overflow-hidden"><div className="flex min-h-14 shrink-0 items-center justify-between border-b border-zinc-800 px-4"><div><h3 className="text-sm font-medium">Latest executions</h3><p className="text-[11px] text-zinc-600">Most recent system activity</p></div><div className="flex items-center gap-2"><Link to="/monitoring?tab=executions" className="text-[10px] text-zinc-500 hover:text-zinc-200">View history</Link><IconButton label="Refresh page" className="size-7" onClick={()=>void load()} disabled={loading}><RefreshCw className={`size-3.5 ${loading?"animate-spin":""}`}/></IconButton></div></div><div className="min-h-0 flex-1 overflow-y-auto">{recentExecutions === undefined ? <div className="space-y-2 p-3">{[1,2,3,4,5].map(item=><Skeleton key={item} className="h-12"/>)}</div> : visibleRecentExecutions.length ? visibleRecentExecutions.map(record=><button key={record.id} onClick={()=>setSelectedExecution(record)} className="flex w-full items-center gap-2 border-b border-zinc-800/70 px-3 py-1.5 text-left text-xs hover:bg-zinc-900/50"><ExecutionStatusBadge status={record.status}/><span className="min-w-0 flex-1"><span className="block truncate font-medium">{record.source_name}</span><span className="mt-0.5 flex items-center gap-1.5 text-[9px] text-zinc-600"><span className="rounded border border-zinc-700 px-1 py-0.5 text-zinc-400">{executionSourceLabels[record.source_type]}</span><span className="truncate">{record.sender_name||record.sender_id}</span></span></span>{isRecentExecution(record.started_at)&&<RecentBadge startedAt={record.started_at}/>}<time className="whitespace-nowrap text-[10px] text-zinc-600">{new Date(record.started_at).toLocaleTimeString("en-US",{hour:"2-digit",minute:"2-digit"})}</time></button>) : <p className="grid h-full place-items-center p-6 text-center text-xs text-zinc-600">No executions recorded.</p>}</div></Panel>}
       </div>
       <CreateSenderDialog
         open={createOpen}

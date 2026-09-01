@@ -1,7 +1,7 @@
 export function normalizeSenderID(value: string) {
   return value
     .trim()
-    .toLocaleLowerCase("pt-BR")
+    .toLocaleLowerCase("en-US")
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "")
     .replace(/[^a-z0-9]+/g, "-")

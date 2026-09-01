@@ -17,16 +17,16 @@ func (a *APIController) Login(c *gin.Context) {
 		Password string `json:"password"`
 	}
 	if err := c.ShouldBindJSON(&input); err != nil {
-		c.JSON(http.StatusBadRequest, errBody(c, "INVALID_REQUEST", "Body inválido"))
+		c.JSON(http.StatusBadRequest, errBody(c, "INVALID_REQUEST", "Invalid request body"))
 		return
 	}
 	if !a.sessions.Authenticate(strings.TrimSpace(input.Password)) {
-		c.JSON(http.StatusUnauthorized, errBody(c, "INVALID_CREDENTIALS", "Senha inválida"))
+		c.JSON(http.StatusUnauthorized, errBody(c, "INVALID_CREDENTIALS", "Invalid password"))
 		return
 	}
 	session, err := a.sessions.Create()
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, errBody(c, "INTERNAL_ERROR", "Não foi possível criar a sessão"))
+		c.JSON(http.StatusInternalServerError, errBody(c, "INTERNAL_ERROR", "Unable to create the session"))
 		return
 	}
 	a.sessions.SetCookie(c.Writer, session)

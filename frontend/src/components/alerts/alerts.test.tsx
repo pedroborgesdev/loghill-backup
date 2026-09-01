@@ -13,12 +13,12 @@ describe("alert form controls", () => {
       return <RecipientInput value={value} onChange={setValue} />;
     }
     render(<Fixture />);
-    const input = screen.getByPlaceholderText("usuario@empresa.com");
+    const input = screen.getByPlaceholderText("user@company.com");
     await user.type(input, "DEV@Example.com{enter}");
     expect(screen.getByText("dev@example.com")).toBeInTheDocument();
-    await user.type(screen.getByPlaceholderText("Adicionar outro e-mail"), " dev@example.com{enter}");
-    expect(screen.getByRole("alert")).toHaveTextContent("já foi adicionado");
-    await user.click(screen.getByRole("button", { name: "Remover dev@example.com" }));
+    await user.type(screen.getByPlaceholderText("Add another email"), " dev@example.com{enter}");
+    expect(screen.getByRole("alert")).toHaveTextContent("has already been added");
+    await user.click(screen.getByRole("button", { name: "Remove dev@example.com" }));
     expect(screen.queryByText("dev@example.com")).not.toBeInTheDocument();
   });
 

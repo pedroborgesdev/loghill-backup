@@ -8,7 +8,7 @@ import { normalizeEvent } from "../../api/events";
 import type { EventDefinition } from "../../types/event";
 
 it("validates stable event keys", () => {
-  expect(isValidEventKey("processamento_finalizado")).toBe(true);
+  expect(isValidEventKey("processing_completed")).toBe(true);
   expect(isValidEventKey("boleto-gerado")).toBe(true);
   expect(isValidEventKey("../segredo")).toBe(false);
   expect(isValidEventKey("Com Espaço")).toBe(false);
@@ -18,15 +18,15 @@ it("copies an event badge without painting the whole log row", () => {
   const writeText = vi.fn().mockResolvedValue(undefined);
   Object.defineProperty(navigator, "clipboard", { configurable: true, value: { writeText } });
   render(<EventBadge eventKey="boleto_gerado" />);
-  fireEvent.click(screen.getByRole("button", { name: /copiar chave do evento/i }));
+  fireEvent.click(screen.getByRole("button", { name: /copy event key/i }));
   expect(writeText).toHaveBeenCalledWith("boleto_gerado");
   expect(screen.getByText("EVENT")).toBeInTheDocument();
 });
 
 it("keeps an existing event key immutable", () => {
   render(<EventKeyField value="evento_existente" onChange={vi.fn()} immutable />);
-  expect(screen.getByLabelText("Chave do evento")).toHaveAttribute("readonly");
-  expect(screen.getByText(/imutável depois da criação/i)).toBeInTheDocument();
+  expect(screen.getByLabelText("Event key")).toHaveAttribute("readonly");
+  expect(screen.getByText(/immutable after creation/i)).toBeInTheDocument();
 });
 
 it("renders preview content as text", () => {

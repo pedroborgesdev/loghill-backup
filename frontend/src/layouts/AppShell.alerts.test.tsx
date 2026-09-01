@@ -24,14 +24,14 @@ it("shows Alerts in the persistent sidebar with active state", async () => {
       <MemoryRouter initialEntries={["/alerts"]}>
         <Routes>
           <Route element={<AppShell />}>
-            <Route path="alerts" element={<div>Conteúdo de alertas</div>} />
+            <Route path="alerts" element={<div>Alerts content</div>} />
           </Route>
         </Routes>
       </MemoryRouter>
     </AuthProvider>,
   );
-  const links = await screen.findAllByRole("link", { name: "Alertas" });
+  const links = await screen.findAllByRole("link", { name: "Alerts" });
   expect(links[0]).toHaveAttribute("aria-current", "page");
-  expect(screen.getByText("Conteúdo de alertas")).toBeInTheDocument();
+  expect(screen.getByText("Alerts content")).toBeInTheDocument();
   vi.unstubAllGlobals();
 });

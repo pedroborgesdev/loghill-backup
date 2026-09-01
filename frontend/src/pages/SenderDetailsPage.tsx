@@ -119,7 +119,7 @@ export function SenderDetailsPage() {
   const choosingInstance = instances.length > 1 && !instances.some((instance) => instance.id === instanceID);
   const selectedInstance = instances.find((instance) => instance.id === instanceID);
 
-  // Só os logs começam vazios; cabeçalho/instâncias reaproveitam prefetch/cache.
+  // Only logs start empty; the header and instances reuse prefetch/cache data.
   useLayoutEffect(() => {
     logsRef.current = undefined;
     autoSelectedQuery.current = "";
@@ -165,8 +165,8 @@ export function SenderDetailsPage() {
   }, [setStreamState, stream.state]);
 
   const load = useCallback(async () => {
-    // A seleção automática da única instância reescreve a URL; sem isso o novo
-    // instance_id dispararia um segundo fetch idêntico ao que acabou de chegar.
+    // Automatically selecting the only instance rewrites the URL; without this,
+    // the new instance_id would trigger a second fetch identical to the completed one.
     if (autoSelectedQuery.current === query) {
       autoSelectedQuery.current = "";
       return;
@@ -219,7 +219,7 @@ export function SenderDetailsPage() {
       setError(
         requestError instanceof Error
           ? requestError.message
-          : "Não foi possível carregar os logs.",
+          : "Unable to load logs.",
       );
     } finally {
       setLoading(false);
@@ -308,7 +308,7 @@ export function SenderDetailsPage() {
     try {
       await api.deleteSenderInstance(sender, deletedID);
       setDeletingInstance(undefined);
-      // O fetchQuery do load reaproveita cache fresco (staleTime 20s); sem invalidar a tabela fica com a instância excluída.
+      // load's fetchQuery reuses fresh cache data (staleTime 20s); invalidate it so the deleted instance leaves the table.
       queryClient.removeQueries({ queryKey: ["view", "sender", sender, "instances"] });
       queryClient.removeQueries({ queryKey: ["view", "sender", sender, "details"] });
       queryClient.removeQueries({ queryKey: ["view", "sender", sender, "instance-logs", deletedID] });
@@ -335,12 +335,12 @@ export function SenderDetailsPage() {
           next.set("page", "1");
           return next;
         }, { replace: true });
-        // O useEffect de load reage à mudança de instance_id.
+        // load's useEffect reacts to the instance_id change.
         return;
       }
       await load();
     } catch (requestError) {
-      setError(requestError instanceof Error ? requestError.message : "Não foi possível excluir a instância.");
+      setError(requestError instanceof Error ? requestError.message : "Unable to delete the instance.");
     } finally {
       setDeletingInstanceBusy(false);
     }
@@ -348,18 +348,18 @@ export function SenderDetailsPage() {
 
   const autoRefreshControl = (
     <label className="flex items-center gap-2 text-xs text-zinc-500">
-      Atualização
+      Refresh
       <Listbox
         value={autoRefresh}
         onChange={setAutoRefresh}
-        label="Intervalo de atualização"
+        label="Refresh interval"
         size="compact"
         className="w-28"
         options={[
           { value: 0, label: "Manual" },
-          { value: 15, label: "15 segundos" },
-          { value: 30, label: "30 segundos" },
-          { value: 60, label: "1 minuto" },
+          { value: 15, label: "15 seconds" },
+          { value: 30, label: "30 seconds" },
+          { value: 60, label: "1 minute" },
         ]}
       />
     </label>
@@ -387,29 +387,29 @@ export function SenderDetailsPage() {
       setParams(next);
     };
     return <div className="flex h-full min-h-0 flex-col gap-4">
-      <div className="flex flex-wrap items-end justify-between gap-3"><div><button type="button" onClick={() => navigate("/senders")} className="mb-2 inline-flex items-center gap-1.5 text-xs text-zinc-500 hover:text-zinc-200"><ArrowLeft className="size-3.5" />Voltar para senders</button><h2 className="text-xl font-semibold">Instâncias de {details?.name ?? sender}</h2><p className="mt-1 text-sm text-zinc-500">Selecione qual execução do sender deseja visualizar.</p></div><div className="flex flex-wrap items-center justify-end gap-2">{autoRefreshControl}<div className="rounded-lg border border-zinc-800 bg-[#161618] px-3 py-2 text-xs text-zinc-500"><span className="font-mono text-zinc-200">{instances.length}</span> instâncias identificadas</div></div></div>
+      <div className="flex flex-wrap items-end justify-between gap-3"><div><button type="button" onClick={() => navigate("/senders")} className="mb-2 inline-flex items-center gap-1.5 text-xs text-zinc-500 hover:text-zinc-200"><ArrowLeft className="size-3.5" />Back to senders</button><h2 className="text-xl font-semibold">Instances for {details?.name ?? sender}</h2><p className="mt-1 text-sm text-zinc-500">Select which sender execution you want to view.</p></div><div className="flex flex-wrap items-center justify-end gap-2">{autoRefreshControl}<div className="rounded-lg border border-zinc-800 bg-[#161618] px-3 py-2 text-xs text-zinc-500"><span className="font-mono text-zinc-200">{instances.length}</span> identified instances</div></div></div>
       {error && <ErrorAlert message={error} onRetry={() => void load()} />}
       <Panel className="flex min-h-0 flex-1 flex-col overflow-hidden">
         <div className="shrink-0 border-b border-zinc-800 px-4 pt-3">
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div>
-              <h3 className="text-sm font-medium">Instâncias registradas</h3>
-              <p className="mt-1 text-[11px] text-zinc-600">Cada linha representa uma inicialização independente do mesmo sender.</p>
+              <h3 className="text-sm font-medium">Registered instances</h3>
+              <p className="mt-1 text-[11px] text-zinc-600">Each row represents an independent startup of the same sender.</p>
             </div>
             <Button onClick={() => void load()} disabled={loading} className="sm:px-2.5">
               <RefreshCw className={`size-4 ${loading ? "animate-spin" : ""}`} />
-              Atualizar
+              Refresh
             </Button>
           </div>
-          <div className="mt-3 flex gap-1" role="tablist" aria-label="Status das instâncias">
-            <button type="button" role="tab" aria-selected={instanceStatusTab === "active"} onClick={() => selectInstanceStatusTab("active")} className={`border-b-2 px-3 pb-2 text-xs font-medium transition-colors ${instanceStatusTab === "active" ? "border-emerald-400 text-zinc-100" : "border-transparent text-zinc-500 hover:text-zinc-300"}`}>Ativos <span className="ml-1 text-[10px] text-zinc-500">{activeInstances.length}</span></button>
-            <button type="button" role="tab" aria-selected={instanceStatusTab === "inactive"} onClick={() => selectInstanceStatusTab("inactive")} className={`border-b-2 px-3 pb-2 text-xs font-medium transition-colors ${instanceStatusTab === "inactive" ? "border-zinc-300 text-zinc-100" : "border-transparent text-zinc-500 hover:text-zinc-300"}`}>Inativos <span className="ml-1 text-[10px] text-zinc-500">{inactiveInstances.length}</span></button>
+          <div className="mt-3 flex gap-1" role="tablist" aria-label="Instance status">
+            <button type="button" role="tab" aria-selected={instanceStatusTab === "active"} onClick={() => selectInstanceStatusTab("active")} className={`border-b-2 px-3 pb-2 text-xs font-medium transition-colors ${instanceStatusTab === "active" ? "border-emerald-400 text-zinc-100" : "border-transparent text-zinc-500 hover:text-zinc-300"}`}>Active <span className="ml-1 text-[10px] text-zinc-500">{activeInstances.length}</span></button>
+            <button type="button" role="tab" aria-selected={instanceStatusTab === "inactive"} onClick={() => selectInstanceStatusTab("inactive")} className={`border-b-2 px-3 pb-2 text-xs font-medium transition-colors ${instanceStatusTab === "inactive" ? "border-zinc-300 text-zinc-100" : "border-transparent text-zinc-500 hover:text-zinc-300"}`}>Inactive <span className="ml-1 text-[10px] text-zinc-500">{inactiveInstances.length}</span></button>
           </div>
         </div>
-        <div className="min-h-0 flex-1 overflow-auto"><table className="w-full text-left text-xs"><thead className="sticky top-0 z-10 border-b border-zinc-800 bg-[#1c1c1f] text-zinc-500"><tr><th className="w-36 px-4 py-3">Status</th><th className="px-4 py-3">Instância</th><th className="w-44 px-4 py-3">Inicializada em</th><th className="w-44 px-4 py-3">Última atividade</th><th className="w-32 px-4 py-3">Logs</th><th className="w-24 px-4 py-3 text-right">Ações</th></tr></thead><tbody>{visibleInstances.length === 0 ? <tr><td colSpan={6} className="h-32 px-4 text-center text-zinc-500">Nenhuma instância {instanceStatusTab === "active" ? "ativa" : "inativa"}.</td></tr> : visibleInstances.map((instance) => <tr key={instance.id} tabIndex={0} onClick={() => selectInstance(instance.id)} onKeyDown={(event) => { if (event.key === "Enter") selectInstance(instance.id); }} className="h-14 cursor-pointer border-b border-zinc-800/70 hover:bg-zinc-900/50"><td className="px-4"><StatusBadge status={instanceStatus(instance)} /></td><td className="px-4"><div className="flex items-center gap-3"><span className="grid size-8 shrink-0 place-items-center rounded-lg border border-zinc-700 bg-zinc-900"><Server className="size-4 text-sky-400" /></span><span className="min-w-0"><strong className="block text-xs font-medium text-zinc-200">{details?.name ?? sender}</strong><code className="mt-0.5 block truncate text-[10px] text-zinc-600">{instance.id}</code></span></div></td><td className="px-4 text-zinc-400">{instance.legacy ? "Não disponível" : formatDate(instance.created_at)}</td><td className="px-4 text-zinc-400">{formatDate(instance.last_activity_at)}</td><td className="px-4 font-mono text-zinc-300">{formatNumber(instance.log_line_count)}</td><td className="px-4"><button type="button" aria-label={`Excluir instância ${instance.id}`} title="Excluir instância" disabled={deletingInstanceBusy} onClick={(event) => { event.stopPropagation(); setDeletingInstance(instance); }} onKeyDown={(event) => event.stopPropagation()} className="ml-auto grid size-8 place-items-center rounded-lg border border-zinc-700 text-zinc-500 hover:border-red-900 hover:bg-red-950/20 hover:text-red-400 disabled:opacity-50"><Trash2 className="size-4" /></button></td></tr>)}</tbody></table></div>
+        <div className="min-h-0 flex-1 overflow-auto"><table className="w-full text-left text-xs"><thead className="sticky top-0 z-10 border-b border-zinc-800 bg-[#1c1c1f] text-zinc-500"><tr><th className="w-36 px-4 py-3">Status</th><th className="px-4 py-3">Instance</th><th className="w-44 px-4 py-3">Started at</th><th className="w-44 px-4 py-3">Last activity</th><th className="w-32 px-4 py-3">Logs</th><th className="w-24 px-4 py-3 text-right">Actions</th></tr></thead><tbody>{visibleInstances.length === 0 ? <tr><td colSpan={6} className="h-32 px-4 text-center text-zinc-500">No {instanceStatusTab === "active" ? "active" : "inactive"} instances.</td></tr> : visibleInstances.map((instance) => <tr key={instance.id} tabIndex={0} onClick={() => selectInstance(instance.id)} onKeyDown={(event) => { if (event.key === "Enter") selectInstance(instance.id); }} className="h-14 cursor-pointer border-b border-zinc-800/70 hover:bg-zinc-900/50"><td className="px-4"><StatusBadge status={instanceStatus(instance)} /></td><td className="px-4"><div className="flex items-center gap-3"><span className="grid size-8 shrink-0 place-items-center rounded-lg border border-zinc-700 bg-zinc-900"><Server className="size-4 text-sky-400" /></span><span className="min-w-0"><strong className="block text-xs font-medium text-zinc-200">{details?.name ?? sender}</strong><code className="mt-0.5 block truncate text-[10px] text-zinc-600">{instance.id}</code></span></div></td><td className="px-4 text-zinc-400">{instance.legacy ? "Unavailable" : formatDate(instance.created_at)}</td><td className="px-4 text-zinc-400">{formatDate(instance.last_activity_at)}</td><td className="px-4 font-mono text-zinc-300">{formatNumber(instance.log_line_count)}</td><td className="px-4"><button type="button" aria-label={`Delete instance ${instance.id}`} title="Delete instance" disabled={deletingInstanceBusy} onClick={(event) => { event.stopPropagation(); setDeletingInstance(instance); }} onKeyDown={(event) => event.stopPropagation()} className="ml-auto grid size-8 place-items-center rounded-lg border border-zinc-700 text-zinc-500 hover:border-red-900 hover:bg-red-950/20 hover:text-red-400 disabled:opacity-50"><Trash2 className="size-4" /></button></td></tr>)}</tbody></table></div>
         <Pagination page={Math.min(instancePage, totalPages)} totalPages={totalPages} total={filteredInstances.length} pageSize={instancePageSize} onPageSizeChange={(value) => updateInstancePage(1, value)} onChange={(value) => updateInstancePage(value)} />
       </Panel>
-      <ConfirmDialog open={Boolean(deletingInstance)} title="Excluir instância?" description={deletingInstance ? `Todos os logs da instância ${deletingInstance.id} serão excluídos permanentemente. O sender e as outras instâncias não serão alterados.` : ""} confirmLabel={deletingInstanceBusy ? "Excluindo..." : "Excluir instância"} onClose={() => !deletingInstanceBusy && setDeletingInstance(undefined)} onConfirm={() => void deleteInstance()} />
+      <ConfirmDialog open={Boolean(deletingInstance)} title="Delete instance?" description={deletingInstance ? `All logs from instance ${deletingInstance.id} will be permanently deleted. The sender and other instances will not be changed.` : ""} confirmLabel={deletingInstanceBusy ? "Deleting..." : "Delete instance"} onClose={() => !deletingInstanceBusy && setDeletingInstance(undefined)} onConfirm={() => void deleteInstance()} />
     </div>;
   }
 
@@ -448,25 +448,25 @@ export function SenderDetailsPage() {
             <div className="flex flex-wrap items-center gap-2">
               {autoRefreshControl}
               {loading && <RefreshCw className="size-4 animate-spin text-zinc-500" aria-label="Atualizando sender" />}
-              <Button onMouseEnter={() => preloadSenderAssociations("alerts")} onFocus={() => preloadSenderAssociations("alerts")} onClick={() => setAssociationKind("alerts")}><Bell className="size-4" />Alertas</Button>
-              <Button onMouseEnter={() => preloadSenderAssociations("events")} onFocus={() => preloadSenderAssociations("events")} onClick={() => setAssociationKind("events")}><Zap className="size-4" />Eventos</Button>
-              <Button onClick={() => setSenderAction("edit")}><Edit3 className="size-4" />Editar</Button>
-              {details.status === "revoked" ? <Button onClick={() => setSenderAction("reactivate")}><KeyRound className="size-4" />Reativar</Button> : details.status !== "expired" ? <Button onClick={() => setSenderAction("revoke")}><ShieldOff className="size-4" />Revogar</Button> : null}
+              <Button onMouseEnter={() => preloadSenderAssociations("alerts")} onFocus={() => preloadSenderAssociations("alerts")} onClick={() => setAssociationKind("alerts")}><Bell className="size-4" />Alerts</Button>
+              <Button onMouseEnter={() => preloadSenderAssociations("events")} onFocus={() => preloadSenderAssociations("events")} onClick={() => setAssociationKind("events")}><Zap className="size-4" />Events</Button>
+              <Button onClick={() => setSenderAction("edit")}><Edit3 className="size-4" />Edit</Button>
+              {details.status === "revoked" ? <Button onClick={() => setSenderAction("reactivate")}><KeyRound className="size-4" />Reactivate</Button> : details.status !== "expired" ? <Button onClick={() => setSenderAction("revoke")}><ShieldOff className="size-4" />Revoke</Button> : null}
               <a
               href={api.downloadURL(sender, query)}
               className="inline-flex h-9 items-center gap-2 rounded-lg border border-zinc-700 bg-zinc-900 px-3 text-sm font-medium text-zinc-200 hover:border-zinc-600 hover:bg-zinc-800 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-white/50"
             >
               <ArrowDownToLine className="size-4" />
-              Exportar
+              Export
               </a>
             </div>
           </div>
           <dl className="mt-4 grid grid-cols-2 gap-x-4 gap-y-3 border-t border-zinc-800 pt-3 text-xs sm:grid-cols-3 xl:grid-cols-6">
             <div><dt className="text-zinc-600">Logs</dt><dd className="mt-1 font-mono text-zinc-300">{formatNumber(selectedInstance?.log_line_count ?? details.log_line_count)}</dd></div>
-            <div><dt className="text-zinc-600">Tamanho</dt><dd className="mt-1 font-mono text-zinc-300">{formatBytes(selectedInstance?.log_file_size ?? details.log_file_size)}</dd></div>
-            <div><dt className="text-zinc-600">Última atividade</dt><dd className="mt-1 text-zinc-300">{formatDate(selectedInstance?.last_activity_at ?? details.last_activity_at)}</dd></div>
+            <div><dt className="text-zinc-600">Size</dt><dd className="mt-1 font-mono text-zinc-300">{formatBytes(selectedInstance?.log_file_size ?? details.log_file_size)}</dd></div>
+            <div><dt className="text-zinc-600">Last activity</dt><dd className="mt-1 text-zinc-300">{formatDate(selectedInstance?.last_activity_at ?? details.last_activity_at)}</dd></div>
             <div><dt className="text-zinc-600">Healthcheck</dt><dd className="mt-1 text-zinc-300">{formatDate(selectedInstance?.last_healthcheck_at ?? details.last_healthcheck_at)}</dd></div>
-            <div><dt className="text-zinc-600">Inicializada em</dt><dd className="mt-1 text-zinc-300">{selectedInstance?.legacy ? "Não disponível" : formatDate(selectedInstance?.created_at ?? details.created_at)}</dd></div>
+            <div><dt className="text-zinc-600">Started at</dt><dd className="mt-1 text-zinc-300">{selectedInstance?.legacy ? "Unavailable" : formatDate(selectedInstance?.created_at ?? details.created_at)}</dd></div>
             <div><dt className="text-zinc-600">Sender</dt><dd className="mt-1 font-mono text-zinc-300">{details.id}</dd></div>
           </dl>
         </Panel>
@@ -480,7 +480,7 @@ export function SenderDetailsPage() {
             <SearchInput
               value={search}
               onChange={setSearch}
-              placeholder="Buscar mensagem, evento ou metadata"
+              placeholder="Search message, event, or metadata"
               className="min-w-52 flex-1"
               blocked={!paused}
               onBlocked={() => requirePaused()}
@@ -491,19 +491,19 @@ export function SenderDetailsPage() {
               className={advancedOpen ? "border-zinc-500 bg-zinc-800" : ""}
             >
               <Filter className="size-4" />
-              Filtros
+              Filters
               <ChevronDown className={`size-3.5 transition-transform ${advancedOpen ? "rotate-180" : ""}`} />
             </Button>
             <Button onClick={() => setPaused((value) => !value)}>
               {paused ? <Play className="size-4" /> : <Pause className="size-4" />}
-              {paused ? "Retomar" : "Pausar"}
+              {paused ? "Resume" : "Pause"}
               {stream.pendingCount > 0 && (
                 <span className="rounded-full bg-zinc-700 px-1.5 text-[10px]">
                   {stream.pendingCount}
                 </span>
               )}
             </Button>
-            {instances.length > 1 && instanceID && <Listbox value={instanceID} onChange={selectInstance} label="Instância do sender" className="w-56" options={instances.map((instance) => ({ value: instance.id, label: instanceOptionLabel(instance, details?.name ?? sender) }))} />}
+            {instances.length > 1 && instanceID && <Listbox value={instanceID} onChange={selectInstance} label="Sender instance" className="w-56" options={instances.map((instance) => ({ value: instance.id, label: instanceOptionLabel(instance, details?.name ?? sender) }))} />}
           </div>
 
           <div className="flex flex-wrap gap-1.5 border-t border-zinc-800/70 px-3 py-2">
@@ -531,12 +531,12 @@ export function SenderDetailsPage() {
                     setDensity(value);
                     localStorage.setItem("log-density", value);
                   }}
-                  label="Densidade dos logs"
+                  label="Log density"
                   size="compact"
                   className="w-28"
                   options={[
-                    { value: "compact" as LogDensity, label: "Compacta" },
-                    { value: "comfortable" as LogDensity, label: "Confortável" },
+                    { value: "compact" as LogDensity, label: "Compact" },
+                    { value: "comfortable" as LogDensity, label: "Comfortable" },
                   ]}
                 />
               </label>
@@ -546,22 +546,22 @@ export function SenderDetailsPage() {
           {advancedOpen && (
             <div className="grid gap-3 border-t border-zinc-800 bg-[#111113] p-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
               <label className="text-[11px] text-zinc-500">
-                Data inicial
+                Start date
                 <span className="mt-1 block">
                   <DateTimePicker
                     value={startDate}
                     onChange={(value) => updateParam("start_date", value)}
-                    label="Data inicial"
+                    label="Start date"
                   />
                 </span>
               </label>
               <label className="text-[11px] text-zinc-500">
-                Data final
+                End date
                 <span className="mt-1 block">
                   <DateTimePicker
                     value={endDate}
                     onChange={(value) => updateParam("end_date", value)}
-                    label="Data final"
+                    label="End date"
                   />
                 </span>
               </label>
@@ -571,41 +571,41 @@ export function SenderDetailsPage() {
                   <Listbox
                     value={order}
                     onChange={(value) => updateParam("order", value)}
-                    label="Ordem dos logs"
+                    label="Log order"
                     size="compact"
                     className="w-full"
                     options={[
-                      { value: "desc", label: "Mais recentes primeiro" },
-                      { value: "asc", label: "Mais antigos primeiro" },
+                      { value: "desc", label: "Newest first" },
+                      { value: "asc", label: "Oldest first" },
                     ]}
                   />
                 </span>
               </label>
               <label className="text-[11px] text-zinc-500">
-                Presença de evento
+                Event presence
                 <span className="mt-1 block">
                   <Listbox
                     value={eventMode}
                     onChange={(value) => updateParam("event", value === "all" ? "" : value)}
-                    label="Filtrar logs por evento"
+                    label="Filter logs by event"
                     size="compact"
                     className="w-full"
                     options={[
-                      { value: "all", label: "Todos os logs" },
-                      { value: "with", label: "Com evento" },
-                      { value: "without", label: "Sem evento" },
+                      { value: "all", label: "All logs" },
+                      { value: "with", label: "With event" },
+                      { value: "without", label: "Without event" },
                     ]}
                   />
                 </span>
               </label>
               <label className="text-[11px] text-zinc-500">
-                Chave do evento
+                Event key
                 <span className="relative mt-1 block">
                   <Zap className="absolute left-3 top-1/2 z-10 size-3.5 -translate-y-1/2 text-zinc-600" />
                   <Input
                     value={eventKey}
                     onChange={(event) => updateParam("event_key", event.target.value)}
-                    placeholder="envia_email_sucesso"
+                    placeholder="send_email_success"
                     className="w-full pl-9 font-mono text-xs"
                   />
                 </span>
@@ -664,9 +664,9 @@ export function SenderDetailsPage() {
       </Panel>
       <ConfirmDialog
         open={pauseDialogOpen}
-        title="Pause os logs em tempo real"
-        description="A busca textual e a paginação precisam de uma lista estável. Pause o stream antes de continuar para que novos eventos não alterem os resultados durante a consulta."
-        confirmLabel="Pausar e continuar"
+        title="Pause live logs"
+        description="Text search and pagination require a stable list. Pause the stream before continuing so new events do not change the results during the query."
+        confirmLabel="Pause e continuar"
         onClose={() => {
           pendingAction.current = null;
           setPauseDialogOpen(false);

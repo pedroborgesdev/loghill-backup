@@ -42,12 +42,12 @@ const defaultSettings: Omit<Settings, "updated_at"> = {
 };
 
 const unitOptions = [
-  { value: "lines" as const, label: "Linhas" },
+  { value: "lines" as const, label: "Lines" },
   { value: "mb" as const, label: "MB" },
 ];
 
 const unitLabel: Record<StorageUnit, string> = {
-  lines: "Linhas",
+  lines: "Lines",
   mb: "MB",
 };
 
@@ -81,19 +81,19 @@ function toDraft(value: Omit<Settings, "updated_at">): SettingsDraft {
 }
 
 function validateValue(value: string) {
-  if (!value.trim()) return "Informe um valor entre 0 e 10.000.";
-  if (!/^-?\d+$/.test(value)) return "O valor deve ser um número inteiro.";
+  if (!value.trim()) return "Enter a value between 0 and 10,000.";
+  if (!/^-?\d+$/.test(value)) return "The value must be an integer.";
   const parsed = Number(value);
   if (parsed < 0 || parsed > 10_000) {
-    return "Informe um valor entre 0 e 10.000.";
+    return "Enter a value between 0 and 10,000.";
   }
   return "";
 }
 
 function validateIntegerRange(value: string, minimum: number, maximum: number, unit: string) {
-  if (!/^\d+$/.test(value)) return `Informe um número inteiro de ${unit}.`;
+  if (!/^\d+$/.test(value)) return `Enter an integer number of ${unit}.`;
   const parsed = Number(value);
-  return parsed < minimum || parsed > maximum ? `Informe um valor entre ${minimum.toLocaleString("pt-BR")} e ${maximum.toLocaleString("pt-BR")} ${unit}.` : "";
+  return parsed < minimum || parsed > maximum ? `Enter a value between ${minimum.toLocaleString("en-US")} and ${maximum.toLocaleString("en-US")} ${unit}.` : "";
 }
 
 function toNumberUnit(value: NumberUnitDraft): NumberUnitValue {
@@ -108,8 +108,8 @@ function SettingsNumberInput({ value, min, max, label, disabled, error, onChange
   return <div className="relative mt-2">
     <input id={id} type="number" inputMode="numeric" min={min} max={max} step={1} value={value} disabled={disabled} aria-invalid={Boolean(error)} onChange={(event) => onChange(event.target.value)} onKeyDown={(event) => { if (event.key === "ArrowUp" || event.key === "ArrowDown") { event.preventDefault(); adjust(event.key === "ArrowUp" ? 1 : -1); } }} className={`themed-number-input h-10 w-full rounded-lg border px-3 pr-11 font-mono text-sm text-zinc-100 disabled:cursor-not-allowed disabled:opacity-60 ${CONTROL_SURFACE} ${error ? "border-red-800" : "border-zinc-700"}`} />
     <div className="absolute bottom-px right-px top-px flex w-8 flex-col overflow-hidden rounded-r-[7px] border-l border-zinc-700 bg-zinc-950">
-      <button type="button" aria-label={`Aumentar ${label}`} aria-controls={id} disabled={disabled || (valid && numericValue >= max)} onClick={() => adjust(1)} className="grid min-h-0 flex-1 place-items-center border-b border-zinc-800 text-zinc-500 hover:bg-zinc-800 hover:text-zinc-100 disabled:cursor-not-allowed disabled:text-zinc-700"><ChevronUp className="size-3" /></button>
-      <button type="button" aria-label={`Diminuir ${label}`} aria-controls={id} disabled={disabled || (valid && numericValue <= min)} onClick={() => adjust(-1)} className="grid min-h-0 flex-1 place-items-center text-zinc-500 hover:bg-zinc-800 hover:text-zinc-100 disabled:cursor-not-allowed disabled:text-zinc-700"><ChevronDown className="size-3" /></button>
+      <button type="button" aria-label={`Increase ${label}`} aria-controls={id} disabled={disabled || (valid && numericValue >= max)} onClick={() => adjust(1)} className="grid min-h-0 flex-1 place-items-center border-b border-zinc-800 text-zinc-500 hover:bg-zinc-800 hover:text-zinc-100 disabled:cursor-not-allowed disabled:text-zinc-700"><ChevronUp className="size-3" /></button>
+      <button type="button" aria-label={`Decrease ${label}`} aria-controls={id} disabled={disabled || (valid && numericValue <= min)} onClick={() => adjust(-1)} className="grid min-h-0 flex-1 place-items-center text-zinc-500 hover:bg-zinc-800 hover:text-zinc-100 disabled:cursor-not-allowed disabled:text-zinc-700"><ChevronDown className="size-3" /></button>
     </div>
   </div>;
 }
@@ -122,17 +122,17 @@ export function SettingsButton({
   onOpen: (trigger: HTMLButtonElement) => void;
 }) {
   return (
-    <Tooltip label={collapsed ? "Configurações" : ""} className="block w-full">
+    <Tooltip label={collapsed ? "Settings" : ""} className="block w-full">
       <button
         type="button"
-        aria-label="Abrir configurações"
+        aria-label="Open settings"
         onClick={(event) => onOpen(event.currentTarget)}
         className={`flex h-10 w-full items-center gap-3 rounded-lg text-sm text-zinc-500 transition-colors duration-150 hover:bg-zinc-900 hover:text-zinc-200 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-white/50 ${
           collapsed ? "justify-center px-3" : "px-5"
         }`}
       >
         <SettingsIcon className="size-5 shrink-0" aria-hidden="true" />
-        {!collapsed && <span className="truncate">Configurações</span>}
+        {!collapsed && <span className="truncate">Settings</span>}
       </button>
     </Tooltip>
   );
@@ -188,7 +188,7 @@ function NumberUnitInput({
         </div>
         {changed && (
           <span className="shrink-0 rounded-full border border-amber-900/80 bg-amber-950/30 px-2 py-1 text-[10px] text-amber-400">
-            Alterado
+            Changed
           </span>
         )}
       </div>
@@ -225,7 +225,7 @@ function NumberUnitInput({
             <div className="absolute bottom-px right-px top-px flex w-8 flex-col overflow-hidden rounded-r-[7px] border-l border-zinc-700 bg-zinc-950">
               <button
                 type="button"
-                aria-label={`Aumentar ${label}`}
+                aria-label={`Increase ${label}`}
                 aria-controls={id}
                 disabled={disabled || (hasValidInteger && numericValue >= 10_000)}
                 onClick={() => adjustValue(1)}
@@ -235,7 +235,7 @@ function NumberUnitInput({
               </button>
               <button
                 type="button"
-                aria-label={`Diminuir ${label}`}
+                aria-label={`Decrease ${label}`}
                 aria-controls={id}
                 disabled={disabled || (hasValidInteger && numericValue <= 0)}
                 onClick={() => adjustValue(-1)}
@@ -255,26 +255,26 @@ function NumberUnitInput({
           value={value.unit}
           options={unitOptions}
           onChange={(unit) => onChange({ ...value, unit })}
-          label={`Unidade de ${label}`}
+          label={`${label} unit`}
           disabled={disabled}
           className="h-10 w-28"
         />
       </div>
 
       <p id={`${id}-help`} className="mt-2 text-[11px] leading-5 text-zinc-600">
-        {helper} Use 0 para desativar o limite automático correspondente.
+        {helper} Use 0 to disable the corresponding automatic limit.
       </p>
       <p className="mt-1 text-[11px] text-zinc-500">
-        Valor atual: {original.value.toLocaleString("pt-BR")} {unitLabel[original.unit]}
+        Current value: {original.value.toLocaleString("en-US")} {unitLabel[original.unit]}
       </p>
       {isLegacy && (
         <p className="mt-2 rounded-lg border border-amber-950 bg-amber-950/20 px-3 py-2 text-[11px] leading-5 text-amber-500">
-          Configuração legada acima de 10.000. Escolha um valor válido antes de salvar esta seção.
+          Legacy setting above 10,000. Choose a valid value before saving this section.
         </p>
       )}
       {unitChanged && (
         <p className="mt-2 rounded-lg border border-cyan-950 bg-cyan-950/20 px-3 py-2 text-[11px] text-cyan-500">
-          A unidade foi alterada sem converter o valor. Revise o número antes de salvar.
+          The unit was changed without converting the value. Review the number before saving.
         </p>
       )}
       {isZero && (
@@ -288,7 +288,7 @@ function NumberUnitInput({
 
 function SettingsSkeleton() {
   return (
-    <div aria-label="Carregando configurações" role="status" className="space-y-4">
+    <div aria-label="Loading settings" role="status" className="space-y-4">
       {[0, 1].map((item) => (
         <div key={item} className="rounded-xl border border-zinc-800 p-4">
           <Skeleton className="h-4 w-52" />
@@ -351,7 +351,7 @@ export function SettingsDialog({
       setOriginal(value);
       setDraft(toDraft(value));
     } catch (error) {
-      setLoadError(error instanceof Error ? error.message : "Não foi possível carregar as configurações.");
+      setLoadError(error instanceof Error ? error.message : "Unable to load settings.");
     } finally {
       setIsInitialLoading(false);
     }
@@ -373,8 +373,8 @@ export function SettingsDialog({
       "inactive_preservation.value": validateValue(
         draft.inactive_preservation.value,
       ),
-      inactive_after_seconds: validateIntegerRange(draft.inactive_after_seconds, 1, 86_400, "segundos"),
-      delete_inactive_after_days: validateIntegerRange(draft.delete_inactive_after_days, 1, 3_650, "dias"),
+      inactive_after_seconds: validateIntegerRange(draft.inactive_after_seconds, 1, 86_400, "seconds"),
+      delete_inactive_after_days: validateIntegerRange(draft.delete_inactive_after_days, 1, 3_650, "days"),
       ...backendFieldErrors,
     };
     if (
@@ -386,7 +386,7 @@ export function SettingsDialog({
         Number(draft.log_limit.value)
     ) {
       next["inactive_preservation.value"] =
-        "A quantidade preservada não pode ser maior que o limite máximo.";
+        "The retained amount cannot exceed the maximum limit.";
     }
     return next;
   }, [backendFieldErrors, draft]);
@@ -479,7 +479,7 @@ export function SettingsDialog({
       if (error instanceof APIError && error.field) {
         setBackendFieldErrors({ [error.field]: error.message });
       }
-      setSaveError(error instanceof Error ? error.message : "Não foi possível salvar as configurações.");
+      setSaveError(error instanceof Error ? error.message : "Unable to save settings.");
     } finally {
       setIsSaving(false);
     }
@@ -487,20 +487,20 @@ export function SettingsDialog({
 
   const sectionInformation = {
     general: {
-      title: "Geral",
-      description: "Consulte os valores atualmente aplicados e como as alterações entram em vigor.",
+      title: "General",
+      description: "Review the currently applied values and how changes take effect.",
     },
     storage: {
-      title: "Armazenamento de logs",
-      description: "Defina o limite máximo usado durante a gravação de novos logs.",
+      title: "Log storage",
+      description: "Set the maximum limit used when writing new logs.",
     },
     inactivity: {
-      title: "Inatividade",
-      description: "Defina quando um sender fica inativo, quanto preservar e quando excluir seus logs.",
+      title: "Inactivity",
+      description: "Set when a sender becomes inactive, how much to retain, and when to delete its logs.",
     },
     email: {
-      title: "E-mail",
-      description: "Configure o provedor usado para entregar os alertas de logs.",
+      title: "Email",
+      description: "Configure the provider used to deliver log alerts.",
     },
   }[category];
 
@@ -508,7 +508,7 @@ export function SettingsDialog({
     <div className="fixed inset-0 z-[150] flex items-end justify-center sm:items-center sm:p-4">
       <button
         type="button"
-        aria-label="Fechar configurações"
+        aria-label="Close settings"
         className="absolute inset-0 bg-black/75"
         onClick={requestClose}
       />
@@ -524,14 +524,14 @@ export function SettingsDialog({
         <header className="flex shrink-0 items-start justify-between gap-4 border-b border-zinc-800 bg-zinc-950 px-4 py-4 sm:px-5">
           <div>
             <h2 id={titleId} className="text-base font-semibold text-zinc-100">
-              Configurações
+              Settings
             </h2>
             <p id={descriptionId} className="mt-1 text-xs leading-5 text-zinc-500">
-              Configure os limites de armazenamento e compactação dos logs.
+              Configure log storage and compaction limits.
             </p>
           </div>
           <ModalCloseButton
-            label="Fechar configurações"
+            label="Close settings"
             onClick={requestClose}
           />
         </header>
@@ -539,7 +539,7 @@ export function SettingsDialog({
         <div className="min-h-0 flex-1 sm:grid sm:grid-cols-[184px_minmax(0,1fr)]">
           <aside className="hidden border-r border-zinc-800 bg-[#111113] p-3 sm:block">
             <p className="px-2 pb-2 text-[10px] font-medium uppercase tracking-wider text-zinc-600">
-              Categorias
+              Categories
             </p>
             <button
               type="button"
@@ -551,7 +551,7 @@ export function SettingsDialog({
                   : "text-zinc-500 hover:bg-zinc-900 hover:text-zinc-200"
               }`}
             >
-              <SlidersHorizontal className="size-4" /> Geral
+              <SlidersHorizontal className="size-4" /> General
             </button>
             <button
               type="button"
@@ -563,7 +563,7 @@ export function SettingsDialog({
                   : "text-zinc-500 hover:bg-zinc-900 hover:text-zinc-200"
               }`}
             >
-              <Database className="size-4" /> Armazenamento de logs
+              <Database className="size-4" /> Log storage
             </button>
             <button
               type="button"
@@ -575,7 +575,7 @@ export function SettingsDialog({
                   : "text-zinc-500 hover:bg-zinc-900 hover:text-zinc-200"
               }`}
             >
-              <TimerReset className="size-4" /> Inatividade
+              <TimerReset className="size-4" /> Inactivity
             </button>
             <button
               type="button"
@@ -587,7 +587,7 @@ export function SettingsDialog({
                   : "text-zinc-500 hover:bg-zinc-900 hover:text-zinc-200"
               }`}
             >
-              <Mail className="size-4" /> E-mail
+              <Mail className="size-4" /> Email
             </button>
           </aside>
 
@@ -598,25 +598,25 @@ export function SettingsDialog({
                 aria-current={category === "general" ? "page" : undefined}
                 onClick={() => setCategory("general")}
                 className={`h-8 shrink-0 rounded-lg px-3 text-xs ${category === "general" ? "bg-zinc-800 text-zinc-100" : "text-zinc-500"}`}
-              >Geral</button>
+              >General</button>
               <button
                 type="button"
                 aria-current={category === "storage" ? "page" : undefined}
                 onClick={() => setCategory("storage")}
                 className={`h-8 shrink-0 rounded-lg px-3 text-xs ${category === "storage" ? "bg-zinc-800 text-zinc-100" : "text-zinc-500"}`}
-              >Armazenamento de logs</button>
+              >Log storage</button>
               <button
                 type="button"
                 aria-current={category === "inactivity" ? "page" : undefined}
                 onClick={() => setCategory("inactivity")}
                 className={`h-8 shrink-0 rounded-lg px-3 text-xs ${category === "inactivity" ? "bg-zinc-800 text-zinc-100" : "text-zinc-500"}`}
-              >Inatividade</button>
+              >Inactivity</button>
               <button
                 type="button"
                 aria-current={category === "email" ? "page" : undefined}
                 onClick={() => { setEmailMounted(true); setCategory("email"); }}
                 className={`h-8 shrink-0 rounded-lg px-3 text-xs ${category === "email" ? "bg-zinc-800 text-zinc-100" : "text-zinc-500"}`}
-              >E-mail</button>
+              >Email</button>
             </div>
             <section aria-labelledby={`${titleId}-storage`} className="p-4 sm:p-5">
               <div className="mb-4">
@@ -638,7 +638,7 @@ export function SettingsDialog({
                   <div>
                     <AlertTriangle className="mx-auto size-5 text-red-500" />
                     <p className="mt-3 text-sm text-red-300">{loadError}</p>
-                    <Button className="mt-4" onClick={() => void load()}>Tentar novamente</Button>
+                    <Button className="mt-4" onClick={() => void load()}>Try again</Button>
                   </div>
                 </div>
               ) : draft && original ? (
@@ -647,34 +647,34 @@ export function SettingsDialog({
                     <div className="space-y-4">
                       <div className="grid gap-3 sm:grid-cols-2">
                         <div className="rounded-xl border border-zinc-800 bg-zinc-950/55 p-4">
-                          <p className="text-xs text-zinc-500">Limite máximo atual</p>
+                          <p className="text-xs text-zinc-500">Current maximum limit</p>
                           <p className="mt-2 font-mono text-lg text-zinc-100">
-                            {original.log_limit.value.toLocaleString("pt-BR")} {unitLabel[original.log_limit.unit]}
+                            {original.log_limit.value.toLocaleString("en-US")} {unitLabel[original.log_limit.unit]}
                           </p>
                         </div>
                         <div className="rounded-xl border border-zinc-800 bg-zinc-950/55 p-4">
-                          <p className="text-xs text-zinc-500">Preservação após inatividade</p>
+                          <p className="text-xs text-zinc-500">Retention after inactivity</p>
                           <p className="mt-2 font-mono text-lg text-zinc-100">
-                            {original.inactive_preservation.value.toLocaleString("pt-BR")} {unitLabel[original.inactive_preservation.unit]}
+                            {original.inactive_preservation.value.toLocaleString("en-US")} {unitLabel[original.inactive_preservation.unit]}
                           </p>
                         </div>
                       </div>
                       <div className="rounded-xl border border-zinc-800 bg-[#111113] p-4 text-xs leading-6 text-zinc-500">
-                        As alterações salvas entram em vigor nos próximos ciclos de gravação e manutenção, sem reiniciar o LogHill.
+                        Saved changes take effect during the next write and maintenance cycles without restarting LogHill.
                       </div>
                     </div>
                   )}
                   {category === "storage" && (
                     <NumberUnitInput
-                      label="Limite máximo de logs"
-                      description="Define o tamanho máximo do arquivo de logs de cada sender. Quando o limite for atingido, os registros mais antigos serão removidos primeiro."
-                      helper="Quando o limite for atingido, os logs mais antigos serão removidos."
+                      label="Maximum log limit"
+                      description="Sets the maximum size of each sender log file. When the limit is reached, the oldest records are removed first."
+                      helper="When the limit is reached, the oldest logs are removed."
                       value={draft.log_limit}
                       original={original.log_limit}
                       disabled={isSaving}
                       error={errors["log_limit.value"]}
                       changed={JSON.stringify(draft.log_limit) !== JSON.stringify(toDraft(original).log_limit)}
-                      zeroMessage="Sem limite: o arquivo poderá continuar crescendo enquanto o sender estiver ativo."
+                      zeroMessage="No limit: the file may continue growing while the sender is active."
                       onChange={(value) => changeDraft("log_limit", value)}
                     />
                   )}
@@ -682,28 +682,28 @@ export function SettingsDialog({
                     <div className="space-y-4">
                       <div className="grid gap-3 sm:grid-cols-2">
                         <label className="rounded-xl border border-zinc-800 bg-[#111113] p-4 text-xs text-zinc-300">
-                          Considerar inativo após
-                          <SettingsNumberInput value={draft.inactive_after_seconds} min={1} max={86400} label="tempo de inatividade" disabled={isSaving} error={errors.inactive_after_seconds} onChange={(value) => changeTimeDraft("inactive_after_seconds", value)} />
-                          <span className="mt-2 block text-[11px] text-zinc-600">Tempo sem logs ou healthcheck, em segundos.</span>
+                          Mark inactive after
+                          <SettingsNumberInput value={draft.inactive_after_seconds} min={1} max={86400} label="inactivity duration" disabled={isSaving} error={errors.inactive_after_seconds} onChange={(value) => changeTimeDraft("inactive_after_seconds", value)} />
+                          <span className="mt-2 block text-[11px] text-zinc-600">Time without logs or health checks, in seconds.</span>
                           {errors.inactive_after_seconds && <span role="alert" className="mt-2 block text-[11px] text-red-400">{errors.inactive_after_seconds}</span>}
                         </label>
                         <label className="rounded-xl border border-zinc-800 bg-[#111113] p-4 text-xs text-zinc-300">
-                          Excluir instâncias inativas após
-                          <SettingsNumberInput value={draft.delete_inactive_after_days} min={1} max={3650} label="prazo de exclusão" disabled={isSaving} error={errors.delete_inactive_after_days} onChange={(value) => changeTimeDraft("delete_inactive_after_days", value)} />
-                          <span className="mt-2 block text-[11px] text-zinc-600">Prazo contado a partir da inativação; a instância e seus logs serão removidos. Sem outras instâncias, o sender também desaparece.</span>
+                          Delete inactive instances after
+                          <SettingsNumberInput value={draft.delete_inactive_after_days} min={1} max={3650} label="deletion period" disabled={isSaving} error={errors.delete_inactive_after_days} onChange={(value) => changeTimeDraft("delete_inactive_after_days", value)} />
+                          <span className="mt-2 block text-[11px] text-zinc-600">Period counted from deactivation; the instance and its logs will be removed. If no other instances remain, the sender also disappears.</span>
                           {errors.delete_inactive_after_days && <span role="alert" className="mt-2 block text-[11px] text-red-400">{errors.delete_inactive_after_days}</span>}
                         </label>
                       </div>
                       <NumberUnitInput
-                        label="Logs preservados após inatividade"
-                        description="Define quanto do histórico será mantido quando um sender for marcado como inativo."
-                        helper="Quando o sender ficar inativo, somente os registros mais recentes dentro deste limite serão mantidos."
+                        label="Logs retained after inactivity"
+                        description="Sets how much history is retained when a sender is marked inactive."
+                        helper="When the sender becomes inactive, only the most recent records within this limit are retained."
                         value={draft.inactive_preservation}
                         original={original.inactive_preservation}
                         disabled={isSaving}
                         error={errors["inactive_preservation.value"]}
                         changed={JSON.stringify(draft.inactive_preservation) !== JSON.stringify(toDraft(original).inactive_preservation)}
-                        zeroMessage="Nenhum log será preservado quando o sender ficar inativo."
+                        zeroMessage="No logs will be retained when the sender becomes inactive."
                         onChange={(value) => changeDraft("inactive_preservation", value)}
                       />
                     </div>
@@ -729,13 +729,13 @@ export function SettingsDialog({
                   }}
                   className="ml-1 underline decoration-zinc-700 underline-offset-2 hover:text-amber-300 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-white/50"
                 >
-                  Desfazer alterações
+                  Undo changes
                 </button>
               </span>
             )}
             {saveSucceeded && (
               <span role="status" className="inline-flex items-center gap-1.5 text-emerald-500">
-                <CheckCircle2 className="size-3.5" /> Configurações salvas com sucesso.
+                <CheckCircle2 className="size-3.5" /> Settings saved successfully.
               </span>
             )}
             {saveError && <span role="alert" className="text-red-400">{saveError}</span>}
@@ -751,17 +751,17 @@ export function SettingsDialog({
               disabled={!draft || isInitialLoading || isSaving}
               className="mr-auto border-transparent bg-transparent text-zinc-500 sm:mr-2"
             >
-              <RotateCcw className="size-3.5" /> Restaurar padrões
+              <RotateCcw className="size-3.5" /> Restore defaults
             </Button>
             <Button onClick={requestClose} disabled={isSaving} className="border-transparent bg-transparent">
-              Cancelar
+              Cancel
             </Button>
             <Button
               onClick={() => void save()}
               disabled={!draft || !isDirty || hasErrors || isSaving}
               className="border-zinc-600 bg-zinc-800 text-zinc-100 hover:border-zinc-500 hover:bg-zinc-700 disabled:text-zinc-500"
             >
-              {isSaving ? "Salvando..." : "Salvar alterações"}
+              {isSaving ? "Saving..." : "Save changes"}
             </Button>
           </div>
         </footer>}
@@ -771,7 +771,7 @@ export function SettingsDialog({
         <div className="fixed inset-0 z-[220] grid place-items-center p-4">
           <button
             type="button"
-            aria-label="Fechar confirmação e continuar editando"
+            aria-label="Close confirmation and continue editing"
             className="absolute inset-0 bg-black/75"
             onClick={() => setDiscardOpen(false)}
           />
@@ -783,20 +783,20 @@ export function SettingsDialog({
             className="relative w-full max-w-sm rounded-xl border border-zinc-700 bg-[#161618] p-5 shadow-2xl shadow-black/70"
           >
             <h3 id={`${titleId}-discard`} className="text-sm font-semibold text-zinc-100">
-              Descartar alterações?
+              Discard changes?
             </h3>
             <p className="mt-2 text-xs leading-5 text-zinc-500">
-              As alterações feitas nesta janela ainda não foram salvas.
+              Changes made in this window have not been saved yet.
             </p>
             <div className="mt-5 flex justify-end gap-2">
               <Button onClick={() => setDiscardOpen(false)}>
-                Continuar editando
+                Keep editing
               </Button>
               <Button
                 onClick={onClose}
                 className="border-red-900 bg-red-950/30 text-red-300 hover:bg-red-950/60"
               >
-                Descartar
+                Discard
               </Button>
             </div>
           </div>

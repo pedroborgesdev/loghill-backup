@@ -17,21 +17,21 @@ function mockFetch() {
   );
 }
 
-it("shows Eventos in the persistent sidebar with active state", async () => {
+it("shows Events in the persistent sidebar with active state", async () => {
   mockFetch();
   render(
     <AuthProvider>
       <MemoryRouter initialEntries={["/events"]}>
         <Routes>
           <Route element={<AppShell />}>
-            <Route path="events" element={<div>Conteúdo de eventos</div>} />
+            <Route path="events" element={<div>Events content</div>} />
           </Route>
         </Routes>
       </MemoryRouter>
     </AuthProvider>,
   );
-  const links = await screen.findAllByRole("link", { name: "Eventos" });
+  const links = await screen.findAllByRole("link", { name: "Events" });
   expect(links[0]).toHaveAttribute("aria-current", "page");
-  expect(screen.getByText("Conteúdo de eventos")).toBeInTheDocument();
+  expect(screen.getByText("Events content")).toBeInTheDocument();
   vi.unstubAllGlobals();
 });

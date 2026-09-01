@@ -101,38 +101,38 @@ func errBody(c *gin.Context, code, msg string) gin.H {
 	return gin.H{"error": gin.H{"code": code, "message": msg, "request_id": c.GetString("request_id")}}
 }
 func (a *APIController) fail(c *gin.Context, err error) {
-	status, code, msg := 500, "INTERNAL_ERROR", "Erro interno"
+	status, code, msg := 500, "INTERNAL_ERROR", "Internal error"
 	switch {
 	case errors.Is(err, domain.ErrNotFound):
-		status, code, msg = 404, "SENDER_NOT_FOUND", "Sender não encontrado"
+		status, code, msg = 404, "SENDER_NOT_FOUND", "Sender not found"
 	case errors.Is(err, domain.ErrExpired):
-		status, code, msg = 409, "SENDER_EXPIRED", "Sender expirado; registre um novo sender"
+		status, code, msg = 409, "SENDER_EXPIRED", "Sender expired; register a new sender"
 	case errors.Is(err, domain.ErrLogFileNotFound):
-		status, code, msg = 410, "LOG_FILE_NOT_FOUND", "Arquivo de log não está mais disponível"
+		status, code, msg = 410, "LOG_FILE_NOT_FOUND", "The log file is no longer available"
 	case errors.Is(err, domain.ErrInvalidSeverity):
-		status, code, msg = 422, "INVALID_SEVERITY", "Severity inválida"
+		status, code, msg = 422, "INVALID_SEVERITY", "Invalid severity"
 	case errors.Is(err, domain.ErrInvalidEventKey):
-		c.AbortWithStatusJSON(http.StatusBadRequest, errorBodyWithField(c, "INVALID_EVENT_KEY", "O identificador do evento é inválido.", "event"))
+		c.AbortWithStatusJSON(http.StatusBadRequest, errorBodyWithField(c, "INVALID_EVENT_KEY", "The event identifier is invalid.", "event"))
 		return
 	case errors.Is(err, domain.ErrInvalidEventOccurrenceID):
-		c.AbortWithStatusJSON(http.StatusBadRequest, errorBodyWithField(c, "INVALID_EVENT_OCCURRENCE_ID", "O identificador da ocorrência é inválido.", "event_occurrence_id"))
+		c.AbortWithStatusJSON(http.StatusBadRequest, errorBodyWithField(c, "INVALID_EVENT_OCCURRENCE_ID", "The occurrence identifier is invalid.", "event_occurrence_id"))
 		return
 	case errors.Is(err, domain.ErrInvalidName):
-		status, code, msg = 422, "INVALID_SENDER_NAME", "Nome de sender inválido"
+		status, code, msg = 422, "INVALID_SENDER_NAME", "Invalid sender name"
 	case errors.Is(err, domain.ErrSenderAlreadyExists):
-		status, code, msg = 409, "SENDER_ALREADY_EXISTS", "Já existe um sender com este identificador."
+		status, code, msg = 409, "SENDER_ALREADY_EXISTS", "A sender with this identifier already exists."
 	case errors.Is(err, domain.ErrInvalidSenderKey):
-		status, code, msg = 401, "INVALID_SENDER_KEY", "A chave informada não é válida para este sender."
+		status, code, msg = 401, "INVALID_SENDER_KEY", "The provided key is not valid for this sender."
 	case errors.Is(err, domain.ErrInvalidInstanceToken):
-		status, code, msg = 401, "INVALID_INSTANCE_TOKEN", "A credencial da instância é inválida. Inicialize uma nova instância."
+		status, code, msg = 401, "INVALID_INSTANCE_TOKEN", "The instance credential is invalid. Initialize a new instance."
 	case errors.Is(err, domain.ErrSenderRevoked):
-		status, code, msg = 409, "SENDER_REVOKED", "O sender está revogado. Gere uma nova chave ao reativá-lo."
+		status, code, msg = 409, "SENDER_REVOKED", "The sender is revoked. Generate a new key when reactivating it."
 	case errors.Is(err, domain.ErrConflict):
-		status, code, msg = 409, "CONFLICT", "A operação não pode ser concluída no estado atual."
+		status, code, msg = 409, "CONFLICT", "The operation cannot be completed in its current state."
 	case errors.Is(err, domain.ErrTooManySubscribers):
-		status, code, msg = 429, "RATE_LIMIT_EXCEEDED", "Limite de streams atingido"
+		status, code, msg = 429, "RATE_LIMIT_EXCEEDED", "Stream limit reached"
 	case errors.Is(err, contextCanceled):
-		status, code, msg = 408, "TIMEOUT", "Operação cancelada"
+		status, code, msg = 408, "TIMEOUT", "Operation canceled"
 	}
 	var validation *services.SenderValidationError
 	if errors.As(err, &validation) {
@@ -161,7 +161,7 @@ func (a *APIController) CreateSender(c *gin.Context) {
 	if err != nil {
 		if errors.Is(err, domain.ErrSenderAlreadyExists) {
 			id, _ := services.NormalizeName(in.Name)
-			c.JSON(http.StatusConflict, errorBodyWithField(c, "SENDER_ALREADY_EXISTS", fmt.Sprintf("Já existe um sender com o identificador %s.", id), "name"))
+			c.JSON(http.StatusConflict, errorBodyWithField(c, "SENDER_ALREADY_EXISTS", fmt.Sprintf("A sender with identifier %s already exists.", id), "name"))
 			return
 		}
 		a.fail(c, err)
@@ -173,7 +173,7 @@ func (a *APIController) CreateSender(c *gin.Context) {
 func (a *APIController) CheckSenderID(c *gin.Context) {
 	id, err := services.NormalizeName(c.Query("id"))
 	if err != nil {
-		c.JSON(http.StatusUnprocessableEntity, errorBodyWithField(c, "INVALID_SENDER_ID", "O identificador informado é inválido.", "id"))
+		c.JSON(http.StatusUnprocessableEntity, errorBodyWithField(c, "INVALID_SENDER_ID", "The provided identifier is invalid.", "id"))
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"id": id, "available": a.svc.SenderIDAvailable(c.Request.Context(), id)})
@@ -248,7 +248,7 @@ func (a *APIController) DeleteSender(c *gin.Context) {
 func (a *APIController) ReceiveLog(c *gin.Context) {
 	var in dto.ReceiveLogRequest
 	if err := c.ShouldBindJSON(&in); err != nil {
-		c.JSON(400, errBody(c, "INVALID_REQUEST", "Body inválido"))
+		c.JSON(400, errBody(c, "INVALID_REQUEST", "Invalid request body"))
 		return
 	}
 	senderID := strings.TrimSpace(in.SenderID)
@@ -287,7 +287,7 @@ func (a *APIController) InitSenderInstance(c *gin.Context) {
 func (a *APIController) InitInstanceByKey(c *gin.Context) {
 	var in dto.InitInstanceRequest
 	if err := c.ShouldBindJSON(&in); err != nil && !errors.Is(err, io.EOF) {
-		c.JSON(http.StatusBadRequest, errBody(c, "INVALID_REQUEST", "Body inválido"))
+		c.JSON(http.StatusBadRequest, errBody(c, "INVALID_REQUEST", "Invalid request body"))
 		return
 	}
 	if strings.TrimSpace(in.SenderName) != "" {
@@ -340,7 +340,7 @@ func (a *APIController) DeleteSenderInstance(c *gin.Context) {
 func (a *APIController) SenderHealth(c *gin.Context) {
 	var body map[string]any
 	if c.Request.ContentLength > 0 && c.ShouldBindJSON(&body) != nil {
-		c.JSON(400, errBody(c, "INVALID_REQUEST", "Body inválido"))
+		c.JSON(400, errBody(c, "INVALID_REQUEST", "Invalid request body"))
 		return
 	}
 	s, at, err := a.svc.HealthWithInstanceAuth(c.Request.Context(), c.Param("sender"), c.GetHeader("X-Sender-Key"), strings.TrimSpace(c.GetHeader("X-Sender-Instance-ID")), strings.TrimSpace(c.GetHeader("X-Sender-Instance-Token")))
@@ -411,7 +411,7 @@ func (a *APIController) Download(c *gin.Context) {
 	}
 	format := c.DefaultQuery("format", "jsonl")
 	if format != "txt" && format != "jsonl" {
-		c.JSON(422, errBody(c, "INVALID_REQUEST", "Formato inválido"))
+		c.JSON(422, errBody(c, "INVALID_REQUEST", "Invalid format"))
 		return
 	}
 	filename := url.PathEscape(c.Param("sender") + "-logs." + format)
@@ -442,7 +442,7 @@ func (a *APIController) Stream(c *gin.Context) {
 	c.Header("X-Accel-Buffering", "no")
 	flusher, ok := c.Writer.(http.Flusher)
 	if !ok {
-		c.JSON(500, errBody(c, "INTERNAL_ERROR", "Streaming indisponível"))
+		c.JSON(500, errBody(c, "INTERNAL_ERROR", "Streaming unavailable"))
 		return
 	}
 	writeEvent(c.Writer, "status", gin.H{"status": "connected"})
@@ -501,15 +501,15 @@ func (a *APIController) UpdateSettings(c *gin.Context) {
 	decoder := json.NewDecoder(c.Request.Body)
 	decoder.DisallowUnknownFields()
 	if err := decoder.Decode(&input); err != nil {
-		c.JSON(http.StatusBadRequest, settingsErrorBody(c, "Configurações inválidas ou incompletas.", ""))
+		c.JSON(http.StatusBadRequest, settingsErrorBody(c, "Invalid or incomplete settings.", ""))
 		return
 	}
 	if err := decoder.Decode(&struct{}{}); !errors.Is(err, io.EOF) {
-		c.JSON(http.StatusBadRequest, settingsErrorBody(c, "O body deve conter um único objeto JSON.", ""))
+		c.JSON(http.StatusBadRequest, settingsErrorBody(c, "The request body must contain a single JSON object.", ""))
 		return
 	}
 	if input.LogLimit == nil || input.InactivePreservation == nil {
-		c.JSON(http.StatusBadRequest, settingsErrorBody(c, "Configurações inválidas ou incompletas.", ""))
+		c.JSON(http.StatusBadRequest, settingsErrorBody(c, "Invalid or incomplete settings.", ""))
 		return
 	}
 	current := a.svc.Settings()
@@ -574,7 +574,7 @@ func (a *APIController) Ready(c *gin.Context) {
 }
 func (a *APIController) Spa(c *gin.Context) {
 	if strings.HasPrefix(c.Request.URL.Path, "/api/") || c.Request.URL.Path == "/health" || c.Request.URL.Path == "/ready" {
-		c.JSON(404, errBody(c, "NOT_FOUND", "Rota não encontrada"))
+		c.JSON(404, errBody(c, "NOT_FOUND", "Route not found"))
 		return
 	}
 	path := strings.TrimPrefix(c.Request.URL.Path, "/")

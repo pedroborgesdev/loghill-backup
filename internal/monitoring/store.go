@@ -20,8 +20,8 @@ type persistedRules struct {
 
 var everySeverity = []domain.LogSeverity{domain.Undefined, domain.Trace, domain.Debug, domain.Info, domain.Warn, domain.Error, domain.Fatal}
 
-// Severidades existentes quando o gatilho generico era persistido como uma
-// condicao "severity in". Manter esta lista permite migrar regras antigas.
+// Severities supported when the generic trigger was persisted as a
+// "severity in" condition. Keeping this list allows old rules to be migrated.
 var legacyEverySeverity = []domain.LogSeverity{domain.Trace, domain.Debug, domain.Info, domain.Warn, domain.Error, domain.Fatal}
 
 type persistedPending struct {
@@ -88,8 +88,8 @@ func (s *Store) loadRules() error {
 	return nil
 }
 
-// migrateLogReceived converte o gatilho genérico antigo, gravado como
-// "severity in [todas as severities]", no tipo dedicado log_received.
+// migrateLogReceived converts the old generic trigger, stored as
+// "severity in [all severities]", to the dedicated log_received type.
 func migrateLogReceived(g *ExpressionGroup) bool {
 	changed := false
 	for i := range g.Nodes {

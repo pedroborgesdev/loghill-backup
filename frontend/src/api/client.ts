@@ -28,7 +28,7 @@ export async function request<T>(path: string, options: RequestInit = {}): Promi
       try {
         body = await response.json();
       } catch {
-        /* resposta inválida */
+        /* invalid response */
       }
       if (response.status === 401 && !path.includes("/auth/")) {
         onUnauthorized?.();

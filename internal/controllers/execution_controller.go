@@ -49,7 +49,7 @@ func (*executionFilterError) Error() string { return "invalid execution period" 
 func (a *APIController) ListExecutions(c *gin.Context) {
 	filters, err := parseExecutionFilters(c, a.cfg.MaxPageSize)
 	if err != nil {
-		c.JSON(http.StatusUnprocessableEntity, errBody(c, "INVALID_EXECUTION_FILTER", "Período de execução inválido."))
+		c.JSON(http.StatusUnprocessableEntity, errBody(c, "INVALID_EXECUTION_FILTER", "Invalid execution period."))
 		return
 	}
 	c.JSON(http.StatusOK, a.executions.List(filters))
@@ -57,7 +57,7 @@ func (a *APIController) ListExecutions(c *gin.Context) {
 func (a *APIController) GetExecution(c *gin.Context) {
 	record, ok := a.executions.Get(c.Param("executionID"))
 	if !ok {
-		c.JSON(http.StatusNotFound, errBody(c, "EXECUTION_NOT_FOUND", "Execução não encontrada."))
+		c.JSON(http.StatusNotFound, errBody(c, "EXECUTION_NOT_FOUND", "Execution not found."))
 		return
 	}
 	c.JSON(http.StatusOK, record)
@@ -66,7 +66,7 @@ func (a *APIController) RecentExecutions(c *gin.Context) {
 	limit := positive(c, "limit", 10, 100)
 	filters, err := parseExecutionFilters(c, 100)
 	if err != nil {
-		c.JSON(http.StatusUnprocessableEntity, errBody(c, "INVALID_EXECUTION_FILTER", "Filtros inválidos."))
+		c.JSON(http.StatusUnprocessableEntity, errBody(c, "INVALID_EXECUTION_FILTER", "Invalid filters."))
 		return
 	}
 	filters.Page = 1

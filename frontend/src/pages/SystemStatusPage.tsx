@@ -32,24 +32,24 @@ export function SystemStatusPage() {
   return (
     <div className="space-y-4">
       <div>
-        <h2 className="text-xl font-semibold">Status do sistema</h2>
+        <h2 className="text-xl font-semibold">System status</h2>
         <p className="mt-1 text-sm text-zinc-500">
-          Disponibilidade da API e do armazenamento.
+          API and storage availability.
         </p>
       </div>
       {error && <ErrorAlert message={error} onRetry={() => void query.refetch()} />}
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        <MetricCard label="API" value={health?.status ?? "—"} hint="Estado atual" icon={<Server className="size-4" />} loading={!health} />
-        <MetricCard label="Uptime" value={health ? `${formatNumber(health.uptime_seconds)}s` : "—"} hint="Desde a inicialização" icon={<Radio className="size-4" />} loading={!health} />
+        <MetricCard label="API" value={health?.status ?? "—"} hint="Current status" icon={<Server className="size-4" />} loading={!health} />
+        <MetricCard label="Uptime" value={health ? `${formatNumber(health.uptime_seconds)}s` : "—"} hint="Since startup" icon={<Radio className="size-4" />} loading={!health} />
         <MetricCard label="Senders" value={health ? formatNumber(health.senders.total) : "—"} hint={`${health?.senders.online ?? 0} online`} icon={<Database className="size-4" />} loading={!health} />
-        <MetricCard label="Storage" value={health?.storage.writable ? "Gravável" : "Indisponível"} hint={health?.storage.path ?? "Verificando"} icon={<HardDrive className="size-4" />} loading={!health} />
+        <MetricCard label="Storage" value={health?.storage.writable ? "Writable" : "Unavailable"} hint={health?.storage.path ?? "Checking"} icon={<HardDrive className="size-4" />} loading={!health} />
       </div>
       <Panel className="p-4">
         <div className="flex items-center justify-between border-b border-zinc-800 pb-3">
-          <h3 className="text-sm font-medium">Diagnóstico</h3>
+          <h3 className="text-sm font-medium">Diagnostics</h3>
           <StatusIndicator
             status={health?.status === "healthy" ? "online" : "neutral"}
-            label={health?.status === "healthy" ? "Operacional" : "Verificando"}
+            label={health?.status === "healthy" ? "Operational" : "Checking"}
           />
         </div>
         {!health ? (
@@ -59,8 +59,8 @@ export function SystemStatusPage() {
           </div>
         ) : (
           <dl className="grid gap-4 pt-4 text-xs sm:grid-cols-2">
-            <div><dt className="text-zinc-600">Última verificação</dt><dd className="mt-1 text-zinc-300">{formatDate(health.time)}</dd></div>
-            <div><dt className="text-zinc-600">Diretório de dados</dt><dd className="mt-1 font-mono text-zinc-300">{health.storage.path}</dd></div>
+            <div><dt className="text-zinc-600">Last check</dt><dd className="mt-1 text-zinc-300">{formatDate(health.time)}</dd></div>
+            <div><dt className="text-zinc-600">Data directory</dt><dd className="mt-1 font-mono text-zinc-300">{health.storage.path}</dd></div>
           </dl>
         )}
       </Panel>

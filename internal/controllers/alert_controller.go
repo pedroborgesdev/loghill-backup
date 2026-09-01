@@ -23,7 +23,7 @@ func (a *APIController) ListAlerts(c *gin.Context) {
 	if raw := c.Query("enabled"); raw != "" {
 		value, err := strconv.ParseBool(raw)
 		if err != nil {
-			c.JSON(http.StatusUnprocessableEntity, alertErrorBody(c, "INVALID_ALERT_FILTER", "O filtro enabled é inválido.", "enabled"))
+			c.JSON(http.StatusUnprocessableEntity, alertErrorBody(c, "INVALID_ALERT_FILTER", "The enabled filter is invalid.", "enabled"))
 			return
 		}
 		enabled = &value
@@ -33,7 +33,7 @@ func (a *APIController) ListAlerts(c *gin.Context) {
 		var err error
 		severity, err = domain.ParseSeverity(raw)
 		if err != nil {
-			c.JSON(http.StatusUnprocessableEntity, alertErrorBody(c, "INVALID_ALERT_FILTER", "O filtro severity é inválido.", "severity"))
+			c.JSON(http.StatusUnprocessableEntity, alertErrorBody(c, "INVALID_ALERT_FILTER", "The severity filter is invalid.", "severity"))
 			return
 		}
 	}
@@ -86,7 +86,7 @@ func (a *APIController) DeleteAlert(c *gin.Context) {
 	id := c.Param("alertID")
 	if a.monitoring != nil {
 		if usage := a.monitoring.AlertUsageCount(id); usage > 0 {
-			body := errBody(c, "ALERT_USED_BY_MONITORING", "O alerta está associado a regras de monitoramento.")
+			body := errBody(c, "ALERT_USED_BY_MONITORING", "The alert is associated with monitoring rules.")
 			body["monitoring_rules"] = usage
 			c.JSON(http.StatusConflict, body)
 			return
@@ -106,7 +106,7 @@ func (a *APIController) UpdateAlertStatus(c *gin.Context) {
 	}
 	if !decodeOne(c, &input) || input.Enabled == nil {
 		if input.Enabled == nil && !c.IsAborted() {
-			c.JSON(http.StatusBadRequest, alertErrorBody(c, "INVALID_REQUEST", "Informe o estado do alerta.", "enabled"))
+			c.JSON(http.StatusBadRequest, alertErrorBody(c, "INVALID_REQUEST", "Provide the alert state.", "enabled"))
 		}
 		return
 	}
@@ -127,11 +127,11 @@ func (a *APIController) UpdateAlertStatus(c *gin.Context) {
 func (a *APIController) TestAlert(c *gin.Context) {
 	alert, sender, err := a.notifications.EnqueueAlertTest(c.Request.Context(), c.Param("alertID"))
 	if errors.Is(err, services.ErrNotificationWithoutSenders) {
-		c.JSON(http.StatusConflict, alertErrorBody(c, "ALERT_WITHOUT_SENDERS", "O alerta não possui senders disponíveis.", "sender_ids"))
+		c.JSON(http.StatusConflict, alertErrorBody(c, "ALERT_WITHOUT_SENDERS", "The alert has no available senders.", "sender_ids"))
 		return
 	}
 	if errors.Is(err, notification.ErrQueueFull) || errors.Is(err, notification.ErrQueueClosed) {
-		c.JSON(http.StatusServiceUnavailable, alertErrorBody(c, "EMAIL_QUEUE_FULL", "Não foi possível enfileirar o teste agora.", ""))
+		c.JSON(http.StatusServiceUnavailable, alertErrorBody(c, "EMAIL_QUEUE_FULL", "Unable to queue the test right now.", ""))
 		return
 	}
 	if err != nil {
@@ -173,7 +173,7 @@ func (a *APIController) TestEmailConnection(c *gin.Context) {
 		c.JSON(http.StatusBadGateway, alertErrorBody(c, emailProviderErrorCode(err, "EMAIL_CONNECTION_FAILED"), message, ""))
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{"success": true, "message": "Conexão com o provedor de e-mail validada com sucesso."})
+	c.JSON(http.StatusOK, gin.H{"success": true, "message": "Email provider connection validated successfully."})
 }
 
 func (a *APIController) SendTestEmail(c *gin.Context) {
@@ -185,7 +185,7 @@ func (a *APIController) SendTestEmail(c *gin.Context) {
 	}
 	provider, recipient, err := a.notifications.SendTestEmail(c.Request.Context(), input.Recipient)
 	if errors.Is(err, services.ErrInvalidEmailRecipient) {
-		c.JSON(http.StatusUnprocessableEntity, alertErrorBody(c, "INVALID_EMAIL", "Informe um destinatário válido.", "recipient"))
+		c.JSON(http.StatusUnprocessableEntity, alertErrorBody(c, "INVALID_EMAIL", "Enter a valid recipient.", "recipient"))
 		return
 	}
 	if err != nil {
@@ -193,7 +193,7 @@ func (a *APIController) SendTestEmail(c *gin.Context) {
 		return
 	}
 	slog.Info("email provider test message sent", "provider", provider, "recipient", recipient)
-	c.JSON(http.StatusOK, gin.H{"success": true, "message": "E-mail de teste enviado."})
+	c.JSON(http.StatusOK, gin.H{"success": true, "message": "Test email sent."})
 }
 
 func (a *APIController) failAlert(c *gin.Context, err error) {
@@ -201,9 +201,9 @@ func (a *APIController) failAlert(c *gin.Context, err error) {
 	var settingsValidation *emailconfig.ValidationError
 	switch {
 	case errors.Is(err, alerts.ErrNotFound):
-		c.JSON(http.StatusNotFound, alertErrorBody(c, "ALERT_NOT_FOUND", "Alerta não encontrado.", ""))
+		c.JSON(http.StatusNotFound, alertErrorBody(c, "ALERT_NOT_FOUND", "Alert not found.", ""))
 	case errors.Is(err, alerts.ErrEmailNotConfigured), errors.Is(err, emailprovider.ErrNotConfigured):
-		c.JSON(http.StatusConflict, alertErrorBody(c, "EMAIL_NOT_CONFIGURED", "Configure e habilite um e-mail antes de ativar o alerta.", "provider"))
+		c.JSON(http.StatusConflict, alertErrorBody(c, "EMAIL_NOT_CONFIGURED", "Configure and enable email before enabling the alert.", "provider"))
 	case errors.As(err, &alertValidation):
 		c.JSON(http.StatusUnprocessableEntity, alertErrorBody(c, alertValidation.Code, alertValidation.Message, alertValidation.Field))
 	case errors.As(err, &settingsValidation):
@@ -217,11 +217,11 @@ func decodeOne(c *gin.Context, target any) bool {
 	decoder := json.NewDecoder(c.Request.Body)
 	decoder.DisallowUnknownFields()
 	if err := decoder.Decode(target); err != nil {
-		c.JSON(http.StatusBadRequest, alertErrorBody(c, "INVALID_REQUEST", "Body inválido ou incompleto.", ""))
+		c.JSON(http.StatusBadRequest, alertErrorBody(c, "INVALID_REQUEST", "Invalid or incomplete request body.", ""))
 		return false
 	}
 	if err := decoder.Decode(&struct{}{}); !errors.Is(err, io.EOF) {
-		c.JSON(http.StatusBadRequest, alertErrorBody(c, "INVALID_REQUEST", "O body deve conter um único objeto JSON.", ""))
+		c.JSON(http.StatusBadRequest, alertErrorBody(c, "INVALID_REQUEST", "The request body must contain a single JSON object.", ""))
 		return false
 	}
 	return true
@@ -241,12 +241,12 @@ func friendlyEmailError(err error) string {
 		return providerError.Message
 	}
 	if errors.Is(err, emailprovider.ErrNotConfigured) {
-		return "O provedor de e-mail não está configurado."
+		return "The email provider is not configured."
 	}
 	if errors.Is(err, context.DeadlineExceeded) {
-		return "O serviço de e-mail não respondeu dentro do tempo esperado."
+		return "The email service did not respond within the expected time."
 	}
-	return "Não foi possível concluir a operação com o provedor de e-mail."
+	return "Unable to complete the operation with the email provider."
 }
 
 func emailProviderErrorCode(err error, fallback string) string {

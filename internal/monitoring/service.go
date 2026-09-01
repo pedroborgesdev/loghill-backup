@@ -201,7 +201,7 @@ func (s *Service) SetEnabled(ctx context.Context, id string, enabled bool) (Rule
 		return Rule{}, err
 	}
 	if r.Status == "draft" && enabled {
-		return Rule{}, &ValidationError{"status", "Conclua o rascunho antes de ativá-lo."}
+		return Rule{}, &ValidationError{"status", "Complete the draft before enabling it."}
 	}
 	in := RuleInput{Name: r.Name, Description: r.Description, SenderIDs: r.SenderIDs, IncludeNewSenders: r.IncludeNewSenders, Expression: r.Expression, Actions: r.Actions, Enabled: enabled, Status: r.Status}
 	return s.Update(ctx, id, in)
@@ -211,7 +211,7 @@ func (s *Service) Duplicate(ctx context.Context, id string) (Rule, error) {
 	if err != nil {
 		return Rule{}, err
 	}
-	return s.Create(ctx, RuleInput{Name: "Cópia de " + r.Name, Description: r.Description, SenderIDs: r.SenderIDs, IncludeNewSenders: r.IncludeNewSenders, Expression: r.Expression, Actions: r.Actions, Enabled: false, Status: "draft"})
+	return s.Create(ctx, RuleInput{Name: "Copy of " + r.Name, Description: r.Description, SenderIDs: r.SenderIDs, IncludeNewSenders: r.IncludeNewSenders, Expression: r.Expression, Actions: r.Actions, Enabled: false, Status: "draft"})
 }
 
 func normalizeInput(in *RuleInput) {
@@ -261,27 +261,27 @@ func (s *Service) Validate(ctx context.Context, in RuleInput, currentID string) 
 	normalizeInput(&in)
 	n := len([]rune(strings.TrimSpace(in.Name)))
 	if n < 3 || n > 100 {
-		return &ValidationError{"name", "O nome deve possuir entre 3 e 100 caracteres."}
+		return &ValidationError{"name", "The name must be between 3 and 100 characters."}
 	}
 	if len([]rune(in.Description)) > 500 {
-		return &ValidationError{"description", "A descrição deve possuir no máximo 500 caracteres."}
+		return &ValidationError{"description", "The description must be at most 500 characters."}
 	}
 	if in.Status == "draft" {
 		return s.validateDraft(ctx, in)
 	}
 	if in.Status != "active" {
-		return &ValidationError{"status", "Status de regra inválido."}
+		return &ValidationError{"status", "Invalid rule status."}
 	}
 	if !in.IncludeNewSenders && (len(in.SenderIDs) < 1 || len(in.SenderIDs) > 100) {
-		return &ValidationError{"sender_ids", "Selecione entre 1 e 100 senders."}
+		return &ValidationError{"sender_ids", "Select between 1 and 100 senders."}
 	}
 	for _, id := range in.SenderIDs {
 		v, err := s.deps.Sender(ctx, id)
 		if err != nil {
-			return &ValidationError{"sender_ids", "Um sender selecionado não existe."}
+			return &ValidationError{"sender_ids", "A selected sender does not exist."}
 		}
 		if v.Status == domain.StatusExpired || v.Status == domain.StatusRevoked {
-			return &ValidationError{"sender_ids", "Senders expirados ou revogados não podem ser monitorados."}
+			return &ValidationError{"sender_ids", "Expired or revoked senders cannot be monitored."}
 		}
 	}
 	count, depth := 0, 0
@@ -289,13 +289,13 @@ func (s *Service) Validate(ctx context.Context, in RuleInput, currentID string) 
 		return err
 	}
 	if count < 1 {
-		return &ValidationError{"expression", "Adicione ao menos uma condição."}
+		return &ValidationError{"expression", "Add at least one condition."}
 	}
 	if count > 50 || depth > 5 {
-		return &ValidationError{"expression", "A regra excede os limites de condições ou grupos."}
+		return &ValidationError{"expression", "The rule exceeds the condition or group limits."}
 	}
 	if len(in.Actions) < 1 || len(in.Actions) > 10 {
-		return &ValidationError{"actions", "Adicione entre 1 e 10 ações."}
+		return &ValidationError{"actions", "Add between 1 and 10 actions."}
 	}
 	hasTrigger := false
 	walkConditions(in.Expression, func(c Condition) {
@@ -304,7 +304,7 @@ func (s *Service) Validate(ctx context.Context, in RuleInput, currentID string) 
 		}
 	})
 	if !hasTrigger {
-		return &ValidationError{"expression", "Adicione um gatilho positivo de log, evento ou alerta."}
+		return &ValidationError{"expression", "Add a positive log, event, or alert trigger."}
 	}
 	for _, a := range in.Actions {
 		if err := s.validateAction(a, in.SenderIDs, in.Enabled); err != nil {
@@ -319,24 +319,24 @@ func (s *Service) Validate(ctx context.Context, in RuleInput, currentID string) 
 
 func (s *Service) validateDraft(ctx context.Context, in RuleInput) error {
 	if !in.IncludeNewSenders && len(in.SenderIDs) > 100 {
-		return &ValidationError{"sender_ids", "O rascunho excede o limite de senders."}
+		return &ValidationError{"sender_ids", "The draft exceeds the sender limit."}
 	}
 	for _, id := range in.SenderIDs {
 		sender, err := s.deps.Sender(ctx, id)
 		if err != nil {
-			return &ValidationError{"sender_ids", "Um sender selecionado não existe."}
+			return &ValidationError{"sender_ids", "A selected sender does not exist."}
 		}
 		if sender.Status == domain.StatusExpired || sender.Status == domain.StatusRevoked {
-			return &ValidationError{"sender_ids", "Senders expirados ou revogados não podem ser monitorados."}
+			return &ValidationError{"sender_ids", "Expired or revoked senders cannot be monitored."}
 		}
 	}
 	if len(in.Actions) > 10 {
-		return &ValidationError{"actions", "O rascunho excede o limite de ações."}
+		return &ValidationError{"actions", "The draft exceeds the action limit."}
 	}
 	count := 0
 	walkConditions(in.Expression, func(Condition) { count++ })
 	if count > 50 {
-		return &ValidationError{"expression", "O rascunho excede o limite de condições."}
+		return &ValidationError{"expression", "The draft exceeds the condition limit."}
 	}
 	return nil
 }
@@ -345,14 +345,14 @@ func (s *Service) validateGroup(g ExpressionGroup, level int, count, depth *int)
 		*depth = level
 	}
 	if g.Operator != LogicalAnd && g.Operator != LogicalOr {
-		return &ValidationError{"expression.operator", "Use E ou OU para combinar as condições."}
+		return &ValidationError{"expression.operator", "Use AND or OR to combine conditions."}
 	}
 	if len(g.Nodes) == 0 {
-		return &ValidationError{"expression.nodes", "Um grupo não pode ficar vazio."}
+		return &ValidationError{"expression.nodes", "A group cannot be empty."}
 	}
 	for _, n := range g.Nodes {
 		if (n.Condition == nil) == (n.Group == nil) {
-			return &ValidationError{"expression.nodes", "Cada bloco deve conter uma condição ou grupo."}
+			return &ValidationError{"expression.nodes", "Each block must contain a condition or group."}
 		}
 		if n.Condition != nil {
 			*count++
@@ -368,7 +368,7 @@ func (s *Service) validateGroup(g ExpressionGroup, level int, count, depth *int)
 func rawMap(raw json.RawMessage) (map[string]any, error) {
 	var v map[string]any
 	if len(raw) == 0 || json.Unmarshal(raw, &v) != nil {
-		return nil, errors.New("configuração vazia")
+		return nil, errors.New("empty configuration")
 	}
 	return v, nil
 }
@@ -379,38 +379,38 @@ func stringValue(v map[string]any, key string) string {
 func validateCondition(c Condition) error {
 	if c.Type == ConditionLogReceived {
 		if c.Operator != "received" {
-			return &ValidationError{"expression", "O operador não é compatível com a condição."}
+			return &ValidationError{"expression", "The operator is not compatible with the condition."}
 		}
 		return nil
 	}
 	v, err := rawMap(c.Value)
 	if err != nil {
-		return &ValidationError{"expression", "Preencha os valores da condição."}
+		return &ValidationError{"expression", "Fill in the condition values."}
 	}
 	valid := map[ConditionType]map[string]bool{ConditionEvent: {"triggered": true, "not_triggered": true, "previously_triggered": true, "not_previously_triggered": true}, ConditionAlert: {"triggered": true, "not_triggered": true, "previously_triggered": true, "not_previously_triggered": true}, ConditionSenderStatus: {"became": true}, ConditionMessage: {"contains": true, "not_contains": true, "equals": true, "not_equals": true, "starts_with": true, "not_starts_with": true, "ends_with": true, "not_ends_with": true}, ConditionSeverity: {"equals": true, "not_equals": true, "in": true, "not_in": true}, ConditionMetadata: {"exists": true, "not_exists": true, "equals": true, "not_equals": true, "contains": true, "not_contains": true, "gt": true, "gte": true, "lt": true, "lte": true}, ConditionTime: {"between": true, "not_between": true, "after": true, "before": true}, ConditionWeekday: {"equals": true, "not_equals": true, "in": true, "not_in": true}, ConditionDate: {"between": true, "after": true, "before": true}}
 	ops, ok := valid[c.Type]
 	if !ok || !ops[c.Operator] {
-		return &ValidationError{"expression", "O operador não é compatível com a condição."}
+		return &ValidationError{"expression", "The operator is not compatible with the condition."}
 	}
 	if c.Type == ConditionMetadata && stringValue(v, "path") == "" {
-		return &ValidationError{"expression", "Informe o caminho da metadata."}
+		return &ValidationError{"expression", "Enter the metadata path."}
 	}
 	if c.Type == ConditionSenderStatus && stringValue(v, "status") != "online" && stringValue(v, "status") != "inactive" {
-		return &ValidationError{"expression", "Selecione o status ativo ou inativo."}
+		return &ValidationError{"expression", "Select active or inactive status."}
 	}
 	return nil
 }
 func (s *Service) validateAction(a Action, senders []string, enabled bool) error {
 	v, err := rawMap(a.Config)
 	if err != nil {
-		return &ValidationError{"actions", "Preencha a configuração da ação."}
+		return &ValidationError{"actions", "Fill in the action configuration."}
 	}
 	switch a.Type {
 	case ActionEvent:
 		id := stringValue(v, "event_id")
 		e, err := s.deps.Event(id)
 		if err != nil || !e.Enabled {
-			return &ValidationError{"actions", "Selecione um evento ativo."}
+			return &ValidationError{"actions", "Select an active event."}
 		}
 		compatible := false
 		for _, sid := range senders {
@@ -419,31 +419,31 @@ func (s *Service) validateAction(a Action, senders []string, enabled bool) error
 			}
 		}
 		if !compatible {
-			return &ValidationError{"actions", "O evento não é compatível com os senders da regra."}
+			return &ValidationError{"actions", "The event is not compatible with the rule senders."}
 		}
 	case ActionEmail:
 		if enabled && !s.deps.EmailReady() {
-			return &ValidationError{"actions", "Configure um e-mail antes de ativar esta ação."}
+			return &ValidationError{"actions", "Configure email before enabling this action."}
 		}
 		var recipients []string
 		_ = json.Unmarshal(mustJSON(v["recipients"]), &recipients)
 		if len(recipients) < 1 || len(recipients) > 20 {
-			return &ValidationError{"actions", "Informe entre 1 e 20 destinatários."}
+			return &ValidationError{"actions", "Enter between 1 and 20 recipients."}
 		}
 		for _, recipient := range recipients {
 			if _, ok := validation.EmailAddress(recipient); !ok {
-				return &ValidationError{"actions", "Existe um destinatário de e-mail inválido."}
+				return &ValidationError{"actions", "There is an invalid email recipient."}
 			}
 		}
 		subject, message := stringValue(v, "subject"), stringValue(v, "message")
 		if subject == "" || strings.ContainsAny(subject, "\r\n") || len([]rune(subject)) > 200 {
-			return &ValidationError{"actions", "Informe um assunto válido, sem quebras de linha."}
+			return &ValidationError{"actions", "Enter a valid subject without line breaks."}
 		}
 		if message == "" || len([]rune(message)) > 10_000 {
-			return &ValidationError{"actions", "A mensagem deve possuir entre 1 e 10.000 caracteres."}
+			return &ValidationError{"actions", "The message must be between 1 and 10,000 characters."}
 		}
 	default:
-		return &ValidationError{"actions", "Tipo de ação inválido."}
+		return &ValidationError{"actions", "Invalid action type."}
 	}
 	return nil
 }
@@ -484,7 +484,7 @@ func (s *Service) validateCycles(current string, in RuleInput) error {
 	}
 	for node := range graph {
 		if cycle(node) {
-			return &ValidationError{"actions", "A ação cria um ciclo direto ou indireto entre eventos e regras."}
+			return &ValidationError{"actions", "The action creates a direct or indirect cycle between events and rules."}
 		}
 	}
 	return nil
@@ -792,52 +792,52 @@ func Summary(r Rule) string {
 	actions := []string{}
 	for _, a := range r.Actions {
 		if a.Type == ActionEvent {
-			actions = append(actions, "disparar um evento")
+			actions = append(actions, "trigger an event")
 		} else {
-			actions = append(actions, "enviar um e-mail")
+			actions = append(actions, "send an email")
 		}
 	}
-	return "Quando " + strings.Join(parts, " e ") + ", então " + strings.Join(actions, " e ") + "."
+	return "When " + strings.Join(parts, " and ") + ", then " + strings.Join(actions, " and ") + "."
 }
 func conditionSummary(c Condition) string {
 	prefix := ""
 	if c.Negated {
-		prefix = "NÃO "
+		prefix = "NOT "
 	}
 	v, _ := rawMap(c.Value)
 	switch c.Type {
 	case ConditionEvent:
-		return prefix + "o evento “" + stringValue(v, "event_key") + "” for avaliado"
+		return prefix + "event “" + stringValue(v, "event_key") + "” for avaliado"
 	case ConditionAlert:
-		return prefix + "o alerta selecionado for disparado"
+		return prefix + "the selected alert is triggered"
 	case ConditionSenderStatus:
-		status := map[string]string{"online": "ativo", "inactive": "inativo"}[stringValue(v, "status")]
-		return prefix + "o sender ficar " + status
+		status := map[string]string{"online": "active", "inactive": "inactive"}[stringValue(v, "status")]
+		return prefix + "the sender becomes " + status
 	case ConditionLogReceived:
 		return prefix + "qualquer log for recebido"
 	case ConditionMessage:
-		return prefix + "a mensagem " + strings.ReplaceAll(c.Operator, "_", " ") + " “" + stringValue(v, "text") + "”"
+		return prefix + "the message " + strings.ReplaceAll(c.Operator, "_", " ") + " “" + stringValue(v, "text") + "”"
 	case ConditionSeverity:
 		return prefix + "a severity " + c.Operator
 	case ConditionMetadata:
 		return prefix + "metadata." + stringValue(v, "path") + " " + c.Operator
 	case ConditionTime:
-		return prefix + "o horário " + c.Operator
+		return prefix + "the time " + c.Operator
 	case ConditionWeekday:
-		return prefix + "o dia da semana " + c.Operator
+		return prefix + "the weekday " + c.Operator
 	case ConditionDate:
 		return prefix + "a data " + c.Operator
 	}
-	return prefix + "condição"
+	return prefix + "condition"
 }
 
 func (s *Service) Test(ctx context.Context, rule Rule, input TestInput) (EvaluationResult, error) {
 	sender, err := s.deps.Sender(ctx, input.SenderID)
 	if err != nil {
-		return EvaluationResult{}, &ValidationError{"sender_id", "Sender não encontrado."}
+		return EvaluationResult{}, &ValidationError{"sender_id", "Sender not found."}
 	}
 	if !contains(rule.SenderIDs, sender.ID) {
-		return EvaluationResult{}, &ValidationError{"sender_id", "O sender não pertence ao escopo da regra."}
+		return EvaluationResult{}, &ValidationError{"sender_id", "The sender is outside the rule scope."}
 	}
 	t := input.Trigger.Timestamp
 	if t.IsZero() {
@@ -990,10 +990,10 @@ func sanitize(v string) string {
 }
 func (s *Service) execute(ctx context.Context, r Rule, sender domain.Sender, entry domain.LogEntry, correlation string, depth int) error {
 	if depth >= 10 {
-		return errors.New("limite de profundidade atingido")
+		return errors.New("depth limit reached")
 	}
 	if s.executor == nil {
-		return errors.New("executor de ações indisponível")
+		return errors.New("action executor unavailable")
 	}
 	var errs []string
 	for _, a := range r.Actions {

@@ -294,23 +294,23 @@ func (s *Store) Update(input Input, now time.Time) (Safe, error) {
 		return s.updateGmail(input, now)
 	}
 	if input.Provider != domain.EmailProviderOutlook {
-		return Safe{}, &ValidationError{Code: "INVALID_EMAIL_SETTINGS", Field: "provider", Message: "Provedor de e-mail inválido."}
+		return Safe{}, &ValidationError{Code: "INVALID_EMAIL_SETTINGS", Field: "provider", Message: "Invalid email provider."}
 	}
 	if s.cfg.EmailManagedByEnvironment {
-		return Safe{}, &ValidationError{Code: "EMAIL_SETTINGS_MANAGED", Field: "outlook", Message: "A configuração do Outlook é gerenciada por variáveis de ambiente."}
+		return Safe{}, &ValidationError{Code: "EMAIL_SETTINGS_MANAGED", Field: "outlook", Message: "The Outlook configuration is managed through environment variables."}
 	}
 	input.Outlook.TenantID = strings.TrimSpace(input.Outlook.TenantID)
 	input.Outlook.ClientID = strings.TrimSpace(input.Outlook.ClientID)
 	input.Outlook.SenderName = strings.TrimSpace(input.Outlook.SenderName)
 	if strings.ContainsAny(input.Outlook.SenderName, "\r\n") {
-		return Safe{}, &ValidationError{Code: "INVALID_EMAIL_SETTINGS", Field: "outlook.sender_name", Message: "O nome do remetente contém caracteres inválidos."}
+		return Safe{}, &ValidationError{Code: "INVALID_EMAIL_SETTINGS", Field: "outlook.sender_name", Message: "The sender name contains invalid characters."}
 	}
 	sender, valid := validation.EmailAddress(input.Outlook.SenderEmail)
 	if input.Outlook.SenderEmail != "" && !valid {
-		return Safe{}, &ValidationError{Code: "INVALID_EMAIL_SETTINGS", Field: "outlook.sender_email", Message: "Informe um e-mail remetente válido."}
+		return Safe{}, &ValidationError{Code: "INVALID_EMAIL_SETTINGS", Field: "outlook.sender_email", Message: "Enter a valid sender email address."}
 	}
 	if len(input.Outlook.SenderName) > 100 {
-		return Safe{}, &ValidationError{Code: "INVALID_EMAIL_SETTINGS", Field: "outlook.sender_name", Message: "O nome do remetente deve possuir no máximo 100 caracteres."}
+		return Safe{}, &ValidationError{Code: "INVALID_EMAIL_SETTINGS", Field: "outlook.sender_name", Message: "The sender name must be at most 100 characters."}
 	}
 
 	s.mu.Lock()
@@ -324,7 +324,7 @@ func (s *Store) Update(input Input, now time.Time) (Safe, error) {
 	next.Outlook.SenderName = input.Outlook.SenderName
 	if input.Outlook.ClientSecret != "" {
 		if len(s.key) == 0 {
-			return Safe{}, &ValidationError{Code: "EMAIL_ENCRYPTION_KEY_REQUIRED", Field: "outlook.client_secret", Message: "Configure EMAIL_SETTINGS_ENCRYPTION_KEY para salvar a credencial pela interface."}
+			return Safe{}, &ValidationError{Code: "EMAIL_ENCRYPTION_KEY_REQUIRED", Field: "outlook.client_secret", Message: "Configure EMAIL_SETTINGS_ENCRYPTION_KEY to save the credential through the interface."}
 		}
 		encrypted, err := s.encrypt(input.Outlook.ClientSecret)
 		if err != nil {
@@ -334,7 +334,7 @@ func (s *Store) Update(input Input, now time.Time) (Safe, error) {
 	}
 	secretAvailable := next.Outlook.ClientSecretEncrypted != "" || s.cfg.OutlookClientSecret != ""
 	if input.Enabled && (next.Outlook.TenantID == "" || next.Outlook.ClientID == "" || !secretAvailable || next.Outlook.SenderEmail == "") {
-		return Safe{}, &ValidationError{Code: "OUTLOOK_NOT_CONFIGURED", Field: "outlook", Message: "Complete as credenciais e o remetente antes de habilitar o Outlook."}
+		return Safe{}, &ValidationError{Code: "OUTLOOK_NOT_CONFIGURED", Field: "outlook", Message: "Complete the credentials and sender before enabling Outlook."}
 	}
 	next.UpdatedAt = now
 	if err := s.writeAtomic(next); err != nil {
@@ -346,7 +346,7 @@ func (s *Store) Update(input Input, now time.Time) (Safe, error) {
 
 func (s *Store) updateGmail(input Input, now time.Time) (Safe, error) {
 	if s.cfg.SMTPManagedByEnvironment {
-		return Safe{}, &ValidationError{Code: "EMAIL_SETTINGS_MANAGED", Field: "gmail", Message: "A configuração SMTP é gerenciada por variáveis de ambiente."}
+		return Safe{}, &ValidationError{Code: "EMAIL_SETTINGS_MANAGED", Field: "gmail", Message: "The SMTP configuration is managed through environment variables."}
 	}
 	input.Gmail.Host = strings.TrimSpace(input.Gmail.Host)
 	input.Gmail.Username = strings.TrimSpace(input.Gmail.Username)
@@ -358,14 +358,14 @@ func (s *Store) updateGmail(input Input, now time.Time) (Safe, error) {
 		input.Gmail.Port = 587
 	}
 	if input.Gmail.Port < 1 || input.Gmail.Port > 65535 {
-		return Safe{}, &ValidationError{Code: "INVALID_EMAIL_SETTINGS", Field: "gmail.port", Message: "Informe uma porta SMTP válida."}
+		return Safe{}, &ValidationError{Code: "INVALID_EMAIL_SETTINGS", Field: "gmail.port", Message: "Enter a valid SMTP port."}
 	}
 	if strings.ContainsAny(input.Gmail.Host+input.Gmail.Username+input.Gmail.SenderName, "\r\n") || len(input.Gmail.SenderName) > 100 {
-		return Safe{}, &ValidationError{Code: "INVALID_EMAIL_SETTINGS", Field: "gmail", Message: "A configuração SMTP contém caracteres inválidos."}
+		return Safe{}, &ValidationError{Code: "INVALID_EMAIL_SETTINGS", Field: "gmail", Message: "The SMTP configuration contains invalid characters."}
 	}
 	from, valid := validation.EmailAddress(input.Gmail.From)
 	if input.Gmail.From != "" && !valid {
-		return Safe{}, &ValidationError{Code: "INVALID_EMAIL_SETTINGS", Field: "gmail.from", Message: "Informe um e-mail remetente válido."}
+		return Safe{}, &ValidationError{Code: "INVALID_EMAIL_SETTINGS", Field: "gmail.from", Message: "Enter a valid sender email address."}
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -375,7 +375,7 @@ func (s *Store) updateGmail(input Input, now time.Time) (Safe, error) {
 	next.Gmail = GmailStored{Host: input.Gmail.Host, Port: input.Gmail.Port, Username: input.Gmail.Username, PasswordEncrypted: next.Gmail.PasswordEncrypted, From: from, SenderName: input.Gmail.SenderName}
 	if input.Gmail.Password != "" {
 		if len(s.key) == 0 {
-			return Safe{}, &ValidationError{Code: "EMAIL_ENCRYPTION_KEY_REQUIRED", Field: "gmail.password", Message: "Configure EMAIL_SETTINGS_ENCRYPTION_KEY para salvar a senha pela interface."}
+			return Safe{}, &ValidationError{Code: "EMAIL_ENCRYPTION_KEY_REQUIRED", Field: "gmail.password", Message: "Configure EMAIL_SETTINGS_ENCRYPTION_KEY to save the password through the interface."}
 		}
 		encrypted, err := s.encrypt(input.Gmail.Password)
 		if err != nil {
@@ -385,7 +385,7 @@ func (s *Store) updateGmail(input Input, now time.Time) (Safe, error) {
 	}
 	passwordAvailable := next.Gmail.PasswordEncrypted != "" || s.cfg.SMTPPassword != ""
 	if input.Enabled && (next.Gmail.Username == "" || !passwordAvailable || next.Gmail.From == "") {
-		return Safe{}, &ValidationError{Code: "GMAIL_NOT_CONFIGURED", Field: "gmail", Message: "Complete o servidor, usuário, senha de aplicativo e remetente antes de habilitar o Gmail."}
+		return Safe{}, &ValidationError{Code: "GMAIL_NOT_CONFIGURED", Field: "gmail", Message: "Complete the server, username, app password, and sender before enabling Gmail."}
 	}
 	next.UpdatedAt = now
 	if err := s.writeAtomic(next); err != nil {

@@ -88,8 +88,8 @@ func (r *FileRepository) InstanceCount(ctx context.Context, senderID string) (in
 	return len(instances), nil
 }
 
-// RegisteredInstances retorna somente execuções registradas em instances.json.
-// Logs legados sem instance_id não representam um processo ativo e ficam fora.
+// RegisteredInstances returns only executions registered in instances.json.
+// Legacy logs without an instance_id do not represent an active process and are excluded.
 func (r *FileRepository) RegisteredInstances(ctx context.Context, senderID string) ([]domain.SenderInstance, error) {
 	d, err := r.dir(senderID)
 	if err != nil {

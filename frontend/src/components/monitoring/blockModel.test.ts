@@ -12,7 +12,7 @@ describe("monitoring block model", () => {
     expect(blocks.map((block) => block.category)).toEqual(["trigger", "condition", "action"]);
     const rejected = moveBlock(blocks, 2, 0);
     expect(rejected.blocks).toBe(blocks);
-    expect(rejected.message).toMatch(/ações/i);
+    expect(rejected.message).toMatch(/actions/i);
   });
 
   it("reports incomplete blocks and permits accessible duplication ids", () => {
@@ -20,8 +20,8 @@ describe("monitoring block model", () => {
     const action = createBlock("send_email");
     const blocks = insertBlock(insertBlock([], trigger).blocks, action).blocks;
     const problems = validateBlocks(blocks);
-    expect(problems.get(trigger.id)).toBe("Selecione um evento.");
-    expect(problems.get(action.id)).toMatch(/destinatário/i);
+    expect(problems.get(trigger.id)).toBe("Select an event.");
+    expect(problems.get(action.id)).toMatch(/recipient/i);
     expect(trigger.id).not.toBe(action.id);
   });
 

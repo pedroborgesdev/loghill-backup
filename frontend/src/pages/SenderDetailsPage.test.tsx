@@ -16,7 +16,7 @@ class EventSourceStub {
   close() {}
 }
 
-describe("seleção de instâncias", () => {
+describe("instance selection", () => {
   beforeEach(() => {
     queryClient.clear();
     vi.stubGlobal("EventSource", EventSourceStub);
@@ -46,7 +46,7 @@ describe("seleção de instâncias", () => {
     vi.unstubAllGlobals();
   });
 
-  it("abre em Ativos e separa as instâncias inativas na segunda aba", async () => {
+  it("opens on Active and separates inactive instances into the second tab", async () => {
     render(
       <ShellContext.Provider value={{ refreshToken: 0, refreshing: false, setRefreshing: vi.fn(), streamState: null, setStreamState: vi.fn(), openEmailSettings: vi.fn() }}>
         <MemoryRouter initialEntries={["/senders/worker"]}>
@@ -55,17 +55,17 @@ describe("seleção de instâncias", () => {
       </ShellContext.Provider>,
     );
 
-    const activeTab = await screen.findByRole("tab", { name: "Ativos 1" });
+    const activeTab = await screen.findByRole("tab", { name: "Active 1" });
     expect(activeTab).toHaveAttribute("aria-selected", "true");
     expect(screen.getByText("ins_11111111111111111111111111111111")).toBeInTheDocument();
     expect(screen.queryByText("ins_22222222222222222222222222222222")).not.toBeInTheDocument();
 
-    await userEvent.click(screen.getByRole("tab", { name: "Inativos 1" }));
+    await userEvent.click(screen.getByRole("tab", { name: "Inactive 1" }));
     expect(screen.getByText("ins_22222222222222222222222222222222")).toBeInTheDocument();
     expect(screen.queryByText("ins_11111111111111111111111111111111")).not.toBeInTheDocument();
   });
 
-  it("atualiza a tela pelo botão da tabela e pelo refresh global", async () => {
+  it("updates the screen from the table button and global refresh", async () => {
     const shellValue = (refreshToken: number) => ({
       refreshToken,
       refreshing: false,
@@ -83,11 +83,11 @@ describe("seleção de instâncias", () => {
     );
     const view = render(page(0));
 
-    await screen.findByRole("tab", { name: "Ativos 1" });
-    expect(screen.getByRole("button", { name: "Intervalo de atualização" })).toHaveTextContent("30 segundos");
+    await screen.findByRole("tab", { name: "Active 1" });
+    expect(screen.getByRole("button", { name: "Refresh interval" })).toHaveTextContent("30 seconds");
     const callsBeforeTableRefresh = vi.mocked(fetch).mock.calls.length;
 
-    await userEvent.click(screen.getByRole("button", { name: "Atualizar" }));
+    await userEvent.click(screen.getByRole("button", { name: "Refresh" }));
     await waitFor(() => expect(vi.mocked(fetch).mock.calls.length).toBeGreaterThan(callsBeforeTableRefresh));
 
     const callsBeforeGlobalRefresh = vi.mocked(fetch).mock.calls.length;

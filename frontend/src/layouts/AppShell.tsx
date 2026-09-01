@@ -10,7 +10,7 @@ import {
   Server,
   X,
   Zap,
-  Radar,
+  ScanSearch,
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
@@ -33,10 +33,10 @@ import { ShellContext } from "./appShellContext";
 const navigation = [
   { to: "/", label: "Dashboard", icon: LayoutDashboard, end: true },
   { to: "/senders", label: "Senders", icon: Server, end: false },
-  { to: "/alerts", label: "Alertas", icon: Bell, end: false },
-  { to: "/events", label: "Eventos", icon: Zap, end: false },
-  { to: "/monitoring", label: "Monitoramento", icon: Radar, end: false },
-  { to: "/status", label: "Status do sistema", icon: Activity, end: false },
+  { to: "/alerts", label: "Alerts", icon: Bell, end: false },
+  { to: "/events", label: "Events", icon: Zap, end: false },
+  { to: "/monitoring", label: "Monitoring", icon: ScanSearch, end: false },
+  { to: "/status", label: "System status", icon: Activity, end: false },
 ];
 
 function prefetchNavigation(to: string) {
@@ -101,12 +101,12 @@ function SidebarContent({
           <div className="min-w-0">
             <p className="truncate text-sm font-semibold text-zinc-100">LogHill</p>
             <p className="truncate text-[10px] uppercase tracking-wider text-zinc-600">
-              Observabilidade
+              Observability
             </p>
           </div>
         )}
       </div>
-      <nav aria-label="Navegação principal" className="flex flex-1 flex-col gap-1 p-2">
+      <nav aria-label="Main navigation" className="flex flex-1 flex-col gap-1 p-2">
         {navigation.map(({ to, label, icon: Icon, end }) => (
           <Tooltip key={to} label={collapsed ? label : ""} className="block w-full">
             <NavLink
@@ -136,7 +136,7 @@ function SidebarContent({
           <SettingsButton collapsed={collapsed} onOpen={onOpenSettings} />
         </div>
         <IconButton
-          label="Sair"
+          label="Sign out"
           tooltipClassName="block w-full"
           onClick={onLogout}
           className={`${authRequired ? "" : "hidden"} w-full border-transparent ${collapsed ? "justify-center" : "justify-start px-5"}`}
@@ -146,12 +146,12 @@ function SidebarContent({
           ) : (
             <span className="flex items-center gap-3">
               <LogOut className="size-4" />
-              <span className="text-xs">Sair</span>
+              <span className="text-xs">Sign out</span>
             </span>
           )}
         </IconButton>
         <IconButton
-          label={collapsed ? "Expandir sidebar" : "Recolher sidebar"}
+          label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
           tooltipClassName="block w-full"
           onClick={onCollapse}
           className={`mt-2 hidden w-full border-transparent lg:inline-flex ${
@@ -163,7 +163,7 @@ function SidebarContent({
           ) : (
             <span className="flex items-center gap-3">
               <PanelLeftClose className="size-4" />
-              <span className="text-xs">Recolher</span>
+              <span className="text-xs">Collapse</span>
             </span>
           )}
         </IconButton>
@@ -173,14 +173,14 @@ function SidebarContent({
 }
 
 function pageInformation(pathname: string, sender?: string) {
-  if (pathname === "/status") return { title: "Status do sistema", breadcrumb: "Sistema" };
-  if (pathname === "/alerts") return { title: "Alertas de e-mail", breadcrumb: "Notificações" };
-  if (pathname === "/events") return { title: "Eventos", breadcrumb: "Automações" };
-  if (pathname.startsWith("/monitoring")) return { title: pathname === "/monitoring" ? "Monitoramento" : "Construtor de regra", breadcrumb: "Automações" };
+  if (pathname === "/status") return { title: "System status", breadcrumb: "System" };
+  if (pathname === "/alerts") return { title: "Email alerts", breadcrumb: "Notifications" };
+  if (pathname === "/events") return { title: "Events", breadcrumb: "Automations" };
+  if (pathname.startsWith("/monitoring")) return { title: pathname === "/monitoring" ? "Monitoring" : "Rule builder", breadcrumb: "Automations" };
   if (pathname.startsWith("/senders/"))
-    return { title: "Detalhes do sender", breadcrumb: sender ?? "Sender" };
-  if (pathname === "/senders") return { title: "Senders", breadcrumb: "Inventário" };
-  return { title: "Dashboard", breadcrumb: "Visão geral" };
+    return { title: "Sender details", breadcrumb: sender ?? "Sender" };
+  if (pathname === "/senders") return { title: "Senders", breadcrumb: "Inventory" };
+  return { title: "Dashboard", breadcrumb: "Overview" };
 }
 
 export function AppShell() {
@@ -279,12 +279,12 @@ export function AppShell() {
           <div className="fixed inset-0 z-50 lg:hidden">
             <button
               className="absolute inset-0 bg-black/70"
-              aria-label="Fechar menu"
+              aria-label="Close menu"
               onClick={() => setMobileOpen(false)}
             />
             <aside className="relative h-full w-72 border-r border-zinc-800 bg-[#111113]">
               <IconButton
-                label="Fechar menu"
+                label="Close menu"
                 onClick={() => setMobileOpen(false)}
                 className="absolute right-2 top-2 z-10"
               >
@@ -321,7 +321,7 @@ export function AppShell() {
           <header className="z-30 flex h-14 shrink-0 items-center justify-between border-b border-zinc-800 bg-[#111113]/95 px-3 backdrop-blur-sm sm:px-5">
             <div className="flex min-w-0 items-center gap-3">
               <IconButton
-                label="Abrir menu"
+                label="Open menu"
                 onClick={() => setMobileOpen(true)}
                 className="lg:hidden"
               >
@@ -344,7 +344,7 @@ export function AppShell() {
                   }
                   label={
                     backendOnline === null
-                      ? "Verificando"
+                      ? "Checking"
                       : backendOnline
                         ? "Backend online"
                         : "Backend offline"
@@ -363,18 +363,18 @@ export function AppShell() {
                     }
                     label={
                       {
-                        connected: "SSE ao vivo",
-                        reconnecting: "Reconectando",
-                        paused: "SSE pausado",
+                        connected: "Live SSE",
+                        reconnecting: "Reconnecting",
+                        paused: "SSE paused",
                         disconnected: "SSE offline",
-                        error: "Erro no SSE",
+                        error: "SSE error",
                       }[streamState]
                     }
                   />
                 )}
               </div>
               <IconButton
-                label="Atualizar página"
+                label="Refresh page"
                 onClick={refresh}
                 disabled={refreshing}
               >

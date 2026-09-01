@@ -131,10 +131,10 @@ func TestTemplateEscapesHTMLAndKeepsFullBody(t *testing.T) {
 	if !strings.Contains(message.Text, "<script>") || !strings.Contains(message.HTML, "/senders/worker-1?severity=ERROR") {
 		t.Fatal("plain body or link missing")
 	}
-	if strings.Contains(message.Subject, "[") || !strings.HasPrefix(message.Subject, "LogHill — Erro detectado em worker:") {
+	if strings.Contains(message.Subject, "[") || !strings.HasPrefix(message.Subject, "LogHill — Error detected on worker:") {
 		t.Fatalf("subject is not readable: %q", message.Subject)
 	}
-	for _, expected := range []string{`align="center"`, "Central de observabilidade", "Um erro foi detectado", "#f59e0b", "/loghill.png"} {
+	for _, expected := range []string{`align="center"`, "Observability center", "An error was detected", "#f59e0b", "/loghill.png"} {
 		if !strings.Contains(message.HTML, expected) {
 			t.Fatalf("themed email is missing %q", expected)
 		}
@@ -150,18 +150,18 @@ func TestTemplateRendersBeautifulProviderTestWithoutBracketedSubject(t *testing.
 	if err != nil {
 		t.Fatal(err)
 	}
-	if message.Subject != "Teste de e-mail do LogHill — configuração concluída" || strings.Contains(message.Subject, "[") {
+	if message.Subject != "LogHill email test — configuration complete" || strings.Contains(message.Subject, "[") {
 		t.Fatalf("unexpected subject: %q", message.Subject)
 	}
 	if len(message.To) != 1 || message.To[0] != "dev@example.com" {
 		t.Fatalf("unexpected recipients: %v", message.To)
 	}
-	for _, expected := range []string{"Tudo certo com o seu e-mail", "Microsoft 365 / Outlook", "Configuração validada", "Abrir o LogHill", "https://logs.example.com/loghill.png"} {
+	for _, expected := range []string{"Your email is ready", "Microsoft 365 / Outlook", "Configuration validated", "Open LogHill", "https://logs.example.com/loghill.png"} {
 		if !strings.Contains(message.HTML, expected) {
 			t.Fatalf("provider test email is missing %q", expected)
 		}
 	}
-	if !strings.Contains(message.Text, "A integração do LogHill com o Outlook está funcionando") {
+	if !strings.Contains(message.Text, "The LogHill integration with Outlook is working") {
 		t.Fatal("provider test plain-text fallback is incomplete")
 	}
 }
@@ -172,7 +172,7 @@ func TestTemplateRendersGmailProviderTestWithoutOutlookReferences(t *testing.T) 
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, expected := range []string{"Gmail", "SMTP com STARTTLS", "Gmail via SMTP"} {
+	for _, expected := range []string{"Gmail", "SMTP with STARTTLS", "Gmail via SMTP"} {
 		if !strings.Contains(message.HTML, expected) && !strings.Contains(message.Text, expected) {
 			t.Fatalf("gmail provider test email is missing %q", expected)
 		}
@@ -184,7 +184,7 @@ func TestTemplateRendersGmailProviderTestWithoutOutlookReferences(t *testing.T) 
 
 func TestEventTemplateRendersRestrictedVariablesAndEscapesHTML(t *testing.T) {
 	renderer := NewTemplate("https://logs.example.com")
-	value := domain.Notification{SourceType: domain.NotificationSourceEvent, Event: domain.EventDefinition{ID: "evt_1", Name: "Processamento finalizado", Key: "processamento_finalizado", Recipients: []string{"dev@example.com"}, SubjectTemplate: "Finalizado — {{metadata.protocolo}} — {{sender.name}}\r\nInjected", MessageTemplate: "{{log.message}}\nAusente: {{metadata.ausente}}"}, Sender: domain.Sender{ID: "worker", Name: "Worker", Status: domain.StatusOnline}, Entry: domain.LogEntry{Timestamp: time.Now(), Severity: domain.Info, Message: "<script>alert('x')</script>", Event: "processamento_finalizado", Metadata: map[string]any{"protocolo": "ABC-123"}}}
+	value := domain.Notification{SourceType: domain.NotificationSourceEvent, Event: domain.EventDefinition{ID: "evt_1", Name: "Processing completed", Key: "processing_completed", Recipients: []string{"dev@example.com"}, SubjectTemplate: "Finalizado — {{metadata.protocol}} — {{sender.name}}\r\nInjected", MessageTemplate: "{{log.message}}\nAusente: {{metadata.ausente}}"}, Sender: domain.Sender{ID: "worker", Name: "Worker", Status: domain.StatusOnline}, Entry: domain.LogEntry{Timestamp: time.Now(), Severity: domain.Info, Message: "<script>alert('x')</script>", Event: "processing_completed", Metadata: map[string]any{"protocol": "ABC-123"}}}
 	message, err := renderer.Render(value)
 	if err != nil {
 		t.Fatal(err)
@@ -198,7 +198,7 @@ func TestEventTemplateRendersRestrictedVariablesAndEscapesHTML(t *testing.T) {
 	if !strings.Contains(message.Text, "Ausente: ") || strings.Contains(message.Text, "metadata.ausente") {
 		t.Fatal("missing metadata was not rendered empty")
 	}
-	if !strings.Contains(message.HTML, "/senders/worker?event_key=processamento_finalizado") {
+	if !strings.Contains(message.HTML, "/senders/worker?event_key=processing_completed") {
 		t.Fatal("event log link missing")
 	}
 }
