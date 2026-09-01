@@ -11,3 +11,7 @@
 coverage/
 **/__pycache__/
 *.py[cod]
+
+# Azure deployment files are maintained only in Azure branches.
+/charts/
+/azure-pipelines.yml

@@ -3,7 +3,7 @@
 O cliente conecta pelo nome do sender e a API o cria automaticamente quando necessário. Configure apenas a URL da API e o nome desejado (ou seu identificador normalizado).
 
 ```env
-LOGHILL_API_URL=http://localhost:8001
+LOGHILL_API_URL=http://localhost:8080
 LOGHILL_SENDER_NAME=automacao-financeira
 ```
 
@@ -63,7 +63,7 @@ Também é possível informar o nome explicitamente:
 log = instrument(
     name="worker",
     sender_name="automacao-financeira",
-    api_url="http://localhost:8001",
+    api_url="http://localhost:8080",
 )
 ```
 

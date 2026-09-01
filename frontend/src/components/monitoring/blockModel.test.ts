@@ -59,4 +59,20 @@ describe("monitoring block model", () => {
       condition: { type: "sender_status", operator: "became", value: { status: "online" } },
     });
   });
+
+  it("creates Wait Until as a sequential time block", () => {
+    const block = createBlock("wait_until");
+    expect(block).toMatchObject({
+      category: "condition",
+      type: "wait_until",
+      connector: "and",
+      negated: false,
+      condition: {
+        type: "wait_until",
+        operator: "next_occurrence",
+        value: { weekday: "monday", time: "09:00" },
+      },
+    });
+    expect(String(block.condition?.value.timezone)).not.toBe("");
+  });
 });

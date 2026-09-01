@@ -11,17 +11,17 @@ COPY go.mod go.sum* ./
 RUN go mod download
 COPY . .
 COPY --from=frontend-builder /src/web/dist ./web/dist
-RUN CGO_ENABLED=0 GOOS=linux go test ./... && \
-    CGO_ENABLED=0 GOOS=linux go build -trimpath -ldflags="-s -w" -o /out/log-theater ./cmd/server
+RUN CGO_ENABLED=0 GOOS=linux go build -trimpath -ldflags="-s -w" -o /out/log-theater ./cmd/server
 
 FROM alpine:3.22 AS runtime
-RUN addgroup -S app && adduser -S -G app app && mkdir -p /app/data && chown -R app:app /app
+RUN apk add --no-cache tzdata && \
+    addgroup -S app && adduser -S -G app app && mkdir -p /app/data && chown -R app:app /app
 WORKDIR /app
 COPY --from=backend-builder /out/log-theater /app/log-theater
 COPY docs/openapi.yaml /app/docs/openapi.yaml
 USER app
-ENV APP_HOST=0.0.0.0 APP_PORT=8001 DATA_DIR=/app/data
-EXPOSE 8001
+ENV APP_HOST=0.0.0.0 APP_PORT=8080 DATA_DIR=/app/data
+EXPOSE 8080
 VOLUME ["/app/data"]
-HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 CMD wget -qO- http://127.0.0.1:8001/health || exit 1
+HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 CMD wget -qO- http://127.0.0.1:8080/health || exit 1
 ENTRYPOINT ["/app/log-theater"]

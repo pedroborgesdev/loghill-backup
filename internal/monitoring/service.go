@@ -387,7 +387,7 @@ func validateCondition(c Condition) error {
 	if err != nil {
 		return &ValidationError{"expression", "Fill in the condition values."}
 	}
-	valid := map[ConditionType]map[string]bool{ConditionEvent: {"triggered": true, "not_triggered": true, "previously_triggered": true, "not_previously_triggered": true}, ConditionAlert: {"triggered": true, "not_triggered": true, "previously_triggered": true, "not_previously_triggered": true}, ConditionSenderStatus: {"became": true}, ConditionMessage: {"contains": true, "not_contains": true, "equals": true, "not_equals": true, "starts_with": true, "not_starts_with": true, "ends_with": true, "not_ends_with": true}, ConditionSeverity: {"equals": true, "not_equals": true, "in": true, "not_in": true}, ConditionMetadata: {"exists": true, "not_exists": true, "equals": true, "not_equals": true, "contains": true, "not_contains": true, "gt": true, "gte": true, "lt": true, "lte": true}, ConditionTime: {"between": true, "not_between": true, "after": true, "before": true}, ConditionWeekday: {"equals": true, "not_equals": true, "in": true, "not_in": true}, ConditionDate: {"between": true, "after": true, "before": true}}
+	valid := map[ConditionType]map[string]bool{ConditionEvent: {"triggered": true, "not_triggered": true, "previously_triggered": true, "not_previously_triggered": true}, ConditionAlert: {"triggered": true, "not_triggered": true, "previously_triggered": true, "not_previously_triggered": true}, ConditionSenderStatus: {"became": true}, ConditionMessage: {"contains": true, "not_contains": true, "equals": true, "not_equals": true, "starts_with": true, "not_starts_with": true, "ends_with": true, "not_ends_with": true}, ConditionSeverity: {"equals": true, "not_equals": true, "in": true, "not_in": true}, ConditionMetadata: {"exists": true, "not_exists": true, "equals": true, "not_equals": true, "contains": true, "not_contains": true, "gt": true, "gte": true, "lt": true, "lte": true}, ConditionTime: {"between": true, "not_between": true, "after": true, "before": true}, ConditionWeekday: {"equals": true, "not_equals": true, "in": true, "not_in": true}, ConditionDate: {"between": true, "after": true, "before": true}, ConditionWaitUntil: {"next_occurrence": true}}
 	ops, ok := valid[c.Type]
 	if !ok || !ops[c.Operator] {
 		return &ValidationError{"expression", "The operator is not compatible with the condition."}
@@ -397,6 +397,20 @@ func validateCondition(c Condition) error {
 	}
 	if c.Type == ConditionSenderStatus && stringValue(v, "status") != "online" && stringValue(v, "status") != "inactive" {
 		return &ValidationError{"expression", "Select active or inactive status."}
+	}
+	if c.Type == ConditionWaitUntil {
+		if c.Negated {
+			return &ValidationError{"expression", "Wait Until cannot be negated."}
+		}
+		if _, ok := parseWeekday(stringValue(v, "weekday")); !ok {
+			return &ValidationError{"expression", "Select a valid weekday for Wait Until."}
+		}
+		if _, err := time.Parse("15:04", stringValue(v, "time")); err != nil {
+			return &ValidationError{"expression", "Enter a valid time for Wait Until."}
+		}
+		if _, err := time.LoadLocation(stringValue(v, "timezone")); err != nil {
+			return &ValidationError{"expression", "Enter a valid IANA timezone for Wait Until."}
+		}
 	}
 	return nil
 }
@@ -575,6 +589,9 @@ func (s *Service) evalGroup(g ExpressionGroup, e domain.LogEntry, alertID string
 	if g.Negated {
 		value = !value
 	}
+	if g.Operator == LogicalAnd && !value {
+		pending = false
+	}
 	return value, pending
 }
 func (s *Service) evalCondition(c Condition, e domain.LogEntry, alertID string, expired bool) (bool, bool) {
@@ -619,6 +636,11 @@ func (s *Service) evalCondition(c Condition, e domain.LogEntry, alertID string, 
 		matched = compareWeekday(e.Timestamp, v, c.Operator)
 	case ConditionDate:
 		matched = compareDate(e.Timestamp, v, c.Operator)
+	case ConditionWaitUntil:
+		if !expired {
+			return true, true
+		}
+		matched = true
 	}
 	if c.Negated {
 		matched = !matched
@@ -786,6 +808,43 @@ func compareDate(t time.Time, v map[string]any, op string) bool {
 	return false
 }
 
+func parseWeekday(value string) (time.Weekday, bool) {
+	weekdays := map[string]time.Weekday{
+		"sunday": time.Sunday, "monday": time.Monday, "tuesday": time.Tuesday,
+		"wednesday": time.Wednesday, "thursday": time.Thursday, "friday": time.Friday,
+		"saturday": time.Saturday,
+	}
+	weekday, ok := weekdays[strings.ToLower(strings.TrimSpace(value))]
+	return weekday, ok
+}
+
+func nextWaitUntil(now time.Time, value map[string]any) (time.Time, bool) {
+	weekday, ok := parseWeekday(stringValue(value, "weekday"))
+	if !ok {
+		return time.Time{}, false
+	}
+	clock, err := time.Parse("15:04", stringValue(value, "time"))
+	if err != nil {
+		return time.Time{}, false
+	}
+	location, err := time.LoadLocation(stringValue(value, "timezone"))
+	if err != nil {
+		return time.Time{}, false
+	}
+	localNow := now.In(location)
+	for offset := 0; offset <= 7; offset++ {
+		day := localNow.AddDate(0, 0, offset)
+		if day.Weekday() != weekday {
+			continue
+		}
+		candidate := time.Date(day.Year(), day.Month(), day.Day(), clock.Hour(), clock.Minute(), 0, 0, location)
+		if !candidate.Before(localNow) {
+			return candidate, true
+		}
+	}
+	return time.Time{}, false
+}
+
 func Summary(r Rule) string {
 	parts := []string{}
 	walkConditions(r.Expression, func(c Condition) { parts = append(parts, conditionSummary(c)) })
@@ -827,6 +886,8 @@ func conditionSummary(c Condition) string {
 		return prefix + "the weekday " + c.Operator
 	case ConditionDate:
 		return prefix + "a data " + c.Operator
+	case ConditionWaitUntil:
+		return "wait until " + stringValue(v, "weekday") + " at " + stringValue(v, "time") + " (" + stringValue(v, "timezone") + ")"
 	}
 	return prefix + "condition"
 }
@@ -893,8 +954,8 @@ func (s *Service) notify(ctx context.Context, sender domain.Sender, entry domain
 		r.LastResult = "not_matched"
 		if result.Pending {
 			r.LastResult = "pending"
-			minutes := pendingMinutes(r.Expression)
-			p := PendingEvaluation{ID: newID("pend_"), ExecutionID: executionID, RuleID: r.ID, SenderID: sender.ID, TriggeredAt: now, DueAt: now.Add(time.Duration(minutes) * time.Minute), Status: "pending", Trigger: Trigger{Type: "log", AlertID: alertID, EventKey: entry.Event, Severity: entry.Severity, Message: entry.Message, Timestamp: entry.Timestamp, Metadata: entry.Metadata}, CorrelationID: correlation}
+			dueAt := pendingDueAt(r.Expression, now)
+			p := PendingEvaluation{ID: newID("pend_"), ExecutionID: executionID, RuleID: r.ID, SenderID: sender.ID, TriggeredAt: now, DueAt: dueAt, Status: "pending", Trigger: Trigger{Type: "log", AlertID: alertID, EventKey: entry.Event, Severity: entry.Severity, Message: entry.Message, Timestamp: entry.Timestamp, Metadata: entry.Metadata}, CorrelationID: correlation}
 			_ = s.store.PutPending(p)
 			if s.executions != nil && executionID != "" {
 				_, _ = s.executions.Update(executionID, func(v *executions.Record) {
@@ -969,17 +1030,32 @@ func (s *Service) cancelPending(senderID, eventKey string) {
 		}
 	}
 }
-func pendingMinutes(g ExpressionGroup) int {
-	minutes := 1
+func pendingDueAt(g ExpressionGroup, now time.Time) time.Time {
+	var dueAt time.Time
+	setDueAt := func(candidate time.Time) {
+		if dueAt.IsZero() || candidate.After(dueAt) {
+			dueAt = candidate
+		}
+	}
 	walkConditions(g, func(c Condition) {
 		if c.Type == ConditionEvent && (strings.Contains(c.Operator, "not_")) {
 			v, _ := rawMap(c.Value)
-			if n := int(numberValue(v, "window_minutes")); n > minutes && n <= 1440 {
-				minutes = n
+			if minutes := int(numberValue(v, "window_minutes")); minutes > 0 && minutes <= 1440 {
+				candidate := now.Add(time.Duration(minutes) * time.Minute)
+				setDueAt(candidate)
+			}
+		}
+		if c.Type == ConditionWaitUntil {
+			v, _ := rawMap(c.Value)
+			if candidate, ok := nextWaitUntil(now, v); ok {
+				setDueAt(candidate)
 			}
 		}
 	})
-	return minutes
+	if dueAt.IsZero() {
+		return now.Add(time.Minute)
+	}
+	return dueAt
 }
 func sanitize(v string) string {
 	v = strings.ReplaceAll(strings.ReplaceAll(v, "\r", " "), "\n", " ")

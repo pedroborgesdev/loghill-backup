@@ -89,7 +89,7 @@ cd ..
 go run ./cmd/server
 ```
 
-Open [http://localhost:8001](http://localhost:8001).
+Open [http://localhost:8080](http://localhost:8080).
 
 The generator only replaces `data/` when that directory is empty or was previously created by the generator. It refuses to overwrite an existing LogHill environment.
 
@@ -99,7 +99,7 @@ The generator only replaces `data/` when that directory is empty or was previous
 docker compose up --build
 ```
 
-The included Compose file exposes LogHill at [http://localhost:8001](http://localhost:8001) and persists its state in `./data`.
+The included Compose file exposes LogHill at [http://localhost:8080](http://localhost:8080) and persists its state in `./data`.
 
 For production use, configure `APP_PASSWORD`, publish the application behind TLS, and keep the data directory and provider credentials outside version control. See the [installation guide](./INSTALATION.md) and [OpenAPI specification](./docs/openapi.yaml) for additional setup details.
 

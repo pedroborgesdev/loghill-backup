@@ -4,17 +4,17 @@ services:
     container_name: loghill
     restart: unless-stopped
     ports:
-      - "8001:8001"
+      - "8080:8080"
     environment:
       APP_HOST: 0.0.0.0
-      APP_PORT: 8001
+      APP_PORT: 8080
       DATA_DIR: /app/data
       APP_PUBLIC_URL: ${APP_PUBLIC_URL}
       TZ: America/Sao_Paulo
     volumes:
       - loghill-data:/app/data
     healthcheck:
-      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8001/health"]
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8080/health"]
       interval: 30s
       timeout: 3s
       retries: 3

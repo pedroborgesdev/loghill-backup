@@ -5,11 +5,11 @@ Este guia apresenta duas formas de executar o LogHill:
 1. [Binário nativo](#1-binário-nativo), compilado a partir do código-fonte;
 2. [Docker Compose](#2-docker-compose), construindo localmente ou usando a imagem publicada no GHCR.
 
-Nos dois casos, a aplicação utiliza a porta `8001` por padrão e precisa de armazenamento persistente para `DATA_DIR`.
+Nos dois casos, a aplicação utiliza a porta `8080` por padrão e precisa de armazenamento persistente para `DATA_DIR`.
 
 ## Requisitos gerais
 
-- Porta TCP `8001` disponível, ou outra porta configurada em `APP_PORT`;
+- Porta TCP `8080` disponível, ou outra porta configurada em `APP_PORT`;
 - Um diretório persistente para logs e configurações;
 - `APP_PASSWORD` definido quando o serviço estiver acessível por rede;
 - URL pública correta em `APP_PUBLIC_URL` para links enviados por alertas e eventos.
@@ -30,8 +30,8 @@ Configuração mínima recomendada:
 
 ```env
 APP_HOST=0.0.0.0
-APP_PORT=8001
-APP_PUBLIC_URL=http://localhost:8001
+APP_PORT=8080
+APP_PUBLIC_URL=http://localhost:8080
 DATA_DIR=./data
 APP_PASSWORD=troque-por-uma-senha-forte
 TZ=America/Sao_Paulo
@@ -99,10 +99,10 @@ New-Item -ItemType Directory -Force data | Out-Null
 
 O servidor carrega `.env` do diretório de trabalho e fica disponível em:
 
-- Interface: <http://localhost:8001>
-- Swagger: <http://localhost:8001/docs>
-- Liveness: <http://localhost:8001/health>
-- Readiness: <http://localhost:8001/ready>
+- Interface: <http://localhost:8080>
+- Swagger: <http://localhost:8080/docs>
+- Liveness: <http://localhost:8080/health>
+- Readiness: <http://localhost:8080/ready>
 
 ### 1.6 Executar como serviço systemd
 
@@ -190,7 +190,7 @@ docker compose up -d --build
 O compose padrão:
 
 - constrói frontend e backend;
-- publica `8001:8001`;
+- publica `8080:8080`;
 - persiste `/app/data` em `./data`;
 - reinicia o container automaticamente;
 - verifica `/health` a cada 30 segundos.
@@ -203,14 +203,14 @@ services:
   log-theater:
     environment:
       APP_PASSWORD: ${APP_PASSWORD}
-      APP_PUBLIC_URL: ${APP_PUBLIC_URL:-http://localhost:8001}
+      APP_PUBLIC_URL: ${APP_PUBLIC_URL:-http://localhost:8080}
 ```
 
 Defina as variáveis no shell antes de subir:
 
 ```bash
 export APP_PASSWORD='troque-por-uma-senha-forte'
-export APP_PUBLIC_URL='http://localhost:8001'
+export APP_PUBLIC_URL='http://localhost:8080'
 docker compose up -d --build
 ```
 
@@ -218,7 +218,7 @@ PowerShell:
 
 ```powershell
 $env:APP_PASSWORD = 'troque-por-uma-senha-forte'
-$env:APP_PUBLIC_URL = 'http://localhost:8001'
+$env:APP_PUBLIC_URL = 'http://localhost:8080'
 docker compose up -d --build
 ```
 
@@ -239,17 +239,17 @@ services:
     container_name: loghill
     restart: unless-stopped
     ports:
-      - "8001:8001"
+      - "8080:8080"
     env_file:
       - .env
     environment:
       APP_HOST: 0.0.0.0
-      APP_PORT: "8001"
+      APP_PORT: "8080"
       DATA_DIR: /app/data
     volumes:
       - loghill-data:/app/data
     healthcheck:
-      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8001/health"]
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8080/health"]
       interval: 30s
       timeout: 3s
       start_period: 5s
@@ -262,7 +262,7 @@ volumes:
 Crie `.env` ao lado do compose:
 
 ```env
-APP_PUBLIC_URL=http://localhost:8001
+APP_PUBLIC_URL=http://localhost:8080
 APP_PASSWORD=troque-por-uma-senha-forte
 TZ=America/Sao_Paulo
 ```
@@ -347,7 +347,7 @@ O backup deve incluir todo o conteúdo de `/app/data`, especialmente:
 Dentro de um container, `localhost` aponta para o próprio container. Se o cliente e o LogHill estiverem no mesmo compose, use o nome do serviço:
 
 ```env
-LOGHILL_API_URL=http://loghill:8001
+LOGHILL_API_URL=http://loghill:8080
 ```
 
 Se o LogHill estiver exposto por domínio:
@@ -361,7 +361,7 @@ LOGHILL_API_URL=https://loghill.exemplo.com
 Confira o healthcheck:
 
 ```bash
-curl http://localhost:8001/health
+curl http://localhost:8080/health
 ```
 
 Resposta esperada:
@@ -389,23 +389,23 @@ Resposta esperada:
 Confira a prontidão:
 
 ```bash
-curl http://localhost:8001/ready
+curl http://localhost:8080/ready
 ```
 
-Abra <http://localhost:8001> e autentique com `APP_PASSWORD`, caso configurada.
+Abra <http://localhost:8080> e autentique com `APP_PASSWORD`, caso configurada.
 
 ## 4. Solução de problemas
 
 ### Porta já utilizada
 
-Altere a porta publicada mantendo a porta interna `8001`:
+Altere apenas a porta publicada, mantendo a porta interna `8080`:
 
 ```yaml
 ports:
-  - "8080:8001"
+  - "9090:8080"
 ```
 
-Nesse caso, use `APP_PUBLIC_URL=http://localhost:8080`.
+Nesse caso, use `APP_PUBLIC_URL=http://localhost:9090`.
 
 ### Container sem permissão para gravar
 
@@ -424,8 +424,8 @@ Confirme que `DATA_DIR=/app/data` e que `/app/data` está associado a um volume 
 
 ### Aplicação cliente não conecta
 
-- Fora de containers, use `http://localhost:8001` apenas quando o LogHill estiver na mesma máquina;
-- entre serviços do Compose, use `http://loghill:8001`;
+- Fora de containers, use `http://localhost:8080` apenas quando o LogHill estiver na mesma máquina;
+- entre serviços do Compose, use `http://loghill:8080`;
 - em Kubernetes, use o DNS do Service;
 - confira firewall, TLS, proxy e CORS conforme o ambiente.
 

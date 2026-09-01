@@ -17,7 +17,7 @@ import { ExecutionTabs } from "../components/executions/ExecutionTabs";
 import { ExecutionView } from "../components/executions/ExecutionView";
 import { SourceRecentExecutions } from "../components/executions/SourceRecentExecutions";
 
-const conditionLabels: Record<string,string> = { event_triggered: "Event", alert_triggered: "Alert", sender_status: "Sender status", log_received: "Log received", message: "Message", severity: "Severity", metadata: "Metadata", time: "Time", weekday: "Weekday", date: "Date" };
+const conditionLabels: Record<string,string> = { event_triggered: "Event", alert_triggered: "Alert", sender_status: "Sender status", log_received: "Log received", message: "Message", severity: "Severity", metadata: "Metadata", time: "Time", weekday: "Weekday", date: "Date", wait_until: "Wait Until" };
 const actionLabels: Record<string,string> = { trigger_event: "Event", send_email: "Email" };
 function ruleConditionTypes(rule: MonitoringRule) { return rule.expression.nodes.flatMap((node) => node.condition ? [conditionLabels[node.condition.type]] : []).filter(Boolean).join(" + "); }
 function conditionDescription(condition?: MonitoringRule["expression"]["nodes"][number]["condition"]) { if (!condition) return "Condition group"; if (condition.type === "log_received") return "Any received log"; return `${conditionLabels[condition.type] ?? condition.type} — ${condition.operator}`; }

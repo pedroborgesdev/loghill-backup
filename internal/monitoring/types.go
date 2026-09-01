@@ -22,6 +22,7 @@ const (
 	ConditionTime         ConditionType   = "time"
 	ConditionWeekday      ConditionType   = "weekday"
 	ConditionDate         ConditionType   = "date"
+	ConditionWaitUntil    ConditionType   = "wait_until"
 	ActionEvent           ActionType      = "trigger_event"
 	ActionEmail           ActionType      = "send_email"
 	LogicalAnd            LogicalOperator = "and"

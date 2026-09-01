@@ -221,3 +221,85 @@ func TestIncompleteDraftCanBePersistedButNotEnabled(t *testing.T) {
 		t.Fatal("an incomplete draft must not be enabled")
 	}
 }
+
+func TestWaitUntilDefersFridayLogUntilMonday(t *testing.T) {
+	service, clock, executor := testService(t)
+	location, err := time.LoadLocation("America/Sao_Paulo")
+	if err != nil {
+		t.Fatal(err)
+	}
+	clock.now = time.Date(2026, time.August, 28, 16, 30, 0, 0, location)
+	input := baseInput()
+	input.Expression.Nodes = []ExpressionNode{
+		{Condition: &Condition{Type: ConditionLogReceived, Operator: "received", Value: raw(map[string]any{})}},
+		{Connector: LogicalAnd, Condition: &Condition{Type: ConditionWeekday, Operator: "equals", Value: raw(map[string]any{"weekday": "friday"})}},
+		{Connector: LogicalAnd, Condition: &Condition{Type: ConditionWaitUntil, Operator: "next_occurrence", Value: raw(map[string]any{"weekday": "monday", "time": "09:00", "timezone": "America/Sao_Paulo"})}},
+	}
+	rule, err := service.Create(context.Background(), input)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	entry := domain.LogEntry{SenderID: "sender-a", Timestamp: clock.now, Severity: domain.Error, Message: "Friday failure"}
+	service.Notify(context.Background(), domain.Sender{ID: "sender-a"}, entry)
+	if executor.calls != 0 {
+		t.Fatalf("action executed before the wait elapsed: %d", executor.calls)
+	}
+	pending := service.store.Pending()
+	if len(pending) != 1 {
+		t.Fatalf("expected one pending evaluation, got %#v", pending)
+	}
+	wantDueAt := time.Date(2026, time.August, 31, 9, 0, 0, 0, location)
+	if !pending[0].DueAt.Equal(wantDueAt) {
+		t.Fatalf("unexpected due date: got %s want %s", pending[0].DueAt, wantDueAt)
+	}
+
+	clock.now = wantDueAt.Add(-time.Second)
+	service.ProcessPending(context.Background())
+	if executor.calls != 0 {
+		t.Fatal("action executed before Monday at 09:00")
+	}
+	clock.now = wantDueAt
+	service.ProcessPending(context.Background())
+	if executor.calls != 1 {
+		t.Fatalf("expected action at Monday 09:00, got %d calls", executor.calls)
+	}
+	if len(service.store.Pending()) != 0 {
+		t.Fatal("completed wait was not removed from pending storage")
+	}
+	loaded, err := service.Get(rule.ID)
+	if err != nil || loaded.ExecutionCount != 1 || loaded.LastResult != "success" {
+		t.Fatalf("rule execution was not recorded: %#v %v", loaded, err)
+	}
+}
+
+func TestWaitUntilRejectsInvalidTimezone(t *testing.T) {
+	service, _, _ := testService(t)
+	input := baseInput()
+	input.Expression.Nodes = append(input.Expression.Nodes, ExpressionNode{Connector: LogicalAnd, Condition: &Condition{Type: ConditionWaitUntil, Operator: "next_occurrence", Value: raw(map[string]any{"weekday": "monday", "time": "09:00", "timezone": "not/a-timezone"})}})
+	if _, err := service.Create(context.Background(), input); err == nil {
+		t.Fatal("expected invalid Wait Until timezone to be rejected")
+	}
+}
+
+func TestWaitUntilDoesNotScheduleWhenEarlierConditionDoesNotMatch(t *testing.T) {
+	service, clock, executor := testService(t)
+	location, err := time.LoadLocation("America/Sao_Paulo")
+	if err != nil {
+		t.Fatal(err)
+	}
+	clock.now = time.Date(2026, time.August, 27, 16, 30, 0, 0, location)
+	input := baseInput()
+	input.Expression.Nodes = []ExpressionNode{
+		{Condition: &Condition{Type: ConditionLogReceived, Operator: "received", Value: raw(map[string]any{})}},
+		{Connector: LogicalAnd, Condition: &Condition{Type: ConditionWeekday, Operator: "equals", Value: raw(map[string]any{"weekday": "friday"})}},
+		{Connector: LogicalAnd, Condition: &Condition{Type: ConditionWaitUntil, Operator: "next_occurrence", Value: raw(map[string]any{"weekday": "monday", "time": "09:00", "timezone": "America/Sao_Paulo"})}},
+	}
+	if _, err = service.Create(context.Background(), input); err != nil {
+		t.Fatal(err)
+	}
+	service.Notify(context.Background(), domain.Sender{ID: "sender-a"}, domain.LogEntry{SenderID: "sender-a", Timestamp: clock.now, Severity: domain.Error, Message: "Thursday failure"})
+	if executor.calls != 0 || len(service.store.Pending()) != 0 {
+		t.Fatalf("a non-matching Thursday log must not schedule Monday: calls=%d pending=%#v", executor.calls, service.store.Pending())
+	}
+}

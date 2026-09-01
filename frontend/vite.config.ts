@@ -9,5 +9,5 @@ export default defineConfig({
   plugins: [react()],
   test: { environment: "jsdom", setupFiles: ["./src/test/setup.ts"] },
   build: { outDir: resolve(projectDirectory, "../web/dist"), emptyOutDir: true },
-  server: { proxy: { "/api": "http://localhost:8001", "/health": "http://localhost:8001", "/ready": "http://localhost:8001" } },
+  server: { proxy: { "/api": "http://localhost:8080", "/health": "http://localhost:8080", "/ready": "http://localhost:8080" } },
 });
