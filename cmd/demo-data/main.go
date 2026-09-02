@@ -203,7 +203,7 @@ func senderSeeds() []senderSeed {
 	}
 }
 
-func seedSenders(ctx context.Context, repo *repositories.SenderRepository, now time.Time) error {
+func seedSenders(ctx context.Context, repo repositories.SenderRepository, now time.Time) error {
 	for index, seed := range senderSeeds() {
 		lastSeen := now.Add(-seed.LastSeen)
 		created := now.AddDate(0, 0, -(35 + index*3))

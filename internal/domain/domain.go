@@ -233,6 +233,7 @@ var (
 	ErrInvalidSettings          = errors.New("invalid settings")
 	ErrInvalidEventKey          = errors.New("invalid event key")
 	ErrInvalidEventOccurrenceID = errors.New("invalid event occurrence id")
+	ErrEventOccurrenceConflict  = errors.New("event occurrence id already used with a different payload")
 )
 
 type Clock interface{ Now() time.Time }

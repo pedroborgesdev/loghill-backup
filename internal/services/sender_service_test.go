@@ -87,6 +87,56 @@ func TestReceiveLogPersistsAndStreamsEvent(t *testing.T) {
 	}
 }
 
+type countingEventSink struct{ calls int }
+
+func (s *countingEventSink) NotifyEvent(context.Context, domain.Sender, domain.LogEntry) { s.calls++ }
+
+func TestEventOccurrenceIsIdempotentAcrossServiceRestart(t *testing.T) {
+	dir := filepath.Join(t.TempDir(), "data")
+	repo := repositories.New(dir)
+	if err := repo.Init(); err != nil {
+		t.Fatal(err)
+	}
+	clock := &fakeClock{now: time.Date(2026, 9, 1, 12, 0, 0, 0, time.UTC)}
+	settings, err := settingsstore.Open(dir, clock.Now())
+	if err != nil {
+		t.Fatal(err)
+	}
+	svc := New(repo, testConfig(dir), clock, settings)
+	sink := &countingEventSink{}
+	svc.SetEventSink(sink)
+	sender, credentials, err := svc.CreateSender(context.Background(), "Worker Idempotente", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	metadata := map[string]any{"protocol": "ABC-123", "attempt": float64(1)}
+	first, receivedAt, err := svc.ReceiveLogWithEvent(context.Background(), sender.ID, credentials.SenderKey, "info", "concluído", "processing_completed", "occ-123", nil, metadata)
+	if err != nil {
+		t.Fatal(err)
+	}
+	clock.now = clock.now.Add(time.Minute)
+	restarted := New(repositories.New(dir), testConfig(dir), clock, settings)
+	restartedSink := &countingEventSink{}
+	restarted.SetEventSink(restartedSink)
+	duplicate, duplicateReceivedAt, err := restarted.ReceiveLogWithEvent(context.Background(), sender.ID, credentials.SenderKey, "INFO", "concluído", "processing_completed", "occ-123", nil, map[string]any{"attempt": float64(1), "protocol": "ABC-123"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if duplicate.Timestamp != first.Timestamp || duplicateReceivedAt != receivedAt {
+		t.Fatalf("duplicate returned a different result: first=%+v/%v duplicate=%+v/%v", first, receivedAt, duplicate, duplicateReceivedAt)
+	}
+	if sink.calls != 1 || restartedSink.calls != 0 {
+		t.Fatalf("event notifications=%d after restart=%d, want 1 and 0", sink.calls, restartedSink.calls)
+	}
+	if _, _, err = restarted.ReceiveLogWithEvent(context.Background(), sender.ID, credentials.SenderKey, "INFO", "outro payload", "processing_completed", "occ-123", nil, metadata); !errors.Is(err, domain.ErrEventOccurrenceConflict) {
+		t.Fatalf("expected occurrence conflict, got %v", err)
+	}
+	page, err := restarted.Logs(context.Background(), sender.ID, domain.LogFilters{Page: 1, PageSize: 10, Order: "asc"})
+	if err != nil || len(page.Items) != 1 {
+		t.Fatalf("logs=%+v err=%v, want one persisted log", page.Items, err)
+	}
+}
+
 func TestReplayedLogKeepsOriginInstanceAndOriginalActivityTime(t *testing.T) {
 	dir := filepath.Join(t.TempDir(), "data")
 	repo := repositories.New(dir)

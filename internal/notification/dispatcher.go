@@ -35,16 +35,30 @@ type Renderer interface {
 	Render(domain.Notification) (domain.EmailMessage, error)
 }
 
+type WebhookSender interface {
+	Send(context.Context, domain.Notification) error
+}
+
+type SMSSender interface {
+	Send(context.Context, domain.Notification) error
+}
+
 type Dispatcher struct {
-	queue         chan domain.Notification
+	outbox        *OutboxStore
+	wake          chan struct{}
+	stop          chan struct{}
 	rejections    chan domain.Notification
 	provider      emailprovider.Provider
 	renderer      Renderer
 	recorder      DeliveryRecorder
+	webhookSender WebhookSender
+	smsSender     SMSSender
 	workers       int
 	maxRetries    int
 	sendTimeout   time.Duration
 	retryInterval time.Duration
+	leaseDuration time.Duration
+	workerOwner   string
 	queueMu       sync.RWMutex
 	closed        bool
 	workerWG      sync.WaitGroup
@@ -54,9 +68,28 @@ type Dispatcher struct {
 	cancel        context.CancelFunc
 }
 
-func NewDispatcher(size, workers, maxRetries int, timeout, retryInterval time.Duration, provider emailprovider.Provider, renderer Renderer, recorder DeliveryRecorder) *Dispatcher {
+func (d *Dispatcher) SetWebhookSender(sender WebhookSender) *Dispatcher {
+	d.webhookSender = sender
+	return d
+}
+
+func (d *Dispatcher) SetSMSSender(sender SMSSender) *Dispatcher {
+	d.smsSender = sender
+	return d
+}
+
+func NewDispatcher(dataDir string, size, workers, maxRetries int, timeout, retryInterval time.Duration, provider emailprovider.Provider, renderer Renderer, recorder DeliveryRecorder) (*Dispatcher, error) {
+	outbox, err := OpenOutbox(dataDir, size, time.Now)
+	if err != nil {
+		return nil, err
+	}
+	workerOwner, err := newOutboxID()
+	if err != nil {
+		return nil, err
+	}
 	ctx, cancel := context.WithCancel(context.Background())
-	return &Dispatcher{queue: make(chan domain.Notification, size), rejections: make(chan domain.Notification, size), workers: workers, maxRetries: maxRetries, sendTimeout: timeout, retryInterval: retryInterval, provider: provider, renderer: renderer, recorder: recorder, ctx: ctx, cancel: cancel}
+	leaseDuration := time.Duration(maxRetries+1)*timeout + time.Duration(maxRetries)*retryInterval + time.Minute
+	return &Dispatcher{outbox: outbox, wake: make(chan struct{}, 1), stop: make(chan struct{}), rejections: make(chan domain.Notification, size), workers: workers, maxRetries: maxRetries, sendTimeout: timeout, retryInterval: retryInterval, leaseDuration: leaseDuration, workerOwner: workerOwner, provider: provider, renderer: renderer, recorder: recorder, ctx: ctx, cancel: cancel}, nil
 }
 
 func (d *Dispatcher) Start() {
@@ -89,31 +122,35 @@ func (d *Dispatcher) TryReportRejected(value domain.Notification) bool {
 }
 
 func (d *Dispatcher) Enqueue(value domain.Notification) error {
-	d.queueMu.RLock()
-	defer d.queueMu.RUnlock()
-	if d.closed {
-		return ErrQueueClosed
-	}
-	select {
-	case d.queue <- value:
-		return nil
-	default:
-		return ErrQueueFull
-	}
+	return d.Dispatch(context.Background(), value)
 }
 
 func (d *Dispatcher) Dispatch(ctx context.Context, value domain.Notification) error {
 	if err := ctx.Err(); err != nil {
 		return err
 	}
-	return d.Enqueue(value)
+	d.queueMu.RLock()
+	if d.closed {
+		d.queueMu.RUnlock()
+		return ErrQueueClosed
+	}
+	_, err := d.outbox.Enqueue(ctx, value)
+	d.queueMu.RUnlock()
+	if err != nil {
+		return err
+	}
+	select {
+	case d.wake <- struct{}{}:
+	default:
+	}
+	return nil
 }
 
 func (d *Dispatcher) Shutdown(ctx context.Context) error {
 	d.closeOnce.Do(func() {
 		d.queueMu.Lock()
 		d.closed = true
-		close(d.queue)
+		close(d.stop)
 		close(d.rejections)
 		d.queueMu.Unlock()
 	})
@@ -134,7 +171,7 @@ func (d *Dispatcher) Shutdown(ctx context.Context) error {
 func (d *Dispatcher) rejectionWorker() {
 	defer d.workerWG.Done()
 	for value := range d.rejections {
-		message := "The notification queue is full; the log was preserved, but the email was not queued."
+		message := "The notification queue is full; the log was preserved, but the action was not queued."
 		_ = d.recorder.RecordDelivery(notificationID(value), value.Test, domain.DeliveryFailed, message)
 		if recorder, ok := d.recorder.(executionDeliveryRecorder); ok {
 			recorder.RecordExecutionDelivery(value, domain.DeliveryFailed, message, 0)
@@ -144,12 +181,49 @@ func (d *Dispatcher) rejectionWorker() {
 
 func (d *Dispatcher) worker() {
 	defer d.workerWG.Done()
-	for value := range d.queue {
-		d.deliverSafely(value)
+	for {
+		select {
+		case <-d.stop:
+			return
+		default:
+		}
+		job, ok, err := d.outbox.Claim(d.ctx, d.workerOwner, d.leaseDuration)
+		if err != nil {
+			if errors.Is(err, context.Canceled) {
+				return
+			}
+			slog.Error("could not claim notification outbox job", "error", err)
+			d.waitForWork()
+			continue
+		}
+		if !ok {
+			d.waitForWork()
+			continue
+		}
+		if d.deliverSafely(job.Notification) {
+			if err = d.outbox.Complete(context.Background(), job.ID, d.workerOwner); err != nil {
+				slog.Error("could not complete notification outbox job", "job_id", job.ID, "error", err)
+			}
+			continue
+		}
+		if err = d.outbox.Retry(context.Background(), job.ID, d.workerOwner, "Delivery interrupted by shutdown.", time.Now()); err != nil {
+			slog.Error("could not release interrupted notification outbox job", "job_id", job.ID, "error", err)
+		}
 	}
 }
 
-func (d *Dispatcher) deliverSafely(value domain.Notification) {
+func (d *Dispatcher) waitForWork() {
+	timer := time.NewTimer(250 * time.Millisecond)
+	defer timer.Stop()
+	select {
+	case <-d.stop:
+	case <-d.wake:
+	case <-timer.C:
+	case <-d.ctx.Done():
+	}
+}
+
+func (d *Dispatcher) deliverSafely(value domain.Notification) (completed bool) {
 	defer func() {
 		if recovered := recover(); recovered != nil {
 			message := "Internal failure while preparing the notification."
@@ -158,6 +232,7 @@ func (d *Dispatcher) deliverSafely(value domain.Notification) {
 				recorder.RecordExecutionDelivery(value, domain.DeliveryFailed, message, 1)
 			}
 			slog.Error("email notification worker recovered", "source_type", notificationSource(value), "source_id", notificationID(value))
+			completed = true
 		}
 	}()
 	if err := d.recorder.MarkPending(notificationID(value), value.Test); err != nil {
@@ -166,17 +241,28 @@ func (d *Dispatcher) deliverSafely(value domain.Notification) {
 	if recorder, ok := d.recorder.(executionDeliveryRecorder); ok {
 		recorder.MarkExecutionProcessing(value)
 	}
-	message, err := d.renderer.Render(value)
-	if err != nil {
-		_ = d.recorder.RecordDelivery(notificationID(value), value.Test, domain.DeliveryFailed, "Unable to render the email.")
-		if recorder, ok := d.recorder.(executionDeliveryRecorder); ok {
-			recorder.RecordExecutionDelivery(value, domain.DeliveryFailed, "Unable to render the email.", 1)
+	var send func(context.Context) error
+	if value.Event.ActionType == domain.EventActionWebhook {
+		if d.webhookSender == nil {
+			return d.recordTerminalFailure(value, "The webhook sender is unavailable.", 1)
 		}
-		return
+		send = func(ctx context.Context) error { return d.webhookSender.Send(ctx, value) }
+	} else if value.Event.ActionType == domain.EventActionSMS {
+		if d.smsSender == nil {
+			return d.recordTerminalFailure(value, "The SMS sender is unavailable.", 1)
+		}
+		send = func(ctx context.Context) error { return d.smsSender.Send(ctx, value) }
+	} else {
+		message, err := d.renderer.Render(value)
+		if err != nil {
+			return d.recordTerminalFailure(value, "Unable to render the email.", 1)
+		}
+		send = func(ctx context.Context) error { return d.provider.Send(ctx, message) }
 	}
+	var err error
 	for attempt := 0; attempt <= d.maxRetries; attempt++ {
 		ctx, cancel := context.WithTimeout(d.ctx, d.sendTimeout)
-		err = d.provider.Send(ctx, message)
+		err = send(ctx)
 		cancel()
 		if err == nil {
 			_ = d.recorder.RecordDelivery(notificationID(value), value.Test, domain.DeliverySent, "")
@@ -184,7 +270,7 @@ func (d *Dispatcher) deliverSafely(value domain.Notification) {
 				recorder.RecordExecutionDelivery(value, domain.DeliverySent, "", attempt+1)
 			}
 			slog.Info("email notification delivered", "source_type", notificationSource(value), "source_id", notificationID(value), "sender_id", value.Sender.ID, "severity", value.Entry.Severity, "test", value.Test, "attempt", attempt+1)
-			return
+			return true
 		}
 		if attempt < d.maxRetries && d.retryInterval > 0 {
 			slog.Warn("retrying email notification delivery", "source_type", notificationSource(value), "source_id", notificationID(value), "sender_id", value.Sender.ID, "severity", value.Entry.Severity, "attempt", attempt+2)
@@ -193,7 +279,7 @@ func (d *Dispatcher) deliverSafely(value domain.Notification) {
 			case <-timer.C:
 			case <-d.ctx.Done():
 				timer.Stop()
-				return
+				return false
 			}
 		}
 	}
@@ -203,6 +289,15 @@ func (d *Dispatcher) deliverSafely(value domain.Notification) {
 		recorder.RecordExecutionDelivery(value, domain.DeliveryFailed, safe, d.maxRetries+1)
 	}
 	slog.Error("email notification delivery failed", "source_type", notificationSource(value), "source_id", notificationID(value), "sender_id", value.Sender.ID, "severity", value.Entry.Severity, "test", value.Test, "attempts", d.maxRetries+1, "error", safe)
+	return true
+}
+
+func (d *Dispatcher) recordTerminalFailure(value domain.Notification, message string, attempts int) bool {
+	_ = d.recorder.RecordDelivery(notificationID(value), value.Test, domain.DeliveryFailed, message)
+	if recorder, ok := d.recorder.(executionDeliveryRecorder); ok {
+		recorder.RecordExecutionDelivery(value, domain.DeliveryFailed, message, attempts)
+	}
+	return true
 }
 
 func notificationID(value domain.Notification) string {

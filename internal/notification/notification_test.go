@@ -42,6 +42,20 @@ func (fakeRenderer) Render(value domain.Notification) (domain.EmailMessage, erro
 	return domain.EmailMessage{To: value.Alert.Recipients, Subject: "test", Text: "test", HTML: "test"}, nil
 }
 
+type fakeWebhookSender struct {
+	mu    sync.Mutex
+	calls int
+}
+
+func (s *fakeWebhookSender) Send(context.Context, domain.Notification) error {
+	s.mu.Lock()
+	s.calls++
+	s.mu.Unlock()
+	return nil
+}
+
+func (s *fakeWebhookSender) count() int { s.mu.Lock(); defer s.mu.Unlock(); return s.calls }
+
 type recordedDelivery struct {
 	status  domain.DeliveryStatus
 	test    bool
@@ -73,7 +87,10 @@ func testNotification() domain.Notification {
 func TestDispatcherRetriesAndShutsDown(t *testing.T) {
 	provider := &fakeProvider{failFor: 2}
 	recorder := newRecorder()
-	dispatcher := NewDispatcher(2, 1, 2, time.Second, time.Millisecond, provider, fakeRenderer{}, recorder)
+	dispatcher, err := NewDispatcher(t.TempDir(), 2, 1, 2, time.Second, time.Millisecond, provider, fakeRenderer{}, recorder)
+	if err != nil {
+		t.Fatal(err)
+	}
 	dispatcher.Start()
 	if err := dispatcher.Enqueue(testNotification()); err != nil {
 		t.Fatal(err)
@@ -96,7 +113,10 @@ func TestDispatcherRetriesAndShutsDown(t *testing.T) {
 func TestDispatcherTimeoutQueueFullAndGracefulCancellation(t *testing.T) {
 	provider := &fakeProvider{waitForContext: true}
 	recorder := newRecorder()
-	dispatcher := NewDispatcher(1, 1, 1, 10*time.Millisecond, 0, provider, fakeRenderer{}, recorder)
+	dispatcher, err := NewDispatcher(t.TempDir(), 1, 1, 1, 10*time.Millisecond, 0, provider, fakeRenderer{}, recorder)
+	if err != nil {
+		t.Fatal(err)
+	}
 	if err := dispatcher.Enqueue(testNotification()); err != nil {
 		t.Fatal(err)
 	}
@@ -115,6 +135,98 @@ func TestDispatcherTimeoutQueueFullAndGracefulCancellation(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
 	if err := dispatcher.Shutdown(ctx); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestDispatcherRecoversPersistedNotificationAfterRestart(t *testing.T) {
+	dir := t.TempDir()
+	firstRecorder := newRecorder()
+	first, err := NewDispatcher(dir, 2, 1, 0, time.Second, 0, &fakeProvider{}, fakeRenderer{}, firstRecorder)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = first.Enqueue(testNotification()); err != nil {
+		t.Fatal(err)
+	}
+	shutdownCtx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	if err = first.Shutdown(shutdownCtx); err != nil {
+		t.Fatal(err)
+	}
+
+	provider := &fakeProvider{}
+	recorder := newRecorder()
+	second, err := NewDispatcher(dir, 2, 1, 0, time.Second, 0, provider, fakeRenderer{}, recorder)
+	if err != nil {
+		t.Fatal(err)
+	}
+	second.Start()
+	select {
+	case <-recorder.done:
+	case <-time.After(time.Second):
+		t.Fatal("persisted notification was not recovered")
+	}
+	if provider.count() != 1 {
+		t.Fatalf("expected one recovered delivery, got %d", provider.count())
+	}
+	if err = second.Shutdown(shutdownCtx); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestDispatcherDeliversWebhookThroughDurableWorker(t *testing.T) {
+	email := &fakeProvider{}
+	webhook := &fakeWebhookSender{}
+	recorder := newRecorder()
+	dispatcher, err := NewDispatcher(t.TempDir(), 2, 1, 0, time.Second, 0, email, fakeRenderer{}, recorder)
+	if err != nil {
+		t.Fatal(err)
+	}
+	dispatcher.SetWebhookSender(webhook).Start()
+	value := domain.Notification{SourceType: domain.NotificationSourceEvent, SourceID: "evt-webhook", Event: domain.EventDefinition{ID: "evt-webhook", ActionType: domain.EventActionWebhook, WebhookURL: "https://hooks.example.com/loghill"}, Sender: domain.Sender{ID: "worker-1"}, Entry: domain.LogEntry{Event: "finished", Severity: domain.Info}}
+	if err = dispatcher.Dispatch(context.Background(), value); err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case <-recorder.done:
+	case <-time.After(time.Second):
+		t.Fatal("webhook delivery timed out")
+	}
+	if webhook.count() != 1 || email.count() != 0 {
+		t.Fatalf("webhook calls=%d email calls=%d", webhook.count(), email.count())
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	if err = dispatcher.Shutdown(ctx); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestDispatcherDeliversSMSThroughDurableWorker(t *testing.T) {
+	email := &fakeProvider{}
+	sms := &fakeWebhookSender{}
+	recorder := newRecorder()
+	dispatcher, err := NewDispatcher(t.TempDir(), 2, 1, 0, time.Second, 0, email, fakeRenderer{}, recorder)
+	if err != nil {
+		t.Fatal(err)
+	}
+	dispatcher.SetSMSSender(sms).Start()
+	value := domain.Notification{SourceType: domain.NotificationSourceEvent, SourceID: "evt-sms", Event: domain.EventDefinition{ID: "evt-sms", ActionType: domain.EventActionSMS, PhoneNumbers: []string{"+5511999999999"}, SMSTemplate: "Failure"}, Sender: domain.Sender{ID: "worker-1"}, Entry: domain.LogEntry{Event: "finished", Severity: domain.Info}}
+	if err = dispatcher.Dispatch(context.Background(), value); err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case <-recorder.done:
+	case <-time.After(time.Second):
+		t.Fatal("SMS delivery timed out")
+	}
+	if sms.count() != 1 || email.count() != 0 {
+		t.Fatalf("SMS calls=%d email calls=%d", sms.count(), email.count())
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	if err = dispatcher.Shutdown(ctx); err != nil {
 		t.Fatal(err)
 	}
 }

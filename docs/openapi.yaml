@@ -33,6 +33,7 @@ paths:
         "202": { description: Log persistido e aceito; alertas e eventos são processados de forma assíncrona }
         "400": { description: Contrato inválido, inclusive chave de evento inválida, content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } } }
         "401": { $ref: "#/components/responses/InvalidSenderKey" }
+        "409": { description: event_occurrence_id já utilizado pelo sender com outro payload, content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } } }
         "422": { $ref: "#/components/responses/ValidationError" }
         "429": { description: Limite de requisições excedido }
   /api/v1/senders:
@@ -553,7 +554,7 @@ components:
         message: { type: string }
         timestamp: { type: string, format: date-time }
         event: { type: string, minLength: 3, maxLength: 80, pattern: "^[a-z0-9][a-z0-9_-]{2,79}$", description: Chave opcional que dispara eventos associados ao sender }
-        event_occurrence_id: { type: string, maxLength: 200, description: Identificador opcional reservado para idempotência; no MVP requisições repetidas ainda podem gerar novos envios }
+        event_occurrence_id: { type: string, maxLength: 200, description: Chave idempotente escopada ao sender. Repetir a chave com o mesmo payload retorna o resultado original sem novos efeitos; outro payload retorna 409. }
         metadata: { type: object, additionalProperties: true }
     SenderInstance:
       type: object
@@ -673,7 +674,7 @@ components:
         pagination: { type: object }
         summary: { type: object }
         email_provider: { type: object }
-    EventActionType: { type: string, enum: [none, email] }
+    EventActionType: { type: string, enum: [none, email, webhook, sms] }
     EventInput:
       type: object
       additionalProperties: false
@@ -686,6 +687,9 @@ components:
         recipients: { type: array, maxItems: 20, uniqueItems: true, items: { type: string, format: email }, description: Obrigatório somente quando action_type for email. }
         subject_template: { type: string, maxLength: 200, description: Obrigatório para e-mail; sem CR ou LF e aceita variáveis suportadas. }
         message_template: { type: string, maxLength: 10000, description: Obrigatório para e-mail; texto puro com placeholders. }
+        webhook_url: { type: string, format: uri, description: Obrigatorio somente para webhook; deve ser HTTPS publico e sem credenciais embutidas. }
+        phone_numbers: { type: array, maxItems: 20, uniqueItems: true, items: { type: string, pattern: '^\+[1-9][0-9]{7,14}$' }, description: Obrigatório somente para SMS. }
+        sms_template: { type: string, maxLength: 1600, description: Obrigatório somente para SMS. }
         enabled: { type: boolean }
     EventDefinition:
       allOf:

@@ -84,6 +84,54 @@ func TestEventWithoutEmailCanBeActive(t *testing.T) {
 	}
 }
 
+func TestWebhookEventValidationAndPersistence(t *testing.T) {
+	service, dir, sender, _ := eventFixture(t)
+	input := domain.EventInput{Name: "Webhook financeiro", Key: "webhook_financeiro", SenderIDs: []string{sender}, ActionType: domain.EventActionWebhook, WebhookURL: "https://hooks.example.com/loghill", Enabled: true}
+	event, err := service.Create(context.Background(), input)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if event.WebhookURL != input.WebhookURL || len(event.Recipients) != 0 || event.SubjectTemplate != "" {
+		t.Fatalf("unexpected webhook event: %#v", event)
+	}
+	reopened, err := Open(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if restored, ok := reopened.Get(event.ID); !ok || restored.WebhookURL != input.WebhookURL {
+		t.Fatalf("webhook was not persisted: %#v", restored)
+	}
+	input.Key = "webhook_privado"
+	input.WebhookURL = "https://127.0.0.1/internal"
+	if _, err = service.Create(context.Background(), input); err == nil {
+		t.Fatal("private webhook target was accepted")
+	}
+}
+
+func TestSMSEventValidationAndPersistence(t *testing.T) {
+	service, dir, sender, _ := eventFixture(t)
+	input := domain.EventInput{Name: "SMS financeiro", Key: "sms_financeiro", SenderIDs: []string{sender}, ActionType: domain.EventActionSMS, PhoneNumbers: []string{" +5511999999999 ", "+5511999999999"}, SMSTemplate: "Falha em {{sender.name}}", Enabled: true}
+	event, err := service.Create(context.Background(), input)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(event.PhoneNumbers) != 1 || event.PhoneNumbers[0] != "+5511999999999" || event.SMSTemplate != input.SMSTemplate || len(event.Recipients) != 0 {
+		t.Fatalf("unexpected SMS event: %#v", event)
+	}
+	reopened, err := Open(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if restored, ok := reopened.Get(event.ID); !ok || len(restored.PhoneNumbers) != 1 || restored.SMSTemplate != input.SMSTemplate {
+		t.Fatalf("SMS event was not persisted: %#v", restored)
+	}
+	input.Key = "sms_invalido"
+	input.PhoneNumbers = []string{"11999999999"}
+	if _, err = service.Create(context.Background(), input); err == nil {
+		t.Fatal("non-E.164 phone number was accepted")
+	}
+}
+
 func TestEventCRUDMatchingAndKeyRules(t *testing.T) {
 	service, _, senderA, senderB := eventFixture(t)
 	ctx := context.Background()

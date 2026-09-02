@@ -16,7 +16,10 @@ func (r *FileRepository) Repair(ctx context.Context, s domain.Sender) (domain.Se
 	if err != nil {
 		return s, err
 	}
-	release := r.acquireWrite(ctx, s.ID)
+	release, err := r.acquireWrite(ctx, s.ID)
+	if err != nil {
+		return s, err
+	}
 	defer release()
 	_ = os.Remove(filepath.Join(d, "logs.txt.tmp"))
 	_ = os.Remove(filepath.Join(d, "sender.json.tmp"))

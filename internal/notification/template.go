@@ -101,6 +101,10 @@ func (t *Template) renderEvent(value domain.Notification) (domain.EmailMessage, 
 	return renderMessage(recipients, subject, data)
 }
 
+func (t *Template) RenderEventText(value domain.Notification, templateValue string) string {
+	return renderEventValue(templateValue, value, t.publicURL)
+}
+
 func renderEventValue(templateValue string, value domain.Notification, publicURL string) string {
 	return eventPlaceholderPattern.ReplaceAllStringFunc(templateValue, func(token string) string {
 		match := eventPlaceholderPattern.FindStringSubmatch(token)

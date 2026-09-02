@@ -11,6 +11,7 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"os"
 	"regexp"
 	"sort"
 	"strings"
@@ -22,7 +23,6 @@ import (
 	"logtheater/internal/domain"
 	"logtheater/internal/repositories"
 	settingsstore "logtheater/internal/settings"
-	"logtheater/internal/storage"
 )
 
 var (
@@ -43,13 +43,12 @@ type SenderCredentials struct {
 }
 
 type Service struct {
-	repo           *repositories.SenderRepository
+	repo           repositories.SenderRepository
 	cfg            config.Config
 	clock          domain.Clock
 	settings       *settingsstore.Store
 	Hub            *Hub
 	started        time.Time
-	locks          *storage.LockManager
 	alertSink      LogAlertSink
 	eventSink      LogEventSink
 	monitoringSink LogMonitoringSink
@@ -71,11 +70,11 @@ type LogMonitoringSink interface {
 	NotifySenderCreated(context.Context, domain.Sender)
 }
 
-func New(repo *repositories.SenderRepository, cfg config.Config, clock domain.Clock, settings *settingsstore.Store) *Service {
-	return &Service{repo: repo, cfg: cfg, clock: clock, settings: settings, Hub: NewHub(cfg.SSEMaxClients, cfg.SSEBuffer), started: clock.Now(), locks: repo.Locks()}
+func New(repo repositories.SenderRepository, cfg config.Config, clock domain.Clock, settings *settingsstore.Store) *Service {
+	return &Service{repo: repo, cfg: cfg, clock: clock, settings: settings, Hub: NewHub(cfg.SSEMaxClients, cfg.SSEBuffer), started: clock.Now()}
 }
 
-func NewSenderService(repo *repositories.SenderRepository, cfg config.Config, clock domain.Clock, settings *settingsstore.Store) *SenderService {
+func NewSenderService(repo repositories.SenderRepository, cfg config.Config, clock domain.Clock, settings *settingsstore.Store) *SenderService {
 	return New(repo, cfg, clock, settings)
 }
 
@@ -219,10 +218,11 @@ func (s *Service) UpdateSender(ctx context.Context, id, name, description string
 	if len([]rune(description)) > 250 {
 		return domain.Sender{}, &SenderValidationError{Field: "description", Message: "The description must be at most 250 characters."}
 	}
-	lock := s.locks.Get(id)
-	lock.Lock()
-	defer lock.Unlock()
-	ctx = storage.ContextWithSenderLock(ctx, id)
+	ctx, release, err := s.repo.LockSender(ctx, id)
+	if err != nil {
+		return domain.Sender{}, err
+	}
+	defer release()
 	item, err := s.repo.Get(ctx, id)
 	if err != nil {
 		return item, err
@@ -234,10 +234,11 @@ func (s *Service) UpdateSender(ctx context.Context, id, name, description string
 }
 
 func (s *Service) RotateSenderKey(ctx context.Context, id string) (domain.Sender, SenderCredentials, time.Time, error) {
-	lock := s.locks.Get(id)
-	lock.Lock()
-	defer lock.Unlock()
-	ctx = storage.ContextWithSenderLock(ctx, id)
+	ctx, release, err := s.repo.LockSender(ctx, id)
+	if err != nil {
+		return domain.Sender{}, SenderCredentials{}, time.Time{}, err
+	}
+	defer release()
 	item, err := s.repo.Get(ctx, id)
 	if err != nil {
 		return item, SenderCredentials{}, time.Time{}, err
@@ -261,10 +262,11 @@ func (s *Service) RotateSenderKey(ctx context.Context, id string) (domain.Sender
 }
 
 func (s *Service) RevokeSender(ctx context.Context, id string) (domain.Sender, error) {
-	lock := s.locks.Get(id)
-	lock.Lock()
-	defer lock.Unlock()
-	ctx = storage.ContextWithSenderLock(ctx, id)
+	ctx, release, err := s.repo.LockSender(ctx, id)
+	if err != nil {
+		return domain.Sender{}, err
+	}
+	defer release()
 	item, err := s.repo.Get(ctx, id)
 	if err != nil {
 		return item, err
@@ -276,10 +278,11 @@ func (s *Service) RevokeSender(ctx context.Context, id string) (domain.Sender, e
 }
 
 func (s *Service) ReactivateSender(ctx context.Context, id string) (domain.Sender, SenderCredentials, error) {
-	lock := s.locks.Get(id)
-	lock.Lock()
-	defer lock.Unlock()
-	ctx = storage.ContextWithSenderLock(ctx, id)
+	ctx, release, err := s.repo.LockSender(ctx, id)
+	if err != nil {
+		return domain.Sender{}, SenderCredentials{}, err
+	}
+	defer release()
 	item, err := s.repo.Get(ctx, id)
 	if err != nil {
 		return item, SenderCredentials{}, err
@@ -312,10 +315,11 @@ func (s *Service) Get(ctx context.Context, id string) (domain.Sender, error) {
 }
 
 func (s *Service) InitInstance(ctx context.Context, senderID, senderKey string) (domain.SenderInstance, error) {
-	lock := s.locks.Get(senderID)
-	lock.Lock()
-	defer lock.Unlock()
-	ctx = storage.ContextWithSenderLock(ctx, senderID)
+	ctx, release, err := s.repo.LockSender(ctx, senderID)
+	if err != nil {
+		return domain.SenderInstance{}, err
+	}
+	defer release()
 	sender, err := s.repo.Get(ctx, senderID)
 	if err != nil {
 		return domain.SenderInstance{}, domain.ErrInvalidSenderKey
@@ -371,10 +375,11 @@ func (s *Service) InitInstanceByName(ctx context.Context, senderName string) (do
 	} else if getErr != nil {
 		return domain.Sender{}, domain.SenderInstance{}, "", getErr
 	}
-	lock := s.locks.Get(senderID)
-	lock.Lock()
-	defer lock.Unlock()
-	ctx = storage.ContextWithSenderLock(ctx, senderID)
+	ctx, release, err := s.repo.LockSender(ctx, senderID)
+	if err != nil {
+		return domain.Sender{}, domain.SenderInstance{}, "", err
+	}
+	defer release()
 	sender, err := s.repo.Get(ctx, senderID)
 	if err != nil {
 		return domain.Sender{}, domain.SenderInstance{}, "", err
@@ -503,10 +508,11 @@ func (s *Service) ReceiveLogWithInstanceAuthAndEvent(ctx context.Context, id, se
 }
 
 func (s *Service) ReceiveLogWithAuthenticatedInstanceAndEvent(ctx context.Context, id, senderKey, authenticatedInstanceID, instanceToken, originInstanceID, severity, message, event, occurrenceID string, timestamp *time.Time, metadata map[string]any) (domain.LogEntry, time.Time, error) {
-	lock := s.locks.Get(id)
-	lock.Lock()
-	defer lock.Unlock()
-	ctx = storage.ContextWithSenderLock(ctx, id)
+	ctx, release, err := s.repo.LockSender(ctx, id)
+	if err != nil {
+		return domain.LogEntry{}, time.Time{}, err
+	}
+	defer release()
 	if strings.TrimSpace(message) == "" || int64(len(message)) > s.cfg.MaxMessageSize {
 		return domain.LogEntry{}, time.Time{}, fmt.Errorf("invalid message")
 	}
@@ -548,6 +554,21 @@ func (s *Service) ReceiveLogWithAuthenticatedInstanceAndEvent(ctx context.Contex
 	if len([]rune(occurrenceID)) > 200 || strings.ContainsAny(occurrenceID, "\r\n\x00") {
 		return domain.LogEntry{}, time.Time{}, domain.ErrInvalidEventOccurrenceID
 	}
+	fingerprint, err := eventOccurrenceFingerprint(sev, message, event, originInstanceID, timestamp, metadata)
+	if err != nil {
+		return domain.LogEntry{}, time.Time{}, err
+	}
+	if occurrenceID != "" {
+		existing, occurrenceErr := s.repo.GetEventOccurrence(ctx, id, occurrenceID)
+		switch {
+		case occurrenceErr == nil && existing.Fingerprint == fingerprint:
+			return existing.Entry, existing.ReceivedAt, nil
+		case occurrenceErr == nil:
+			return domain.LogEntry{}, time.Time{}, domain.ErrEventOccurrenceConflict
+		case !errors.Is(occurrenceErr, os.ErrNotExist):
+			return domain.LogEntry{}, time.Time{}, occurrenceErr
+		}
+	}
 	previousStatus := sender.Status
 	now := s.clock.Now()
 	ts := now
@@ -575,6 +596,12 @@ func (s *Service) ReceiveLogWithAuthenticatedInstanceAndEvent(ctx context.Contex
 	if err = s.repo.Update(ctx, sender); err != nil {
 		return e, time.Time{}, err
 	}
+	if occurrenceID != "" {
+		err = s.repo.SaveEventOccurrence(ctx, id, repositories.EventOccurrenceRecord{ID: occurrenceID, Fingerprint: fingerprint, Entry: e, ReceivedAt: now})
+		if err != nil {
+			return e, time.Time{}, err
+		}
+	}
 	s.Hub.Publish(id, e)
 	if s.alertSink != nil {
 		s.alertSink.Notify(ctx, sender, e)
@@ -590,6 +617,26 @@ func (s *Service) ReceiveLogWithAuthenticatedInstanceAndEvent(ctx context.Contex
 	}
 	return e, now, nil
 }
+
+func eventOccurrenceFingerprint(severity domain.LogSeverity, message, event, originInstanceID string, timestamp *time.Time, metadata map[string]any) (string, error) {
+	payload := struct {
+		Severity         domain.LogSeverity `json:"severity"`
+		Message          string             `json:"message"`
+		Event            string             `json:"event,omitempty"`
+		OriginInstanceID string             `json:"origin_instance_id,omitempty"`
+		Timestamp        *time.Time         `json:"timestamp,omitempty"`
+		Metadata         map[string]any     `json:"metadata,omitempty"`
+	}{
+		Severity: severity, Message: message, Event: event,
+		OriginInstanceID: originInstanceID, Timestamp: timestamp, Metadata: metadata,
+	}
+	encoded, err := json.Marshal(payload)
+	if err != nil {
+		return "", err
+	}
+	hash := sha256.Sum256(encoded)
+	return hex.EncodeToString(hash[:]), nil
+}
 func (s *Service) Health(ctx context.Context, id, senderKey string) (domain.Sender, time.Time, error) {
 	return s.HealthWithInstance(ctx, id, senderKey, "")
 }
@@ -599,10 +646,11 @@ func (s *Service) HealthWithInstance(ctx context.Context, id, senderKey, instanc
 }
 
 func (s *Service) HealthWithInstanceAuth(ctx context.Context, id, senderKey, instanceID, instanceToken string) (domain.Sender, time.Time, error) {
-	lock := s.locks.Get(id)
-	lock.Lock()
-	defer lock.Unlock()
-	ctx = storage.ContextWithSenderLock(ctx, id)
+	ctx, release, err := s.repo.LockSender(ctx, id)
+	if err != nil {
+		return domain.Sender{}, time.Time{}, err
+	}
+	defer release()
 	item, err := s.repo.Get(ctx, id)
 	if err != nil {
 		return item, time.Time{}, domain.ErrInvalidSenderKey
@@ -787,98 +835,72 @@ func (s *Service) Tick(ctx context.Context) error {
 		if err := ctx.Err(); err != nil {
 			return err
 		}
-		lock := s.locks.Get(item.ID)
-		lock.Lock()
-		lockedCtx := storage.ContextWithSenderLock(ctx, item.ID)
-		if item.Status == domain.StatusExpired {
-			if err = s.repo.Delete(lockedCtx, item.ID); err != nil {
-				lock.Unlock()
-				return err
-			}
-			lock.Unlock()
-			continue
-		}
-
-		instances, instancesErr := s.repo.RegisteredInstances(lockedCtx, item.ID)
-		if instancesErr != nil {
-			lock.Unlock()
-			return instancesErr
-		}
-		remainingInstances := 0
-		for _, instance := range instances {
-			if now.Before(instanceExpiresAt(instance, inactiveAfter, deleteAfter)) {
-				remainingInstances++
-				continue
-			}
-			if err = s.repo.DeleteInstance(lockedCtx, item.ID, instance.ID); err != nil {
-				lock.Unlock()
-				return err
-			}
-		}
-		if len(instances) > 0 && remainingInstances == 0 {
-			if err = s.repo.Delete(lockedCtx, item.ID); err != nil {
-				lock.Unlock()
-				return err
-			}
-			lock.Unlock()
-			continue
-		}
-		if len(instances) == 0 && item.Status == domain.StatusInactive &&
-			!now.Before(senderActivity(item).Add(inactiveAfter+deleteAfter)) {
-			if err = s.repo.Delete(lockedCtx, item.ID); err != nil {
-				lock.Unlock()
-				return err
-			}
-			lock.Unlock()
-			continue
-		}
-
-		item, err = s.repo.Get(lockedCtx, item.ID)
-		if err != nil {
-			lock.Unlock()
+		if err = s.tickSender(ctx, item, now, inactiveAfter, deleteAfter, currentSettings.InactivePreservation); err != nil {
 			return err
 		}
-		if item.Status == domain.StatusRevoked || item.Status == domain.StatusNeverConnected {
-			lock.Unlock()
+	}
+	return nil
+}
+
+func (s *Service) tickSender(ctx context.Context, item domain.Sender, now time.Time, inactiveAfter, deleteAfter time.Duration, preservation domain.NumberUnitValue) error {
+	lockedCtx, release, err := s.repo.LockSender(ctx, item.ID)
+	if err != nil {
+		return err
+	}
+	defer release()
+	if item.Status == domain.StatusExpired {
+		return s.repo.Delete(lockedCtx, item.ID)
+	}
+	instances, err := s.repo.RegisteredInstances(lockedCtx, item.ID)
+	if err != nil {
+		return err
+	}
+	remainingInstances := 0
+	for _, instance := range instances {
+		if now.Before(instanceExpiresAt(instance, inactiveAfter, deleteAfter)) {
+			remainingInstances++
 			continue
 		}
-		if item.Status == domain.StatusInactive {
-			if item.ExpiresAt != nil || item.ExpiredAt != nil {
-				item.ExpiresAt = nil
-				item.ExpiredAt = nil
-				item.UpdatedAt = now
-				if err = s.repo.Update(lockedCtx, item); err != nil {
-					lock.Unlock()
-					return err
-				}
-			}
-			lock.Unlock()
-			continue
+		if err = s.repo.DeleteInstance(lockedCtx, item.ID, instance.ID); err != nil {
+			return err
 		}
-		if item.Status == domain.StatusOnline && item.LastActivityAt != nil && now.Sub(*item.LastActivityAt) > inactiveAfter {
-			inactive := now
-			count, size, e := s.repo.CompactByLimit(lockedCtx, item.ID, currentSettings.InactivePreservation)
-			if e != nil && !errors.Is(e, domain.ErrLogFileNotFound) {
-				lock.Unlock()
-				return e
-			}
-			item.Status = domain.StatusInactive
-			item.InactiveAt = &inactive
-			item.CompactedAt = &inactive
-			item.ExpiresAt = nil
-			item.ExpiredAt = nil
-			item.UpdatedAt = now
-			item.LogLineCount = count
-			item.LogFileSize = size
-			if err = s.repo.Update(lockedCtx, item); err != nil {
-				lock.Unlock()
-				return err
-			}
-			if s.monitoringSink != nil {
-				s.monitoringSink.NotifySenderStatus(lockedCtx, item, domain.StatusOnline)
-			}
+	}
+	if len(instances) > 0 && remainingInstances == 0 {
+		return s.repo.Delete(lockedCtx, item.ID)
+	}
+	if len(instances) == 0 && item.Status == domain.StatusInactive && !now.Before(senderActivity(item).Add(inactiveAfter+deleteAfter)) {
+		return s.repo.Delete(lockedCtx, item.ID)
+	}
+	item, err = s.repo.Get(lockedCtx, item.ID)
+	if err != nil {
+		return err
+	}
+	if item.Status == domain.StatusRevoked || item.Status == domain.StatusNeverConnected {
+		return nil
+	}
+	if item.Status == domain.StatusInactive {
+		if item.ExpiresAt == nil && item.ExpiredAt == nil {
+			return nil
 		}
-		lock.Unlock()
+		item.ExpiresAt, item.ExpiredAt, item.UpdatedAt = nil, nil, now
+		return s.repo.Update(lockedCtx, item)
+	}
+	if item.Status != domain.StatusOnline || item.LastActivityAt == nil || now.Sub(*item.LastActivityAt) <= inactiveAfter {
+		return nil
+	}
+	inactive := now
+	count, size, compactErr := s.repo.CompactByLimit(lockedCtx, item.ID, preservation)
+	if compactErr != nil && !errors.Is(compactErr, domain.ErrLogFileNotFound) {
+		return compactErr
+	}
+	item.Status, item.InactiveAt, item.CompactedAt = domain.StatusInactive, &inactive, &inactive
+	item.ExpiresAt, item.ExpiredAt, item.UpdatedAt = nil, nil, now
+	item.LogLineCount, item.LogFileSize = count, size
+	if err = s.repo.Update(lockedCtx, item); err != nil {
+		return err
+	}
+	if s.monitoringSink != nil {
+		s.monitoringSink.NotifySenderStatus(lockedCtx, item, domain.StatusOnline)
 	}
 	return nil
 }
@@ -903,10 +925,11 @@ func (s *Service) UpdateSettings(value domain.Settings) (domain.Settings, error)
 }
 
 func (s *Service) DeleteSender(ctx context.Context, id string) error {
-	lock := s.locks.Get(id)
-	lock.Lock()
-	defer lock.Unlock()
-	ctx = storage.ContextWithSenderLock(ctx, id)
+	ctx, release, err := s.repo.LockSender(ctx, id)
+	if err != nil {
+		return err
+	}
+	defer release()
 	return s.repo.Delete(ctx, id)
 }
 

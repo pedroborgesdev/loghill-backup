@@ -10,6 +10,7 @@ import (
 	"log/slog"
 	"math"
 	"reflect"
+	"regexp"
 	"sort"
 	"strconv"
 	"strings"
@@ -298,13 +299,17 @@ func (s *Service) Validate(ctx context.Context, in RuleInput, currentID string) 
 		return &ValidationError{"actions", "Add between 1 and 10 actions."}
 	}
 	hasTrigger := false
+	pureTemporal := true
 	walkConditions(in.Expression, func(c Condition) {
 		if !c.Negated && (c.Type == ConditionEvent || c.Type == ConditionAlert || c.Type == ConditionSenderStatus || c.Type == ConditionLogReceived || c.Type == ConditionMessage || c.Type == ConditionSeverity || c.Type == ConditionMetadata) {
 			hasTrigger = true
 		}
+		if !isTemporalCondition(c.Type) {
+			pureTemporal = false
+		}
 	})
-	if !hasTrigger {
-		return &ValidationError{"expression", "Add a positive log, event, or alert trigger."}
+	if !hasTrigger && !pureTemporal {
+		return &ValidationError{"expression", "Add a positive log, event, alert, or temporal trigger."}
 	}
 	for _, a := range in.Actions {
 		if err := s.validateAction(a, in.SenderIDs, in.Enabled); err != nil {
@@ -315,6 +320,20 @@ func (s *Service) Validate(ctx context.Context, in RuleInput, currentID string) 
 		return err
 	}
 	return nil
+}
+
+func isTemporalCondition(conditionType ConditionType) bool {
+	return conditionType == ConditionTime || conditionType == ConditionWeekday || conditionType == ConditionDate || conditionType == ConditionWaitUntil
+}
+
+func isPureTemporal(expression ExpressionGroup) bool {
+	pure := true
+	walkConditions(expression, func(condition Condition) {
+		if !isTemporalCondition(condition.Type) {
+			pure = false
+		}
+	})
+	return pure
 }
 
 func (s *Service) validateDraft(ctx context.Context, in RuleInput) error {
@@ -387,10 +406,19 @@ func validateCondition(c Condition) error {
 	if err != nil {
 		return &ValidationError{"expression", "Fill in the condition values."}
 	}
-	valid := map[ConditionType]map[string]bool{ConditionEvent: {"triggered": true, "not_triggered": true, "previously_triggered": true, "not_previously_triggered": true}, ConditionAlert: {"triggered": true, "not_triggered": true, "previously_triggered": true, "not_previously_triggered": true}, ConditionSenderStatus: {"became": true}, ConditionMessage: {"contains": true, "not_contains": true, "equals": true, "not_equals": true, "starts_with": true, "not_starts_with": true, "ends_with": true, "not_ends_with": true}, ConditionSeverity: {"equals": true, "not_equals": true, "in": true, "not_in": true}, ConditionMetadata: {"exists": true, "not_exists": true, "equals": true, "not_equals": true, "contains": true, "not_contains": true, "gt": true, "gte": true, "lt": true, "lte": true}, ConditionTime: {"between": true, "not_between": true, "after": true, "before": true}, ConditionWeekday: {"equals": true, "not_equals": true, "in": true, "not_in": true}, ConditionDate: {"between": true, "after": true, "before": true}, ConditionWaitUntil: {"next_occurrence": true}}
+	valid := map[ConditionType]map[string]bool{ConditionEvent: {"triggered": true, "not_triggered": true, "previously_triggered": true, "not_previously_triggered": true}, ConditionAlert: {"triggered": true, "not_triggered": true, "previously_triggered": true, "not_previously_triggered": true}, ConditionSenderStatus: {"became": true}, ConditionMessage: {"contains": true, "not_contains": true, "equals": true, "not_equals": true, "starts_with": true, "not_starts_with": true, "ends_with": true, "not_ends_with": true, "matches_regex": true, "not_matches_regex": true}, ConditionSeverity: {"equals": true, "not_equals": true, "in": true, "not_in": true}, ConditionMetadata: {"exists": true, "not_exists": true, "equals": true, "not_equals": true, "contains": true, "not_contains": true, "gt": true, "gte": true, "lt": true, "lte": true}, ConditionTime: {"between": true, "not_between": true, "after": true, "before": true}, ConditionWeekday: {"equals": true, "not_equals": true, "in": true, "not_in": true}, ConditionDate: {"between": true, "after": true, "before": true}, ConditionWaitUntil: {"next_occurrence": true}}
 	ops, ok := valid[c.Type]
 	if !ok || !ops[c.Operator] {
 		return &ValidationError{"expression", "The operator is not compatible with the condition."}
+	}
+	if c.Type == ConditionMessage && strings.Contains(c.Operator, "regex") {
+		pattern := stringValue(v, "text")
+		if len(pattern) == 0 || len(pattern) > 500 {
+			return &ValidationError{"expression", "Enter a regular expression with at most 500 bytes."}
+		}
+		if _, err := regexp.Compile(pattern); err != nil {
+			return &ValidationError{"expression", "Enter a valid RE2 regular expression."}
+		}
 	}
 	if c.Type == ConditionMetadata && stringValue(v, "path") == "" {
 		return &ValidationError{"expression", "Enter the metadata path."}
@@ -558,8 +586,12 @@ func walkConditions(g ExpressionGroup, fn func(Condition)) {
 }
 
 func (s *Service) Evaluate(rule Rule, sender domain.Sender, entry domain.LogEntry, alertID string, expired bool) EvaluationResult {
+	return s.evaluate(rule, sender, entry, alertID, expired, false)
+}
+
+func (s *Service) evaluate(rule Rule, sender domain.Sender, entry domain.LogEntry, alertID string, expired, scheduled bool) EvaluationResult {
 	results := []ConditionResult{}
-	matched, pending := s.evalGroup(rule.Expression, entry, alertID, expired, &results)
+	matched, pending := s.evalGroup(rule.Expression, entry, alertID, expired, scheduled, &results)
 	actions := []ActionType{}
 	if matched && !pending {
 		for _, a := range rule.Actions {
@@ -568,16 +600,16 @@ func (s *Service) Evaluate(rule Rule, sender domain.Sender, entry domain.LogEntr
 	}
 	return EvaluationResult{Matched: matched, Pending: pending, Conditions: results, Actions: actions, Summary: Summary(rule)}
 }
-func (s *Service) evalGroup(g ExpressionGroup, e domain.LogEntry, alertID string, expired bool, out *[]ConditionResult) (bool, bool) {
+func (s *Service) evalGroup(g ExpressionGroup, e domain.LogEntry, alertID string, expired, scheduled bool, out *[]ConditionResult) (bool, bool) {
 	value := g.Operator == LogicalAnd
 	pending := false
 	for _, n := range g.Nodes {
 		var matched, p bool
 		if n.Condition != nil {
-			matched, p = s.evalCondition(*n.Condition, e, alertID, expired)
+			matched, p = s.evalCondition(*n.Condition, e, alertID, expired, scheduled)
 			*out = append(*out, ConditionResult{ID: n.Condition.ID, Matched: matched, Description: conditionSummary(*n.Condition)})
 		} else {
-			matched, p = s.evalGroup(*n.Group, e, alertID, expired, out)
+			matched, p = s.evalGroup(*n.Group, e, alertID, expired, scheduled, out)
 		}
 		pending = pending || p
 		if g.Operator == LogicalAnd {
@@ -594,7 +626,7 @@ func (s *Service) evalGroup(g ExpressionGroup, e domain.LogEntry, alertID string
 	}
 	return value, pending
 }
-func (s *Service) evalCondition(c Condition, e domain.LogEntry, alertID string, expired bool) (bool, bool) {
+func (s *Service) evalCondition(c Condition, e domain.LogEntry, alertID string, expired, scheduled bool) (bool, bool) {
 	v, _ := rawMap(c.Value)
 	var matched bool
 	switch c.Type {
@@ -637,6 +669,10 @@ func (s *Service) evalCondition(c Condition, e domain.LogEntry, alertID string, 
 	case ConditionDate:
 		matched = compareDate(e.Timestamp, v, c.Operator)
 	case ConditionWaitUntil:
+		if scheduled {
+			matched = matchesWaitUntil(e.Timestamp, v)
+			break
+		}
 		if !expired {
 			return true, true
 		}
@@ -646,6 +682,19 @@ func (s *Service) evalCondition(c Condition, e domain.LogEntry, alertID string, 
 		matched = !matched
 	}
 	return matched, false
+}
+
+func matchesWaitUntil(value time.Time, config map[string]any) bool {
+	weekday, ok := parseWeekday(stringValue(config, "weekday"))
+	if !ok {
+		return false
+	}
+	location, err := time.LoadLocation(stringValue(config, "timezone"))
+	if err != nil {
+		return false
+	}
+	local := value.In(location)
+	return local.Weekday() == weekday && local.Format("15:04") == stringValue(config, "time")
 }
 func compareText(a, b, op string) bool {
 	switch op {
@@ -665,6 +714,15 @@ func compareText(a, b, op string) bool {
 		return strings.HasSuffix(a, b)
 	case "not_ends_with":
 		return !strings.HasSuffix(a, b)
+	case "matches_regex", "not_matches_regex":
+		matched, err := regexp.MatchString(b, a)
+		if err != nil {
+			return false
+		}
+		if op == "not_matches_regex" {
+			return !matched
+		}
+		return matched
 	}
 	return false
 }
@@ -973,7 +1031,6 @@ func (s *Service) notify(ctx context.Context, sender domain.Sender, entry domain
 				r.FailureCount++
 			}
 		}
-		r.UpdatedAt = r.UpdatedAt
 		_ = s.store.Put(r)
 		status := r.LastResult
 		if s.executions != nil && executionID != "" && !result.Pending {
@@ -1083,6 +1140,7 @@ func (s *Service) execute(ctx context.Context, r Rule, sender domain.Sender, ent
 	return nil
 }
 func (s *Service) ProcessPending(ctx context.Context) {
+	s.ensureScheduledEvaluations()
 	now := s.clock.Now()
 	for _, p := range s.store.Pending() {
 		if p.Status != "pending" || p.DueAt.After(now) {
@@ -1091,6 +1149,10 @@ func (s *Service) ProcessPending(ctx context.Context) {
 		r, err := s.Get(p.RuleID)
 		if err != nil || !r.Enabled {
 			_ = s.store.DeletePending(p.ID)
+			continue
+		}
+		if p.Trigger.Type == "schedule" {
+			s.processScheduledEvaluation(ctx, r, p, now)
 			continue
 		}
 		sender, err := s.deps.Sender(ctx, p.SenderID)
@@ -1124,6 +1186,90 @@ func (s *Service) ProcessPending(ctx context.Context) {
 		}
 		_ = s.store.DeletePending(p.ID)
 	}
+}
+
+func (s *Service) ensureScheduledEvaluations() {
+	now := s.clock.Now()
+	expected := make(map[string]Rule)
+	for _, rule := range s.store.All() {
+		if !rule.Enabled || rule.Status == "draft" || !isPureTemporal(rule.Expression) {
+			continue
+		}
+		for _, senderID := range rule.SenderIDs {
+			expected[scheduledEvaluationID(rule.ID, senderID)] = rule
+		}
+	}
+	existing := make(map[string]PendingEvaluation)
+	for _, pending := range s.store.Pending() {
+		if pending.Trigger.Type == "schedule" {
+			existing[pending.ID] = pending
+		}
+	}
+	for id, rule := range expected {
+		pending, ok := existing[id]
+		if ok && pending.Trigger.Timestamp.Equal(rule.UpdatedAt) {
+			continue
+		}
+		senderID := strings.TrimPrefix(id, "schedule_"+rule.ID+"_")
+		_ = s.store.PutPending(PendingEvaluation{
+			ID: id, RuleID: rule.ID, SenderID: senderID, TriggeredAt: now,
+			DueAt: nextScheduleEvaluation(now), Status: "pending",
+			Trigger:       Trigger{Type: "schedule", Timestamp: rule.UpdatedAt, Severity: domain.Undefined, Message: "Scheduled monitoring evaluation"},
+			CorrelationID: newID("corr_"),
+		})
+	}
+	for id := range existing {
+		if _, ok := expected[id]; !ok {
+			_ = s.store.DeletePending(id)
+		}
+	}
+}
+
+func scheduledEvaluationID(ruleID, senderID string) string {
+	return "schedule_" + ruleID + "_" + senderID
+}
+
+func nextScheduleEvaluation(now time.Time) time.Time {
+	return now.Truncate(time.Minute).Add(time.Minute)
+}
+
+func (s *Service) processScheduledEvaluation(ctx context.Context, rule Rule, pending PendingEvaluation, now time.Time) {
+	sender, err := s.deps.Sender(ctx, pending.SenderID)
+	if err != nil || sender.Status == domain.StatusExpired || sender.Status == domain.StatusRevoked {
+		_ = s.store.DeletePending(pending.ID)
+		return
+	}
+	evaluatedAt := pending.DueAt
+	entry := domain.LogEntry{SenderID: sender.ID, Timestamp: evaluatedAt, ActivityAt: evaluatedAt, Severity: domain.Undefined, Message: "Scheduled monitoring evaluation"}
+	result := s.evaluate(rule, sender, entry, "", false, true)
+	status := "not_matched"
+	shouldExecute := result.Matched && !pending.LastMatched
+	if shouldExecute {
+		status = "success"
+		if err = s.execute(ctx, rule, sender, entry, pending.CorrelationID, 0); err != nil {
+			status = "failed"
+			rule.LastError = sanitize(err.Error())
+			rule.FailureCount++
+		} else {
+			rule.LastError = ""
+			rule.ExecutionCount++
+			rule.LastExecutedAt = &now
+		}
+	}
+	rule.LastEvaluatedAt = &now
+	rule.LastResult = status
+	_ = s.store.Put(rule)
+	_ = s.store.AppendExecution(Execution{
+		ID: newID("exec_"), RuleID: rule.ID, SenderID: sender.ID, TriggerType: "schedule",
+		CorrelationID: pending.CorrelationID, StartedAt: now, FinishedAt: s.clock.Now(), Status: status, Result: result, Error: rule.LastError,
+	})
+	pending.LastMatched = result.Matched
+	pending.TriggeredAt = now
+	pending.DueAt = nextScheduleEvaluation(now)
+	if shouldExecute {
+		pending.CorrelationID = newID("corr_")
+	}
+	_ = s.store.PutPending(pending)
 }
 
 func executionConditions(items []ConditionResult) []executions.ConditionResult {

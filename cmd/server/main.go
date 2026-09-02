@@ -27,6 +27,8 @@ import (
 	"logtheater/internal/scheduler"
 	"logtheater/internal/services"
 	settingsstore "logtheater/internal/settings"
+	"logtheater/internal/smsprovider"
+	"logtheater/internal/webhook"
 	webassets "logtheater/web"
 )
 
@@ -82,7 +84,13 @@ func main() {
 	emailProvider := emailprovider.NewSelector(emailSettings, outlookProvider, gmailProvider)
 	emailTemplate := notification.NewTemplate(cfg.PublicURL)
 	recorder := notification.NewRecorder(alertService, eventService).SetExecutions(executionStore)
-	dispatcher := notification.NewDispatcher(cfg.EmailAlertQueueSize, cfg.EmailAlertWorkers, cfg.EmailAlertMaxRetries, cfg.EmailAlertSendTimeout, cfg.EmailAlertRetryInterval, emailProvider, emailTemplate, recorder)
+	dispatcher, err := notification.NewDispatcher(cfg.DataDir, cfg.EmailAlertQueueSize, cfg.EmailAlertWorkers, cfg.EmailAlertMaxRetries, cfg.EmailAlertSendTimeout, cfg.EmailAlertRetryInterval, emailProvider, emailTemplate, recorder)
+	if err != nil {
+		slog.Error("notification outbox initialization failed", "error", err)
+		os.Exit(1)
+	}
+	dispatcher.SetWebhookSender(webhook.NewClient())
+	dispatcher.SetSMSSender(smsprovider.NewTwilio(cfg.TwilioSMSEnabled, cfg.TwilioAccountSID, cfg.TwilioAuthToken, cfg.TwilioFromNumber, &http.Client{Timeout: cfg.EmailAlertSendTimeout}, emailTemplate))
 	notificationService := services.NewNotificationService(alertService, eventService, svc, emailSettings, emailProvider, dispatcher, cfg.PublicURL, cfg.EmailAlertSendTimeout)
 	dispatcher.Start()
 	monitoringService.SetExecutor(monitoring.NewExecutor(monitoringService, eventService, dispatcher))

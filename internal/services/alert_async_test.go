@@ -53,7 +53,10 @@ func TestReceiveLogDoesNotWaitForEmailDelivery(t *testing.T) {
 	logService := services.New(repo, cfg, domain.SystemClock{}, settings)
 	alertService := alerts.NewService(alertStore, repo, emailSettings, domain.SystemClock{})
 	provider := &blockingProvider{started: make(chan struct{}), release: make(chan struct{})}
-	dispatcher := notification.NewDispatcher(10, 1, 0, time.Second, 0, provider, notification.NewTemplate("http://localhost:8080"), alertService)
+	dispatcher, err := notification.NewDispatcher(dir, 10, 1, 0, time.Second, 0, provider, notification.NewTemplate("http://localhost:8080"), alertService)
+	if err != nil {
+		t.Fatal(err)
+	}
 	dispatcher.Start()
 	logService.SetAlertSink(notification.NewRuntime(alertService, dispatcher))
 	sender, credentials, err := logService.CreateSender(context.Background(), "worker", "")

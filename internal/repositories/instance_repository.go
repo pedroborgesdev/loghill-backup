@@ -18,7 +18,10 @@ func (r *FileRepository) RegisterInstance(ctx context.Context, senderID string, 
 	if err != nil {
 		return err
 	}
-	release := r.acquireWrite(ctx, senderID)
+	release, err := r.acquireWrite(ctx, senderID)
+	if err != nil {
+		return err
+	}
 	defer release()
 	if _, err = r.readSender(filepath.Join(d, "sender.json")); err != nil {
 		return err
@@ -60,7 +63,10 @@ func (r *FileRepository) GetInstance(ctx context.Context, senderID, instanceID s
 	if err != nil {
 		return domain.SenderInstance{}, err
 	}
-	release := r.acquireRead(ctx, senderID)
+	release, err := r.acquireRead(ctx, senderID)
+	if err != nil {
+		return domain.SenderInstance{}, err
+	}
 	defer release()
 	instances, err := readInstances(filepath.Join(d, "instances.json"))
 	if err != nil {
@@ -79,7 +85,10 @@ func (r *FileRepository) InstanceCount(ctx context.Context, senderID string) (in
 	if err != nil {
 		return 0, err
 	}
-	release := r.acquireRead(ctx, senderID)
+	release, err := r.acquireRead(ctx, senderID)
+	if err != nil {
+		return 0, err
+	}
 	defer release()
 	instances, err := readInstances(filepath.Join(d, "instances.json"))
 	if err != nil {
@@ -95,7 +104,10 @@ func (r *FileRepository) RegisteredInstances(ctx context.Context, senderID strin
 	if err != nil {
 		return nil, err
 	}
-	release := r.acquireRead(ctx, senderID)
+	release, err := r.acquireRead(ctx, senderID)
+	if err != nil {
+		return nil, err
+	}
 	defer release()
 	if _, err = r.readSender(filepath.Join(d, "sender.json")); err != nil {
 		return nil, err
@@ -108,7 +120,10 @@ func (r *FileRepository) DeleteInstance(ctx context.Context, senderID, instanceI
 	if err != nil {
 		return err
 	}
-	release := r.acquireWrite(ctx, senderID)
+	release, err := r.acquireWrite(ctx, senderID)
+	if err != nil {
+		return err
+	}
 	defer release()
 	senderPath := filepath.Join(d, "sender.json")
 	sender, err := r.readSender(senderPath)
@@ -163,7 +178,10 @@ func (r *FileRepository) TouchInstance(ctx context.Context, senderID, instanceID
 	if err != nil {
 		return err
 	}
-	release := r.acquireWrite(ctx, senderID)
+	release, err := r.acquireWrite(ctx, senderID)
+	if err != nil {
+		return err
+	}
 	defer release()
 	instances, err := readInstances(filepath.Join(d, "instances.json"))
 	if err != nil {
@@ -187,7 +205,10 @@ func (r *FileRepository) ListInstances(ctx context.Context, senderID string) ([]
 	if err != nil {
 		return nil, err
 	}
-	release := r.acquireRead(ctx, senderID)
+	release, err := r.acquireRead(ctx, senderID)
+	if err != nil {
+		return nil, err
+	}
 	defer release()
 	if _, err = r.readSender(filepath.Join(d, "sender.json")); err != nil {
 		return nil, err

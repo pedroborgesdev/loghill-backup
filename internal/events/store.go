@@ -197,6 +197,7 @@ func (s *Store) writeAtomic(items []domain.EventDefinition) error {
 func cloneEvent(event domain.EventDefinition) domain.EventDefinition {
 	event.SenderIDs = append([]string{}, event.SenderIDs...)
 	event.Recipients = append([]string{}, event.Recipients...)
+	event.PhoneNumbers = append([]string{}, event.PhoneNumbers...)
 	return event
 }
 

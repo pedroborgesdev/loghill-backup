@@ -29,14 +29,14 @@ func (e *ValidationError) Error() string { return e.Message }
 
 type Service struct {
 	store       *Store
-	senders     *repositories.SenderRepository
+	senders     repositories.SenderRepository
 	emailConfig *emailconfig.Store
 	clock       domain.Clock
 	indexMu     sync.RWMutex
 	index       map[string][]string
 }
 
-func NewService(store *Store, senders *repositories.SenderRepository, emailConfig *emailconfig.Store, clock domain.Clock) *Service {
+func NewService(store *Store, senders repositories.SenderRepository, emailConfig *emailconfig.Store, clock domain.Clock) *Service {
 	service := &Service{store: store, senders: senders, emailConfig: emailConfig, clock: clock, index: make(map[string][]string)}
 	service.rebuildIndex()
 	return service

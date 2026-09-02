@@ -156,4 +156,5 @@ type PendingEvaluation struct {
 	Status        string    `json:"status"`
 	Trigger       Trigger   `json:"trigger"`
 	CorrelationID string    `json:"correlation_id"`
+	LastMatched   bool      `json:"last_matched,omitempty"`
 }

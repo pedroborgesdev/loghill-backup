@@ -24,7 +24,7 @@ func (a *APIController) ListEvents(c *gin.Context) {
 		enabled = &value
 	}
 	action := domain.EventActionType(c.Query("action_type"))
-	if action != "" && action != domain.EventActionEmail && action != domain.EventActionNone {
+	if action != "" && action != domain.EventActionEmail && action != domain.EventActionNone && action != domain.EventActionWebhook && action != domain.EventActionSMS {
 		c.JSON(http.StatusUnprocessableEntity, eventErrorBody(c, "INVALID_EVENT_FILTER", "The action_type filter is invalid.", "action_type"))
 		return
 	}

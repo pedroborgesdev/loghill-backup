@@ -21,7 +21,10 @@ func (r *FileRepository) Append(ctx context.Context, id string, entry domain.Log
 	if err != nil {
 		return 0, 0, err
 	}
-	release := r.acquireWrite(ctx, id)
+	release, err := r.acquireWrite(ctx, id)
+	if err != nil {
+		return 0, 0, err
+	}
 	defer release()
 	s, err := r.readSender(filepath.Join(d, "sender.json"))
 	if err != nil {
@@ -139,7 +142,10 @@ func (r *FileRepository) Compact(ctx context.Context, id string, keep int) (int6
 	if err != nil {
 		return 0, 0, err
 	}
-	release := r.acquireWrite(ctx, id)
+	release, err := r.acquireWrite(ctx, id)
+	if err != nil {
+		return 0, 0, err
+	}
 	defer release()
 	return r.compactUnlocked(filepath.Join(d, "logs.txt"), keep)
 }
@@ -149,7 +155,10 @@ func (r *FileRepository) CompactByLimit(ctx context.Context, id string, limit do
 	if err != nil {
 		return 0, 0, err
 	}
-	release := r.acquireWrite(ctx, id)
+	release, err := r.acquireWrite(ctx, id)
+	if err != nil {
+		return 0, 0, err
+	}
 	defer release()
 	instances, err := readInstances(filepath.Join(d, "instances.json"))
 	if err != nil {
@@ -349,7 +358,10 @@ func (r *FileRepository) ListLogs(ctx context.Context, id string, filters domain
 	if err != nil {
 		return domain.LogPage{}, err
 	}
-	release := r.acquireRead(ctx, id)
+	release, err := r.acquireRead(ctx, id)
+	if err != nil {
+		return domain.LogPage{}, err
+	}
 	defer release()
 	items := []domain.LogEntry{}
 	paths, err := r.logPathsUnlocked(d, filters.InstanceID)
@@ -412,7 +424,10 @@ func (r *FileRepository) RecentLogCounts(ctx context.Context, id string, since t
 	if err != nil {
 		return 0, 0, 0, err
 	}
-	release := r.acquireRead(ctx, id)
+	release, err := r.acquireRead(ctx, id)
+	if err != nil {
+		return 0, 0, 0, err
+	}
 	defer release()
 	paths, err := r.logPathsUnlocked(d, "")
 	if err != nil {

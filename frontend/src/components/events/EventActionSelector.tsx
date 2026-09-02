@@ -1,5 +1,30 @@
-import { Check, Mail } from "lucide-react";
+import { Mail, MessageSquareText, Radar, Webhook } from "lucide-react";
+import type { EventActionType } from "../../types/event";
 
-export function EventActionSelector({ enabled, disabled, onChange }: { enabled: boolean; disabled?: boolean; onChange: (enabled: boolean) => void }) {
-  return <section><p className="text-xs font-medium text-zinc-300">Action optional</p><button type="button" role="checkbox" aria-checked={enabled} disabled={disabled} onClick={() => onChange(!enabled)} className="mt-2 flex w-full items-center gap-3 rounded-xl border border-zinc-700 bg-zinc-900 p-4 text-left hover:border-zinc-600 hover:bg-zinc-800 disabled:opacity-50"><span className={`grid size-5 place-items-center rounded border ${enabled ? "border-sky-400 bg-sky-400 text-zinc-950" : "border-zinc-600 bg-zinc-950"}`}>{enabled && <Check className="size-3.5"/>}</span><span className="grid size-10 place-items-center rounded-lg border border-zinc-700 bg-zinc-950"><Mail className="size-5 text-zinc-300"/></span><span><span className="block text-sm font-medium text-zinc-100">Send email</span><span className="mt-1 block text-[11px] text-zinc-500">Clear this option to use the event only in monitoring rules.</span></span></button></section>;
+const actions: Array<{ value: EventActionType; title: string; description: string; icon: typeof Mail }> = [
+  { value: "none", title: "Monitoring only", description: "Use as a trigger without external delivery.", icon: Radar },
+  { value: "email", title: "Send email", description: "Send the configured email template.", icon: Mail },
+  { value: "webhook", title: "Call webhook", description: "POST the event to a public HTTPS endpoint.", icon: Webhook },
+  { value: "sms", title: "Send SMS", description: "Send a short message through Twilio.", icon: MessageSquareText },
+];
+
+export function EventActionSelector({ value, disabled, onChange }: { value: EventActionType; disabled?: boolean; onChange: (value: EventActionType) => void }) {
+  return (
+    <section>
+      <p className="text-xs font-medium text-zinc-300">Action</p>
+      <div role="radiogroup" aria-label="Event action" className="mt-2 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+        {actions.map((action) => {
+          const Icon = action.icon;
+          const selected = value === action.value;
+          return (
+            <button key={action.value} type="button" role="radio" aria-checked={selected} disabled={disabled} onClick={() => onChange(action.value)} className={`rounded-xl border p-4 text-left transition-colors disabled:opacity-50 ${selected ? "border-sky-500 bg-sky-950/20" : "border-zinc-700 bg-zinc-900 hover:border-zinc-600"}`}>
+              <Icon className={`size-5 ${selected ? "text-sky-400" : "text-zinc-500"}`} />
+              <span className="mt-3 block text-sm font-medium text-zinc-100">{action.title}</span>
+              <span className="mt-1 block text-[11px] leading-4 text-zinc-500">{action.description}</span>
+            </button>
+          );
+        })}
+      </div>
+    </section>
+  );
 }

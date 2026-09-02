@@ -16,7 +16,10 @@ func (r *FileRepository) Create(ctx context.Context, s domain.Sender) error {
 	if err != nil {
 		return err
 	}
-	release := r.acquireWrite(ctx, s.ID)
+	release, err := r.acquireWrite(ctx, s.ID)
+	if err != nil {
+		return err
+	}
 	defer release()
 	if err = os.Mkdir(d, 0750); err != nil {
 		if errors.Is(err, os.ErrExist) {
@@ -42,7 +45,10 @@ func (r *FileRepository) Get(ctx context.Context, id string) (domain.Sender, err
 	if err != nil {
 		return domain.Sender{}, err
 	}
-	release := r.acquireRead(ctx, id)
+	release, err := r.acquireRead(ctx, id)
+	if err != nil {
+		return domain.Sender{}, err
+	}
 	defer release()
 	return r.readSender(filepath.Join(d, "sender.json"))
 }
@@ -51,7 +57,10 @@ func (r *FileRepository) Update(ctx context.Context, s domain.Sender) error {
 	if err != nil {
 		return err
 	}
-	release := r.acquireWrite(ctx, s.ID)
+	release, err := r.acquireWrite(ctx, s.ID)
+	if err != nil {
+		return err
+	}
 	defer release()
 	return r.writeSenderUnlocked(d, s)
 }
@@ -116,7 +125,10 @@ func (r *FileRepository) DeleteLogs(ctx context.Context, id string) error {
 	if err != nil {
 		return err
 	}
-	release := r.acquireWrite(ctx, id)
+	release, err := r.acquireWrite(ctx, id)
+	if err != nil {
+		return err
+	}
 	defer release()
 	paths, err := r.logPathsUnlocked(d, "")
 	if err != nil {
@@ -142,7 +154,10 @@ func (r *FileRepository) Delete(ctx context.Context, id string) error {
 	if err != nil {
 		return err
 	}
-	release := r.acquireWrite(ctx, id)
+	release, err := r.acquireWrite(ctx, id)
+	if err != nil {
+		return err
+	}
 	defer release()
 	if _, err = os.Stat(filepath.Join(d, "sender.json")); errors.Is(err, os.ErrNotExist) {
 		return domain.ErrNotFound

@@ -1,9 +1,10 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, within } from "@testing-library/react";
 import { expect, it, vi } from "vitest";
 import { EventBadge } from "./EventBadge";
 import { EventKeyField } from "./EventKeyField";
 import { isValidEventKey } from "./eventUtils";
 import { EventTemplatePreview } from "./EventTemplatePreview";
+import { EventActionSelector } from "./EventActionSelector";
 import { normalizeEvent } from "../../api/events";
 import type { EventDefinition } from "../../types/event";
 
@@ -35,6 +36,20 @@ it("renders preview content as text", () => {
   expect(document.querySelector("script")).toBeNull();
 });
 
+it("selects webhook as an event action", () => {
+  const onChange = vi.fn();
+  render(<EventActionSelector value="none" onChange={onChange} />);
+  fireEvent.click(screen.getByRole("radio", { name: /call webhook/i }));
+  expect(onChange).toHaveBeenCalledWith("webhook");
+});
+
+it("selects SMS as an event action", () => {
+  const onChange = vi.fn();
+  const view = render(<EventActionSelector value="none" onChange={onChange} />);
+  fireEvent.click(within(view.container).getByRole("radio", { name: /send sms/i }));
+  expect(onChange).toHaveBeenCalledWith("sms");
+});
+
 it("normalizes null collections returned by legacy event records", () => {
   const event = normalizeEvent({
     id: "evt_legacy",
@@ -56,4 +71,5 @@ it("normalizes null collections returned by legacy event records", () => {
 
   expect(event.sender_ids).toEqual([]);
   expect(event.recipients).toEqual([]);
+  expect(event.phone_numbers).toEqual([]);
 });

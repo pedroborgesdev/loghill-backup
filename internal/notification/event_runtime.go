@@ -42,7 +42,13 @@ func (r *EventRuntime) NotifyEvent(ctx context.Context, sender domain.Sender, en
 		executionID := ""
 		if r.executions != nil {
 			severity := entry.Severity
-			record, err := r.executions.Create(executions.Record{SourceType: executions.SourceEvent, SourceID: event.ID, SourceName: event.Name, SenderID: sender.ID, SenderName: sender.Name, TriggerType: "log_event", TriggerID: entry.EventOccurrenceID, TriggerName: entry.Event, TriggerMessage: entry.Message, Severity: &severity, Status: executions.StatusPending, CorrelationID: executions.NewID("corr_"), CausationID: entry.EventOccurrenceID, Actions: []executions.ActionResult{{ID: executions.NewID("action_"), Type: "send_email", Status: executions.StatusPending}}})
+			actionType := "send_email"
+			if event.ActionType == domain.EventActionWebhook {
+				actionType = "webhook"
+			} else if event.ActionType == domain.EventActionSMS {
+				actionType = "sms"
+			}
+			record, err := r.executions.Create(executions.Record{SourceType: executions.SourceEvent, SourceID: event.ID, SourceName: event.Name, SenderID: sender.ID, SenderName: sender.Name, TriggerType: "log_event", TriggerID: entry.EventOccurrenceID, TriggerName: entry.Event, TriggerMessage: entry.Message, Severity: &severity, Status: executions.StatusPending, CorrelationID: executions.NewID("corr_"), CausationID: entry.EventOccurrenceID, Actions: []executions.ActionResult{{ID: executions.NewID("action_"), Type: actionType, Status: executions.StatusPending}}})
 			if err == nil {
 				executionID = record.ID
 			}
@@ -59,7 +65,7 @@ func (r *EventRuntime) NotifyEvent(ctx context.Context, sender domain.Sender, en
 				reported = true
 			}
 			if !reported {
-				_ = r.events.RecordDelivery(event.ID, false, domain.DeliveryFailed, "The notification queue is full; the log was preserved, but the email was not queued.")
+				_ = r.events.RecordDelivery(event.ID, false, domain.DeliveryFailed, "The notification queue is full; the log was preserved, but the action was not queued.")
 			}
 			if r.executions != nil && executionID != "" {
 				message := "The notification queue is full."

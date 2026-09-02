@@ -16,7 +16,7 @@ import (
 )
 
 type Resolver struct {
-	Repo   *repositories.SenderRepository
+	Repo   repositories.SenderRepository
 	Events *events.Service
 	Alerts *alerts.Service
 	Email  *emailconfig.Store

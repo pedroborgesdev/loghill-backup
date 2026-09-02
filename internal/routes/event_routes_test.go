@@ -64,7 +64,10 @@ func newEventHTTPFixture(t *testing.T, admin bool) eventHTTPFixture {
 	alertService := alerts.NewService(alertStore, repo, emailSettings, domain.SystemClock{})
 	eventService := events.NewService(eventStore, repo, emailSettings, domain.SystemClock{})
 	provider := handlerEmailProvider{}
-	dispatcher := notification.NewDispatcher(10, 1, 0, time.Second, 0, provider, notification.NewTemplate("http://localhost"), notification.NewRecorder(alertService, eventService))
+	dispatcher, err := notification.NewDispatcher(dir, 10, 1, 0, time.Second, 0, provider, notification.NewTemplate("http://localhost"), notification.NewRecorder(alertService, eventService))
+	if err != nil {
+		t.Fatal(err)
+	}
 	notificationService := services.NewNotificationService(alertService, eventService, svc, emailSettings, provider, dispatcher, "http://localhost", time.Second)
 	dispatcher.Start()
 	svc.SetAlertSink(notification.NewRuntime(alertService, dispatcher))

@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -177,6 +178,29 @@ func TestLogReceivedTriggerMatchesEveryLogWithoutSeverityFilter(t *testing.T) {
 	}
 }
 
+func TestMessageRegexUsesValidatedRE2Pattern(t *testing.T) {
+	service, _, _ := testService(t)
+	input := baseInput()
+	input.Expression.Nodes[1].Condition.Operator = "matches_regex"
+	input.Expression.Nodes[1].Condition.Value = raw(map[string]any{"text": `(?i)^timeout\s+after\s+\d+ms$`})
+	rule, err := service.Create(context.Background(), input)
+	if err != nil {
+		t.Fatal(err)
+	}
+	matching := domain.LogEntry{SenderID: "sender-a", Severity: domain.Error, Message: "TIMEOUT after 2500ms"}
+	if result := service.Evaluate(rule, domain.Sender{ID: "sender-a"}, matching, "", false); !result.Matched {
+		t.Fatalf("valid regex did not match: %#v", result)
+	}
+	input.Expression.Nodes[1].Condition.Value = raw(map[string]any{"text": `^(unclosed`})
+	if _, err = service.Create(context.Background(), input); err == nil {
+		t.Fatal("invalid regex was accepted")
+	}
+	input.Expression.Nodes[1].Condition.Value = raw(map[string]any{"text": strings.Repeat("a", 501)})
+	if _, err = service.Create(context.Background(), input); err == nil {
+		t.Fatal("oversized regex was accepted")
+	}
+}
+
 func TestLegacySeverityTriggerIsMigratedToLogReceived(t *testing.T) {
 	dir := filepath.Join(t.TempDir(), "data")
 	store, err := Open(dir)
@@ -270,6 +294,62 @@ func TestWaitUntilDefersFridayLogUntilMonday(t *testing.T) {
 	loaded, err := service.Get(rule.ID)
 	if err != nil || loaded.ExecutionCount != 1 || loaded.LastResult != "success" {
 		t.Fatalf("rule execution was not recorded: %#v %v", loaded, err)
+	}
+}
+
+func TestPureTemporalRuleIsScheduledAndSurvivesRestart(t *testing.T) {
+	dir := filepath.Join(t.TempDir(), "data")
+	location, err := time.LoadLocation("America/Sao_Paulo")
+	if err != nil {
+		t.Fatal(err)
+	}
+	clock := &fakeClock{now: time.Date(2026, time.August, 31, 8, 58, 30, 0, location)}
+	deps := fakeDeps{sender: domain.Sender{ID: "sender-a", Name: "Sender A", Status: domain.StatusOnline}, email: true}
+	store, err := Open(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	service := NewService(store, deps, clock)
+	executor := &fakeExecutor{}
+	service.SetExecutor(executor)
+	input := baseInput()
+	input.Expression.Nodes = []ExpressionNode{
+		{Condition: &Condition{Type: ConditionWeekday, Operator: "equals", Value: raw(map[string]any{"weekday": "monday"})}},
+		{Connector: LogicalAnd, Condition: &Condition{Type: ConditionWaitUntil, Operator: "next_occurrence", Value: raw(map[string]any{"weekday": "monday", "time": "09:00", "timezone": "America/Sao_Paulo"})}},
+	}
+	rule, err := service.Create(context.Background(), input)
+	if err != nil {
+		t.Fatal(err)
+	}
+	service.ProcessPending(context.Background())
+	pending := store.Pending()
+	if len(pending) != 1 || pending[0].Trigger.Type != "schedule" {
+		t.Fatalf("scheduled evaluation was not persisted: %#v", pending)
+	}
+	clock.now = time.Date(2026, time.August, 31, 8, 59, 0, 0, location)
+	service.ProcessPending(context.Background())
+	if executor.calls != 0 {
+		t.Fatal("temporal action ran before its configured time")
+	}
+	reopened, err := Open(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	restarted := NewService(reopened, deps, clock)
+	restartedExecutor := &fakeExecutor{}
+	restarted.SetExecutor(restartedExecutor)
+	clock.now = time.Date(2026, time.August, 31, 9, 0, 0, 0, location)
+	restarted.ProcessPending(context.Background())
+	if restartedExecutor.calls != 1 {
+		t.Fatalf("scheduled action calls=%d, want 1", restartedExecutor.calls)
+	}
+	restarted.ProcessPending(context.Background())
+	if restartedExecutor.calls != 1 {
+		t.Fatal("the same scheduled minute executed more than once")
+	}
+	loaded, err := restarted.Get(rule.ID)
+	if err != nil || loaded.ExecutionCount != 1 || loaded.LastResult != "success" {
+		t.Fatalf("scheduled rule state=%#v err=%v", loaded, err)
 	}
 }
 

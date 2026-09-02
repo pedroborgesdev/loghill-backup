@@ -5,11 +5,11 @@
 1. `POST /api/v1/logs` valida e persiste o log.
 2. O evento é publicado no SSE.
 3. O matcher usa um índice em memória por sender e consulta regras ativas nas quais o ID está em `sender_ids`, além da severity.
-4. Cada correspondência é oferecida, sem espera, à fila limitada.
+4. Cada correspondência é persistida, sem aguardar o envio, na outbox limitada em `data/outbox/notifications.json`.
 5. Um worker renderiza HTML e texto, autentica no Microsoft Graph e envia pelo endpoint `sendMail`.
 6. O resultado sanitizado é persistido em `data/alerts.json`.
 
-O envio nunca faz parte do resultado da ingestão. Se Outlook estiver indisponível ou a fila estiver cheia, o log continua aceito. A fila é volátil e tarefas ainda em memória são perdidas em um reinício.
+O envio nunca faz parte do resultado da ingestão. Se Outlook estiver indisponível ou a outbox estiver cheia, o log continua aceito. Pendências sobrevivem ao reinício; workers usam leases persistidos para recuperar tarefas interrompidas. A entrega é pelo menos uma vez, portanto uma queda entre o envio ao provider e a confirmação local pode produzir uma duplicidade.
 
 ## Outlook/O365
 
@@ -57,5 +57,5 @@ Os endpoints estão descritos integralmente em `docs/openapi.yaml`. Quando `APP_
 
 - Somente Outlook/Microsoft 365 está disponível; Gmail é apenas informativo na interface.
 - Não há cooldown, agregação, janela temporal, agenda ou filtro por conteúdo/metadata.
-- A fila não garante entrega após reinício.
+- A outbox garante recuperação após reinício, mas não elimina a pequena janela de duplicidade entre o envio externo e a confirmação local.
 - O status de entrega representa o resultado final do último processamento, não um histórico completo de tentativas.

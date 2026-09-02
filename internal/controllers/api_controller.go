@@ -117,6 +117,9 @@ func (a *APIController) fail(c *gin.Context, err error) {
 	case errors.Is(err, domain.ErrInvalidEventOccurrenceID):
 		c.AbortWithStatusJSON(http.StatusBadRequest, errorBodyWithField(c, "INVALID_EVENT_OCCURRENCE_ID", "The occurrence identifier is invalid.", "event_occurrence_id"))
 		return
+	case errors.Is(err, domain.ErrEventOccurrenceConflict):
+		c.AbortWithStatusJSON(http.StatusConflict, errorBodyWithField(c, "EVENT_OCCURRENCE_CONFLICT", "The occurrence identifier was already used with a different payload.", "event_occurrence_id"))
+		return
 	case errors.Is(err, domain.ErrInvalidName):
 		status, code, msg = 422, "INVALID_SENDER_NAME", "Invalid sender name"
 	case errors.Is(err, domain.ErrSenderAlreadyExists):

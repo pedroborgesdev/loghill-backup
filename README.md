@@ -262,11 +262,12 @@ curl -X POST http://localhost:8080/api/v1/logs \
     "severity": "ERROR",
     "message": "Falha ao processar boleto",
     "event": "boleto_failed",
+    "event_occurrence_id": "boleto-ABC-123-tentativa-2",
     "metadata": {"protocolo":"ABC-123","tentativa":2,"retryable":true}
   }'
 ```
 
-`timestamp` e `event` são opcionais. Sem timestamp, o servidor usa o horário de recebimento. Um evento só dispara definições ativas associadas ao sender.
+`timestamp`, `event` e `event_occurrence_id` são opcionais. Sem timestamp, o servidor usa o horário de recebimento. Um evento só dispara definições ativas associadas ao sender. Para retries seguros, reutilize o mesmo `event_occurrence_id`: o mesmo sender e payload recebem novamente o resultado original, sem criar outro log nem executar as automações outra vez. Reutilizar a chave com conteúdo diferente retorna `409 EVENT_OCCURRENCE_CONFLICT`.
 
 ### 3. Mantenha a instância online
 
@@ -342,9 +343,9 @@ Também há limites de corpo, mensagem, metadata e paginação; headers de segur
 
 ## Persistência e backup
 
-`DATA_DIR` contém senders, instâncias, logs, configurações, automações, pendências, histórico e chave de criptografia. Para backup consistente, pare a aplicação e copie o diretório inteiro. `email-encryption.key` deve acompanhar `email-settings.json`.
+`DATA_DIR` contém senders, instâncias, logs, configurações, automações, a outbox de notificações, histórico e chave de criptografia. Para backup consistente, pare a aplicação e copie o diretório inteiro. `email-encryption.key` deve acompanhar `email-settings.json`.
 
-O LogHill opera como uma instância com armazenamento local. Réplicas apontando para diretórios diferentes possuem estados independentes.
+O modo recomendado é uma única instância com armazenamento local. Mais de um processo pode compartilhar o mesmo `DATA_DIR`: locks de arquivo serializam as alterações e evitam escritas concorrentes sobre o mesmo sender ou sobre a outbox. Réplicas apontando para diretórios diferentes continuam com estados independentes; compartilhamentos de rede só são seguros quando preservam locks e renames atômicos.
 
 ## Desenvolvimento
 
@@ -396,13 +397,9 @@ O backend segue `routes → controllers → services → repositories`. Veja [Ar
 
 ## Limitações atuais
 
-- Persistência local sem coordenação entre réplicas.
-- Fila de notificações em memória; pendências são perdidas no reinício.
-- `event_occurrence_id` ainda não deduplica requisições.
-- Eventos oferecem `none` ou `email`, sem webhook, SMS ou comandos.
-- Regras exclusivamente temporais não são agendadas sem outro gatilho.
-- Editor visual vertical; grupos aninhados existem no contrato do backend.
-- Regex não está exposta; mensagens usam contém, igualdade, prefixo e sufixo.
+- Réplicas só compartilham estado quando usam o mesmo `DATA_DIR` em um filesystem compatível com locks e rename atômico.
+- A outbox recupera pendências após reinício e oferece entrega pelo menos uma vez; uma queda depois do envio e antes da confirmação ainda pode duplicar uma notificação.
+- Eventos oferecem `none`, `email`, webhook HTTPS e SMS por Twilio; comandos locais ainda não estão disponíveis.
 
 ## Documentação adicional
 

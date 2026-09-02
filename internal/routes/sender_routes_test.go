@@ -66,6 +66,17 @@ func TestAdministrativeSenderCreationAndAuthenticatedIngestion(t *testing.T) {
 	if accepted := senderRequest(router, http.MethodPost, "/api/v1/logs", logBody, "", created.Credentials.SenderKey); accepted.Code != http.StatusAccepted {
 		t.Fatalf("valid log status=%d body=%s", accepted.Code, accepted.Body.String())
 	}
+	idempotentBody := `{"sender":"financial-automation","severity":"INFO","message":"processado","event":"processing_completed","event_occurrence_id":"occ-route-1"}`
+	if accepted := senderRequest(router, http.MethodPost, "/api/v1/logs", idempotentBody, "", created.Credentials.SenderKey); accepted.Code != http.StatusAccepted {
+		t.Fatalf("first occurrence status=%d body=%s", accepted.Code, accepted.Body.String())
+	}
+	if duplicate := senderRequest(router, http.MethodPost, "/api/v1/logs", idempotentBody, "", created.Credentials.SenderKey); duplicate.Code != http.StatusAccepted {
+		t.Fatalf("duplicate occurrence status=%d body=%s", duplicate.Code, duplicate.Body.String())
+	}
+	conflictingBody := `{"sender":"financial-automation","severity":"INFO","message":"payload diferente","event":"processing_completed","event_occurrence_id":"occ-route-1"}`
+	if conflict := senderRequest(router, http.MethodPost, "/api/v1/logs", conflictingBody, "", created.Credentials.SenderKey); conflict.Code != http.StatusConflict || !strings.Contains(conflict.Body.String(), "EVENT_OCCURRENCE_CONFLICT") {
+		t.Fatalf("occurrence conflict status=%d body=%s", conflict.Code, conflict.Body.String())
+	}
 	undefinedLog := `{"sender":"financial-automation","severity":"UNDEFINED","message":"INFO: Uvicorn running"}`
 	if accepted := senderRequest(router, http.MethodPost, "/api/v1/logs", undefinedLog, "", created.Credentials.SenderKey); accepted.Code != http.StatusAccepted {
 		t.Fatalf("undefined log status=%d body=%s", accepted.Code, accepted.Body.String())

@@ -2,7 +2,7 @@ import type { DeliveryStatus } from "./alert";
 import type { Pagination } from "./api";
 import type { EmailSettings } from "./email";
 
-export type EventActionType = "none" | "email";
+export type EventActionType = "none" | "email" | "webhook" | "sms";
 
 export interface EventDefinition {
   id: string;
@@ -13,6 +13,9 @@ export interface EventDefinition {
   recipients: string[];
   subject_template: string;
   message_template: string;
+  webhook_url?: string;
+  phone_numbers?: string[];
+  sms_template?: string;
   enabled: boolean;
   created_at: string;
   updated_at: string;
@@ -34,6 +37,9 @@ export interface EventInput {
   recipients: string[];
   subject_template: string;
   message_template: string;
+  webhook_url?: string;
+  phone_numbers?: string[];
+  sms_template?: string;
   enabled: boolean;
 }
 

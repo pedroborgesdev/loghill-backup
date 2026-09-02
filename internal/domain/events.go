@@ -5,8 +5,10 @@ import "time"
 type EventActionType string
 
 const (
-	EventActionNone  EventActionType = "none"
-	EventActionEmail EventActionType = "email"
+	EventActionNone    EventActionType = "none"
+	EventActionEmail   EventActionType = "email"
+	EventActionWebhook EventActionType = "webhook"
+	EventActionSMS     EventActionType = "sms"
 )
 
 type EventDefinition struct {
@@ -18,6 +20,9 @@ type EventDefinition struct {
 	Recipients         []string        `json:"recipients"`
 	SubjectTemplate    string          `json:"subject_template"`
 	MessageTemplate    string          `json:"message_template"`
+	WebhookURL         string          `json:"webhook_url,omitempty"`
+	PhoneNumbers       []string        `json:"phone_numbers,omitempty"`
+	SMSTemplate        string          `json:"sms_template,omitempty"`
 	Enabled            bool            `json:"enabled"`
 	CreatedAt          time.Time       `json:"created_at"`
 	UpdatedAt          time.Time       `json:"updated_at"`
@@ -39,6 +44,9 @@ type EventInput struct {
 	Recipients      []string        `json:"recipients"`
 	SubjectTemplate string          `json:"subject_template"`
 	MessageTemplate string          `json:"message_template"`
+	WebhookURL      string          `json:"webhook_url,omitempty"`
+	PhoneNumbers    []string        `json:"phone_numbers,omitempty"`
+	SMSTemplate     string          `json:"sms_template,omitempty"`
 	Enabled         bool            `json:"enabled"`
 }
 

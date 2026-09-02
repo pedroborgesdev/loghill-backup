@@ -1,6 +1,6 @@
 # Eventos do LogHill
 
-Eventos executam uma ação somente quando o cliente informa explicitamente uma chave no log. Nesta versão, a única ação é o envio de e-mail pelo mesmo Outlook, fila, workers, retry e template base usados pelos alertas.
+Eventos executam uma ação somente quando o cliente informa explicitamente uma chave no log. As ações disponíveis são monitoramento sem entrega, e-mail e webhook HTTPS. E-mail e webhook compartilham a mesma outbox durável, workers, timeout e política de retry.
 
 ## Criar pela interface
 
@@ -53,9 +53,20 @@ type LogOptions struct {
 
 err := logClient.Info(ctx, "Mensagem enviada com sucesso", LogOptions{
     Event: "envia_email_sucesso",
+    EventOccurrenceID: "protocolo-ABC-123-finalizado",
     Metadata: map[string]any{"protocolo": "ABC-123"},
 })
 ```
+
+## Idempotência
+
+Use um `event_occurrence_id` estável em toda tentativa de envio do mesmo evento. A chave é escopada ao sender e fica persistida em `data/senders/{sender_id}/event-occurrences.json` junto do fingerprint e do resultado original.
+
+- Mesmo ID e mesmo payload: responde `202` com o `received_at` original, sem gravar outro log, publicar outro SSE ou disparar novamente eventos e monitoramentos.
+- Mesmo ID e payload diferente: responde `409 EVENT_OCCURRENCE_CONFLICT`.
+- ID diferente ou ausente: cria uma nova ocorrência normalmente.
+
+O fingerprint considera severity normalizada, mensagem, evento, instância de origem, timestamp informado e metadata. A ordem das propriedades de metadata não altera o resultado.
 
 ## Templates
 
@@ -84,11 +95,32 @@ Content-Type: application/json
 
 As definições ficam em `data/events.json`, gravadas com arquivo temporário, `Sync`, fechamento e rename atômico. Na inicialização, duplicidades e registros inválidos impedem uma restauração silenciosamente corrompida. Um índice `sender_id → event_key → event_ids` é reconstruído e atualizado no CRUD.
 
-O log é persistido e publicado no SSE antes do matching. O endpoint apenas tenta enfileirar notificações e responde sem aguardar o Outlook. Fila cheia ou falha de entrega atualiza o resultado sanitizado do evento, sem apagar ou rejeitar o log.
+O log é persistido e publicado no SSE antes do matching. O endpoint persiste a notificação na outbox e responde sem aguardar o Outlook. Outbox cheia ou falha de entrega atualiza o resultado sanitizado do evento, sem apagar ou rejeitar o log. As pendências ficam em `data/outbox/notifications.json`; leases permitem retomá-las depois de reinício ou interrupção de um worker.
+
+### Webhook
+
+Defina `action_type: "webhook"` e `webhook_url` para receber um `POST` com `event_occurrence_id`, definição do evento, sender, log e horário de entrega. A URL deve usar HTTPS, não pode conter usuário/senha e é validada novamente no envio. O cliente bloqueia redirects e destinos loopback, privados, link-local ou multicast, inclusive depois da resolução DNS.
+
+O endpoint deve responder com qualquer status `2xx`. Falhas de rede e respostas fora dessa faixa seguem a política normal de retry e registram apenas um erro sanitizado, sem expor a URL nos logs.
+
+### SMS
+
+Defina `action_type: "sms"`, um ou mais `phone_numbers` em E.164 e `sms_template`. O worker renderiza as mesmas variáveis dos templates de evento e envia a mensagem pela API REST da Twilio. O texto é limitado a 1.600 caracteres e passa pela outbox durável antes da entrega.
+
+Ative o provider somente por ambiente; nenhum segredo é persistido nos JSONs:
+
+```env
+TWILIO_SMS_ENABLED=true
+TWILIO_ACCOUNT_SID=AC...
+TWILIO_AUTH_TOKEN=...
+TWILIO_FROM_NUMBER=+15551234567
+```
+
+Se o provider estiver desabilitado ou incompleto, a tentativa falha de forma sanitizada e fica registrada no evento e no histórico de execução.
 
 ## Limitações da primeira versão
 
-- Apenas a ação `email` e o provider Outlook.
-- A fila é mantida em memória e tarefas pendentes não sobrevivem ao reinício.
-- `event_occurrence_id` já é persistido, mas a deduplicação ainda não está ativa; requisições repetidas podem gerar novos envios.
-- Não há webhook, SMS, Teams, Slack, comandos ou HTTP genérico.
+- Teams, Slack e comandos locais ainda não estão disponíveis.
+- A outbox oferece entrega pelo menos uma vez; uma queda depois do envio externo e antes da confirmação local pode duplicar a mensagem.
+
+O contrato de SMS e da próxima etapa de comandos locais está em [ADR 0002](./adr/0002-sms-and-command-event-actions.md).

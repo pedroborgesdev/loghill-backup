@@ -10,6 +10,7 @@ export function normalizeEvent(event: EventDefinition): EventDefinition {
     ...event,
     sender_ids: Array.isArray(event.sender_ids) ? event.sender_ids : [],
     recipients: Array.isArray(event.recipients) ? event.recipients : [],
+    phone_numbers: Array.isArray(event.phone_numbers) ? event.phone_numbers : [],
   };
 }
 

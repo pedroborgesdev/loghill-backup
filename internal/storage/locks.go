@@ -1,21 +1,12 @@
 package storage
 
-import (
-	"context"
-	"sync"
-)
-
-type LockManager struct{ locks sync.Map }
+import "context"
 
 type senderLockKey struct{}
 
-func (m *LockManager) Get(id string) *sync.RWMutex {
-	v, _ := m.locks.LoadOrStore(id, &sync.RWMutex{})
-	return v.(*sync.RWMutex)
-}
-
-// ContextWithSenderLock marks that the caller already holds the per-sender mutex.
-// Repository methods honor this to avoid deadlocks when service and repository share LockManager.
+// ContextWithSenderLock marks that the caller already holds the cross-process
+// lock for the sender. Repository methods honor this marker to keep a composed
+// mutation inside the same critical section.
 func ContextWithSenderLock(ctx context.Context, senderID string) context.Context {
 	if ctx == nil {
 		ctx = context.Background()
