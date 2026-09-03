@@ -1,13 +1,13 @@
 # Eventos do LogHill
 
-Eventos executam uma ação somente quando o cliente informa explicitamente uma chave no log. As ações disponíveis são monitoramento sem entrega, e-mail e webhook HTTPS. E-mail e webhook compartilham a mesma outbox durável, workers, timeout e política de retry.
+Eventos executam uma ação somente quando o cliente informa explicitamente uma chave no log. As ações disponíveis são monitoramento sem entrega, e-mail, webhook HTTPS e requisição HTTP configurável. As entregas externas compartilham a mesma outbox durável, workers, timeout e política de retry.
 
 ## Criar pela interface
 
 1. Configure o Outlook em **Configurações → E-mail**. Sem provider, o evento só pode ser salvo inativo.
 2. Abra **Eventos** e clique em **Novo evento**.
 3. Informe nome e uma chave estável, como `processamento_finalizado`.
-4. Selecione de 1 a 100 senders, de 1 a 20 destinatários e configure assunto e mensagem.
+4. Selecione de 1 a 100 senders e configure os campos específicos da ação escolhida.
 5. Revise, ative e salve.
 
 A chave aceita de 3 a 80 caracteres no formato `^[a-z0-9][a-z0-9_-]{2,79}$` e é imutável após a criação.
@@ -103,24 +103,15 @@ Defina `action_type: "webhook"` e `webhook_url` para receber um `POST` com `even
 
 O endpoint deve responder com qualquer status `2xx`. Falhas de rede e respostas fora dessa faixa seguem a política normal de retry e registram apenas um erro sanitizado, sem expor a URL nos logs.
 
-### SMS
+### Requisição HTTP
 
-Defina `action_type: "sms"`, um ou mais `phone_numbers` em E.164 e `sms_template`. O worker renderiza as mesmas variáveis dos templates de evento e envia a mensagem pela API REST da Twilio. O texto é limitado a 1.600 caracteres e passa pela outbox durável antes da entrega.
+Defina `action_type: "http"` e `http_request` com `method`, `url`, `headers`, `cookies` e `body`. São aceitos `GET`, `HEAD`, `POST`, `PUT`, `PATCH`, `DELETE`, `CONNECT`, `OPTIONS` e `TRACE`. A URL precisa ser HTTPS pública; redirects e destinos privados continuam bloqueados.
 
-Ative o provider somente por ambiente; nenhum segredo é persistido nos JSONs:
+O evento apenas enfileira a chamada. O worker envia a requisição e fecha a resposta assim que recebe os cabeçalhos: nenhum corpo de resposta é baixado ou interpretado e o status retornado não altera o resultado da entrega. Body, valores de headers e valores de cookies aceitam as mesmas variáveis dos templates de evento.
 
-```env
-TWILIO_SMS_ENABLED=true
-TWILIO_ACCOUNT_SID=AC...
-TWILIO_AUTH_TOKEN=...
-TWILIO_FROM_NUMBER=+15551234567
-```
-
-Se o provider estiver desabilitado ou incompleto, a tentativa falha de forma sanitizada e fica registrada no evento e no histórico de execução.
+Headers e cookies são persistidos em `data/events.json` e na outbox enquanto a chamada estiver pendente. Use permissões restritas no `DATA_DIR`, prefira credenciais de escopo mínimo e faça rotação periódica.
 
 ## Limitações da primeira versão
 
 - Teams, Slack e comandos locais ainda não estão disponíveis.
 - A outbox oferece entrega pelo menos uma vez; uma queda depois do envio externo e antes da confirmação local pode duplicar a mensagem.
-
-O contrato de SMS e da próxima etapa de comandos locais está em [ADR 0002](./adr/0002-sms-and-command-event-actions.md).

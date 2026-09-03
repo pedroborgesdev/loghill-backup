@@ -39,10 +39,6 @@ type WebhookSender interface {
 	Send(context.Context, domain.Notification) error
 }
 
-type SMSSender interface {
-	Send(context.Context, domain.Notification) error
-}
-
 type Dispatcher struct {
 	outbox        *OutboxStore
 	wake          chan struct{}
@@ -52,7 +48,6 @@ type Dispatcher struct {
 	renderer      Renderer
 	recorder      DeliveryRecorder
 	webhookSender WebhookSender
-	smsSender     SMSSender
 	workers       int
 	maxRetries    int
 	sendTimeout   time.Duration
@@ -70,11 +65,6 @@ type Dispatcher struct {
 
 func (d *Dispatcher) SetWebhookSender(sender WebhookSender) *Dispatcher {
 	d.webhookSender = sender
-	return d
-}
-
-func (d *Dispatcher) SetSMSSender(sender SMSSender) *Dispatcher {
-	d.smsSender = sender
 	return d
 }
 
@@ -242,22 +232,19 @@ func (d *Dispatcher) deliverSafely(value domain.Notification) (completed bool) {
 		recorder.MarkExecutionProcessing(value)
 	}
 	var send func(context.Context) error
-	if value.Event.ActionType == domain.EventActionWebhook {
+	if value.Event.ActionType == domain.EventActionWebhook || value.Event.ActionType == domain.EventActionHTTP {
 		if d.webhookSender == nil {
 			return d.recordTerminalFailure(value, "The webhook sender is unavailable.", 1)
 		}
 		send = func(ctx context.Context) error { return d.webhookSender.Send(ctx, value) }
-	} else if value.Event.ActionType == domain.EventActionSMS {
-		if d.smsSender == nil {
-			return d.recordTerminalFailure(value, "The SMS sender is unavailable.", 1)
-		}
-		send = func(ctx context.Context) error { return d.smsSender.Send(ctx, value) }
-	} else {
+	} else if value.SourceType != domain.NotificationSourceEvent || value.Event.ActionType == "" || value.Event.ActionType == domain.EventActionEmail {
 		message, err := d.renderer.Render(value)
 		if err != nil {
 			return d.recordTerminalFailure(value, "Unable to render the email.", 1)
 		}
 		send = func(ctx context.Context) error { return d.provider.Send(ctx, message) }
+	} else {
+		return d.recordTerminalFailure(value, "The event action is unavailable.", 1)
 	}
 	var err error
 	for attempt := 0; attempt <= d.maxRetries; attempt++ {

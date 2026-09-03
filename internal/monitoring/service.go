@@ -20,6 +20,7 @@ import (
 	"logtheater/internal/domain"
 	"logtheater/internal/executions"
 	"logtheater/internal/validation"
+	"logtheater/internal/webhook"
 )
 
 var ErrNotFound = errors.New("monitoring rule not found")
@@ -483,6 +484,14 @@ func (s *Service) validateAction(a Action, senders []string, enabled bool) error
 		}
 		if message == "" || len([]rune(message)) > 10_000 {
 			return &ValidationError{"actions", "The message must be between 1 and 10,000 characters."}
+		}
+	case ActionHTTP:
+		var config domain.HTTPRequestConfig
+		if err := json.Unmarshal(a.Config, &config); err != nil {
+			return &ValidationError{"actions", "Fill in the HTTP request configuration."}
+		}
+		if err := webhook.ValidateRequestConfig(config); err != nil {
+			return &ValidationError{"actions", err.Error()}
 		}
 	default:
 		return &ValidationError{"actions", "Invalid action type."}

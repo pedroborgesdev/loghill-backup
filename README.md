@@ -57,7 +57,7 @@ LogHill API
              └─ dispara outro evento operacional
 ```
 
-O recebimento do log não aguarda o envio de e-mail. Notificações são colocadas em uma fila limitada e processadas em segundo plano, evitando que uma indisponibilidade do provider interrompa a ingestão.
+O recebimento do log não aguarda ações externas, como e-mail ou HTTP. Notificações são persistidas e processadas em segundo plano, evitando que uma indisponibilidade remota interrompa a ingestão.
 
 ## Conhecendo as telas
 
@@ -160,7 +160,7 @@ O fluxo é organizado em:
 
 1. **Gatilho:** log, evento, alerta ou mudança de status.
 2. **Condições:** mensagem, severidade, metadata, horário, dia, data ou espera futura.
-3. **Ações:** disparar evento ou enviar e-mail.
+3. **Ações:** disparar evento, enviar e-mail ou chamar um endpoint HTTP.
 
 Condições usam `E`, `OU` e `NÃO`. Blocos podem ser adicionados por clique ou drag-and-drop e reordenados. Na imagem, a regra recebe logs do `Payment Worker`, exige `ERROR`, procura `payment` na mensagem e dispara `payment_failed`.
 
@@ -399,7 +399,7 @@ O backend segue `routes → controllers → services → repositories`. Veja [Ar
 
 - Réplicas só compartilham estado quando usam o mesmo `DATA_DIR` em um filesystem compatível com locks e rename atômico.
 - A outbox recupera pendências após reinício e oferece entrega pelo menos uma vez; uma queda depois do envio e antes da confirmação ainda pode duplicar uma notificação.
-- Eventos oferecem `none`, `email`, webhook HTTPS e SMS por Twilio; comandos locais ainda não estão disponíveis.
+- Eventos oferecem `none`, `email`, webhook HTTPS e requisições HTTP configuráveis; comandos locais ainda não estão disponíveis.
 
 ## Documentação adicional
 

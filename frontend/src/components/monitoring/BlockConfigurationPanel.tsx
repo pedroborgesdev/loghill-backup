@@ -1,8 +1,10 @@
 import { ChevronLeft, Mail, PanelRightClose } from "lucide-react";
 import type { ReactNode } from "react";
 import type { EmailAlert } from "../../types/alert";
-import type { EventDefinition } from "../../types/event";
+import type { EventDefinition, HTTPRequestConfig } from "../../types/event";
 import { Listbox } from "../controls";
+import { HTTPRequestFields } from "../http/HTTPRequestFields";
+import { emptyHTTPRequest } from "../http/httpRequestModel";
 import { Button, Input } from "../ui";
 import type { MonitoringBlock } from "./blockModel";
 import { blockProblem, blockTitle } from "./blockModel";
@@ -84,6 +86,7 @@ export function BlockConfigurationPanel({ block, events, alerts, collapsed, onTo
         {block.type !== "wait_until" && <button type="button" role="switch" aria-checked={block.negated} onClick={() => onUpdate({ ...block, negated: !block.negated, condition: { ...block.condition!, negated: !block.negated } })} className="flex w-full items-center justify-between rounded-lg border border-zinc-800 p-3 text-left text-xs"><span><b className="block">Negate condition</b><small className="text-zinc-600">Displays the NOT marker.</small></span><span className={`relative h-5 w-9 rounded-full ${block.negated ? "bg-sky-700" : "bg-zinc-700"}`}><span className={`absolute top-1 size-3 rounded-full bg-white ${block.negated ? "translate-x-5" : "translate-x-1"}`} /></span></button>}
       </>}
       {block.type === "trigger_event" && <><Field label="Target event"><Listbox value={String(block.action?.config.event_id ?? "")} onChange={(value) => setConfig("event_id", value)} label="Target event" className="w-full" options={[{ value: "", label: "Select" }, ...events.filter((event) => event.enabled).map((event) => ({ value: event.id, label: event.name }))]} /></Field><Field label="Message"><Input value={String(block.action?.config.message ?? "")} onChange={(event) => setConfig("message", event.target.value)} className="w-full" /></Field><Field label="Severity"><Listbox value={String(block.action?.config.severity ?? "INFO")} onChange={(value) => setConfig("severity", value)} label="Generated severity" className="w-full" options={severities} /></Field></>}
+      {block.type === "send_http" && <HTTPRequestFields value={{ ...emptyHTTPRequest(), ...(block.action?.config as unknown as HTTPRequestConfig) }} onChange={(config) => onUpdate({ ...block, action: { ...block.action!, config: { ...config } } })} />}
       {block.type === "send_email" && <><Field label="Recipients"><Input value={Array.isArray(block.action?.config.recipients) ? block.action.config.recipients.join(", ") : ""} onChange={(event) => setConfig("recipients", event.target.value.split(",").map((value) => value.trim()).filter(Boolean))} placeholder="support@company.com" className="w-full" /></Field><Field label="Subject"><Input value={String(block.action?.config.subject ?? "")} onChange={(event) => setConfig("subject", event.target.value)} maxLength={200} className="w-full" /></Field><Field label="Message"><textarea value={String(block.action?.config.message ?? "")} onChange={(event) => setConfig("message", event.target.value)} maxLength={10000} className="min-h-36 w-full rounded-lg border border-zinc-700 bg-zinc-900 p-3 text-sm outline-none" /></Field><div className="rounded-lg border border-zinc-800 bg-zinc-950 p-3"><p className="flex items-center gap-2 text-xs font-medium"><Mail className="size-3.5" />Preview</p><p className="mt-2 text-xs font-medium">{String(block.action?.config.subject || "No subject")}</p><p className="mt-1 whitespace-pre-wrap text-[11px] text-zinc-500">{String(block.action?.config.message || "No message")}</p></div><div className="text-[10px] leading-5 text-zinc-600">Variables: <code>{"{{rule.name}}"}</code>, <code>{"{{sender.name}}"}</code>, <code>{"{{log.message}}"}</code>, <code>{"{{metadata.key}}"}</code></div><Button disabled className="w-full">Send test after saving</Button></>}
     </div>
   </aside>;

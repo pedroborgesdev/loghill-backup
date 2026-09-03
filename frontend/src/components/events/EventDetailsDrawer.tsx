@@ -1,4 +1,4 @@
-import { Clipboard, Edit3, Mail, MessageSquareText, Radar, Send, Webhook } from "lucide-react";
+import { Clipboard, Edit3, Globe2, Mail, ScanSearch, Send, Webhook } from "lucide-react";
 import { useEffect, useId, useState } from "react";
 import { createPortal } from "react-dom";
 import type { EventDefinition } from "../../types/event";
@@ -10,8 +10,12 @@ import { EventDeliveryBadge, EventStatusBadge } from "./EventStatusBadge";
 function ActionLabel({ event }: { event: EventDefinition }) {
   if (event.action_type === "email") return <span className="inline-flex items-center gap-1.5"><Mail className="size-3.5" />Email</span>;
   if (event.action_type === "webhook") return <span className="inline-flex items-center gap-1.5"><Webhook className="size-3.5" />Webhook</span>;
-  if (event.action_type === "sms") return <span className="inline-flex items-center gap-1.5"><MessageSquareText className="size-3.5" />SMS</span>;
-  return <span className="inline-flex items-center gap-1.5"><Radar className="size-3.5" />Monitoring only</span>;
+  if (event.action_type === "http") return <span className="inline-flex items-center gap-1.5"><Globe2 className="size-3.5" />HTTP request</span>;
+  return <span className="inline-flex items-center gap-1.5"><ScanSearch className="size-3.5" />Monitoring only</span>;
+}
+
+function displayHeaderValue(name: string, value: string) {
+  return /(authorization|api[-_]?key|token|secret)/.test(name.toLowerCase()) ? "••••••" : value;
 }
 
 export function EventDetailsDrawer({ event, onClose, onEdit, onTest }: { event?: EventDefinition; onClose: () => void; onEdit: (event: EventDefinition) => void; onTest: (event: EventDefinition) => void }) {
@@ -35,7 +39,7 @@ export function EventDetailsDrawer({ event, onClose, onEdit, onTest }: { event?:
           <section><h3 className="text-[10px] font-medium uppercase tracking-wide text-zinc-600">Associated senders</h3><div className="mt-2 flex flex-wrap gap-1.5">{event.sender_ids.map((id) => <code key={id} className="rounded-md border border-zinc-800 bg-zinc-950 px-2 py-1 text-[10px] text-zinc-300">{id}</code>)}</div></section>
           {event.action_type === "email" && <><section><h3 className="text-[10px] font-medium uppercase tracking-wide text-zinc-600">Recipients</h3><div className="mt-2 flex flex-wrap gap-1.5">{event.recipients.map((recipient) => <span key={recipient} className="rounded-md border border-zinc-800 bg-zinc-950 px-2 py-1 text-[10px] text-zinc-300">{recipient}</span>)}</div></section><section className="space-y-3"><Value label="Subject" value={event.subject_template} /><Value label="Message" value={<pre className="whitespace-pre-wrap font-sans">{event.message_template}</pre>} /></section></>}
           {event.action_type === "webhook" && <section><h3 className="text-[10px] font-medium uppercase tracking-wide text-zinc-600">HTTPS destination</h3><code className="mt-2 block break-all rounded-lg border border-zinc-800 bg-zinc-950 p-3 text-[10px] text-zinc-300">{event.webhook_url}</code></section>}
-          {event.action_type === "sms" && <><section><h3 className="text-[10px] font-medium uppercase tracking-wide text-zinc-600">Phone numbers</h3><div className="mt-2 flex flex-wrap gap-1.5">{event.phone_numbers?.map((number) => <code key={number} className="rounded-md border border-zinc-800 bg-zinc-950 px-2 py-1 text-[10px] text-zinc-300">{number}</code>)}</div></section><Value label="SMS message" value={<pre className="whitespace-pre-wrap font-sans">{event.sms_template}</pre>} /></>}
+          {event.action_type === "http" && event.http_request && <section className="space-y-3"><Value label="Request" value={<code>{event.http_request.method} {event.http_request.url}</code>} /><Value label="Headers" value={Object.keys(event.http_request.headers ?? {}).length ? Object.entries(event.http_request.headers).map(([name, value]) => <code key={name} className="block break-all">{name}: {displayHeaderValue(name, value)}</code>) : "None"} /><Value label="Cookies" value={Object.keys(event.http_request.cookies ?? {}).length ? Object.keys(event.http_request.cookies).join(", ") : "None"} /><Value label="Body" value={<pre className="whitespace-pre-wrap font-mono text-xs">{event.http_request.body || "Empty"}</pre>} /></section>}
           <section className="grid grid-cols-2 gap-3 rounded-xl border border-zinc-800 bg-zinc-950/40 p-4 text-xs"><Value label="Created" value={formatDate(event.created_at)} /><Value label="Last updated" value={formatDate(event.updated_at)} /><Value label="Last trigger" value={formatDate(event.last_triggered_at)} /><Value label="Last delivery" value={formatDate(event.last_delivery_at)} /><Value label="Executions" value={formatNumber(event.trigger_count)} /><Value label="Deliveries" value={formatNumber(event.delivery_count)} /><Value label="Failures" value={formatNumber(event.failure_count)} />{event.last_delivery_error && <div className="col-span-2"><p className="text-zinc-600">Last error</p><p className="mt-1 break-words text-red-400">{event.last_delivery_error}</p></div>}</section>
           <SourceRecentExecutions source="event" sourceID={event.id} />
         </div>

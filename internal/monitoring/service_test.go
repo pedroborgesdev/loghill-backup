@@ -162,6 +162,23 @@ func TestDirectEventCycleIsRejected(t *testing.T) {
 	}
 }
 
+func TestHTTPActionAcceptsMethodHeadersCookiesAndBody(t *testing.T) {
+	service, _, _ := testService(t)
+	input := baseInput()
+	input.Actions = []Action{{Type: ActionHTTP, Config: raw(domain.HTTPRequestConfig{Method: "DELETE", URL: "https://api.example.com/items/1", Headers: map[string]string{"Authorization": "Bearer token"}, Cookies: map[string]string{"session": "value"}, Body: `{"reason":"{{log.message}}"}`})}}
+	created, err := service.Create(context.Background(), input)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(created.Actions) != 1 || created.Actions[0].Type != ActionHTTP {
+		t.Fatalf("unexpected HTTP action: %#v", created.Actions)
+	}
+	input.Actions[0].Config = raw(domain.HTTPRequestConfig{Method: "POST", URL: "https://localhost/private"})
+	if _, err = service.Create(context.Background(), input); err == nil {
+		t.Fatal("unsafe HTTP action was accepted")
+	}
+}
+
 func TestLogReceivedTriggerMatchesEveryLogWithoutSeverityFilter(t *testing.T) {
 	service, _, _ := testService(t)
 	input := baseInput()

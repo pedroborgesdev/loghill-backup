@@ -12,7 +12,7 @@ export interface MonitoringBlock {
   children?: MonitoringBlock[];
   groupOperator?: LogicalOperator;
 }
-export type LibraryBlockType = "event_triggered" | "alert_triggered" | "sender_status" | "log_received" | "message" | "severity" | "metadata" | "time" | "weekday" | "date" | "wait_until" | "send_email" | "trigger_event";
+export type LibraryBlockType = "event_triggered" | "alert_triggered" | "sender_status" | "log_received" | "message" | "severity" | "metadata" | "time" | "weekday" | "date" | "wait_until" | "send_email" | "send_http" | "trigger_event";
 export const temporaryID = () => `temp_${crypto.randomUUID()}`;
 
 const legacySeverities = ["TRACE", "DEBUG", "INFO", "WARN", "ERROR", "FATAL"];
@@ -21,6 +21,7 @@ const temporalTypes = new Set(["time", "weekday", "date", "wait_until"]);
 export function createBlock(type: LibraryBlockType): MonitoringBlock {
   const id = temporaryID();
   if (type === "send_email") return { id, category: "action", type, connector: "and", negated: false, action: { id, type: "send_email", config: { recipients: [], subject: "Monitoring: {{rule.name}}", message: "Rule {{rule.name}} matched for {{sender.name}}." } } };
+  if (type === "send_http") return { id, category: "action", type, connector: "and", negated: false, action: { id, type: "send_http", config: { method: "POST", url: "", headers: {}, cookies: {}, body: "" } } };
   if (type === "trigger_event") return { id, category: "action", type, connector: "and", negated: false, action: { id, type: "trigger_event", config: { event_id: "", message: "Monitoring rule matched", severity: "INFO" } } };
   if (type === "log_received") return { id, category: "trigger", type, connector: "and", negated: false, condition: { id, type: "log_received", operator: "received", value: {}, negated: false } };
 
@@ -226,6 +227,15 @@ export function blockProblem(block: MonitoringBlock): string {
   if (block.type === "wait_until" && (!block.condition?.value.weekday || !block.condition.value.time || !String(block.condition.value.timezone ?? "").trim())) return "Select a weekday, time, and timezone.";
   if (block.type === "trigger_event" && !block.action?.config.event_id) return "Select a target event.";
   if (block.type === "send_email" && (!Array.isArray(block.action?.config.recipients) || !block.action?.config.recipients.length)) return "Select at least one recipient.";
+  if (block.type === "send_http") {
+    try {
+      const url = new URL(String(block.action?.config.url ?? ""));
+      const hostname = url.hostname.toLowerCase();
+      if (url.protocol !== "https:" || !hostname || url.username || url.password || url.hash || hostname === "localhost" || hostname.endsWith(".localhost")) return "Enter a public HTTPS URL without credentials.";
+    } catch {
+      return "Enter a public HTTPS URL without credentials.";
+    }
+  }
   return "";
 }
 
@@ -238,7 +248,7 @@ export function validateBlocks(blocks: MonitoringBlock[]) {
 }
 
 export function blockTitle(block: MonitoringBlock) {
-  const names: Record<string, string> = { group: "Condition group", event_triggered: "Event triggered", alert_triggered: "Alert triggered", sender_status: "Sender status", log_received: "Log received", message: "Log message", severity: "Severity", metadata: "Metadata", time: "Time", weekday: "Weekday", date: "Date", wait_until: "Wait Until", send_email: "Send email", trigger_event: "Trigger event" };
+  const names: Record<string, string> = { group: "Condition group", event_triggered: "Event triggered", alert_triggered: "Alert triggered", sender_status: "Sender status", log_received: "Log received", message: "Log message", severity: "Severity", metadata: "Metadata", time: "Time", weekday: "Weekday", date: "Date", wait_until: "Wait Until", send_email: "Send email", send_http: "HTTP request", trigger_event: "Trigger event" };
   return names[block.type] ?? block.type;
 }
 
@@ -258,6 +268,7 @@ export function blockSummary(block: MonitoringBlock): string {
     case "date": return `Date ${block.condition?.operator.replaceAll("_", " ")} ${value.start || "…"}`;
     case "wait_until": return `Wait until ${value.weekday || "…"} at ${value.time || "…"}`;
     case "send_email": return `Send email to ${Array.isArray(value.recipients) && value.recipients.length ? value.recipients.join(", ") : "recipients not defined"}`;
+    case "send_http": return `${value.method || "HTTP"} ${value.url || "destination not defined"}`;
     case "trigger_event": return `Trigger event ${value.event_id || "not selected"}`;
     default: return blockTitle(block);
   }

@@ -45,8 +45,8 @@ func (r *EventRuntime) NotifyEvent(ctx context.Context, sender domain.Sender, en
 			actionType := "send_email"
 			if event.ActionType == domain.EventActionWebhook {
 				actionType = "webhook"
-			} else if event.ActionType == domain.EventActionSMS {
-				actionType = "sms"
+			} else if event.ActionType == domain.EventActionHTTP {
+				actionType = "http"
 			}
 			record, err := r.executions.Create(executions.Record{SourceType: executions.SourceEvent, SourceID: event.ID, SourceName: event.Name, SenderID: sender.ID, SenderName: sender.Name, TriggerType: "log_event", TriggerID: entry.EventOccurrenceID, TriggerName: entry.Event, TriggerMessage: entry.Message, Severity: &severity, Status: executions.StatusPending, CorrelationID: executions.NewID("corr_"), CausationID: entry.EventOccurrenceID, Actions: []executions.ActionResult{{ID: executions.NewID("action_"), Type: actionType, Status: executions.StatusPending}}})
 			if err == nil {

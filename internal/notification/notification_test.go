@@ -203,26 +203,53 @@ func TestDispatcherDeliversWebhookThroughDurableWorker(t *testing.T) {
 	}
 }
 
-func TestDispatcherDeliversSMSThroughDurableWorker(t *testing.T) {
+func TestDispatcherRoutesHTTPRequestThroughDurableWorker(t *testing.T) {
 	email := &fakeProvider{}
-	sms := &fakeWebhookSender{}
+	httpSender := &fakeWebhookSender{}
 	recorder := newRecorder()
 	dispatcher, err := NewDispatcher(t.TempDir(), 2, 1, 0, time.Second, 0, email, fakeRenderer{}, recorder)
 	if err != nil {
 		t.Fatal(err)
 	}
-	dispatcher.SetSMSSender(sms).Start()
-	value := domain.Notification{SourceType: domain.NotificationSourceEvent, SourceID: "evt-sms", Event: domain.EventDefinition{ID: "evt-sms", ActionType: domain.EventActionSMS, PhoneNumbers: []string{"+5511999999999"}, SMSTemplate: "Failure"}, Sender: domain.Sender{ID: "worker-1"}, Entry: domain.LogEntry{Event: "finished", Severity: domain.Info}}
+	dispatcher.SetWebhookSender(httpSender).Start()
+	value := domain.Notification{SourceType: domain.NotificationSourceEvent, SourceID: "evt-http", Event: domain.EventDefinition{ID: "evt-http", ActionType: domain.EventActionHTTP, HTTPRequest: &domain.HTTPRequestConfig{Method: "POST", URL: "https://api.example.com"}}, Sender: domain.Sender{ID: "worker-1"}, Entry: domain.LogEntry{Event: "finished", Severity: domain.Info}}
 	if err = dispatcher.Dispatch(context.Background(), value); err != nil {
 		t.Fatal(err)
 	}
 	select {
 	case <-recorder.done:
 	case <-time.After(time.Second):
-		t.Fatal("SMS delivery timed out")
+		t.Fatal("HTTP delivery timed out")
 	}
-	if sms.count() != 1 || email.count() != 0 {
-		t.Fatalf("SMS calls=%d email calls=%d", sms.count(), email.count())
+	if httpSender.count() != 1 || email.count() != 0 {
+		t.Fatalf("HTTP calls=%d email calls=%d", httpSender.count(), email.count())
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	if err = dispatcher.Shutdown(ctx); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestDispatcherRejectsUnavailableEventActionWithoutSendingEmail(t *testing.T) {
+	email := &fakeProvider{}
+	recorder := newRecorder()
+	dispatcher, err := NewDispatcher(t.TempDir(), 2, 1, 0, time.Second, 0, email, fakeRenderer{}, recorder)
+	if err != nil {
+		t.Fatal(err)
+	}
+	dispatcher.Start()
+	value := domain.Notification{SourceType: domain.NotificationSourceEvent, SourceID: "evt-retired", Event: domain.EventDefinition{ID: "evt-retired", ActionType: "retired"}, Sender: domain.Sender{ID: "worker-1"}, Entry: domain.LogEntry{Event: "finished", Severity: domain.Info}}
+	if err = dispatcher.Dispatch(context.Background(), value); err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case <-recorder.done:
+	case <-time.After(time.Second):
+		t.Fatal("retired action rejection timed out")
+	}
+	if email.count() != 0 {
+		t.Fatalf("retired action unexpectedly sent %d emails", email.count())
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()

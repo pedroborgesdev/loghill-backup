@@ -1,4 +1,4 @@
-import { Edit3, Eye, Mail, MessageSquareText, Power, Radar, Send, Trash2, Webhook } from "lucide-react";
+import { Edit3, Eye, Globe2, Mail, Power, ScanSearch, Send, Trash2, Webhook } from "lucide-react";
 import type { EventDefinition } from "../../types/event";
 import { relativeDate } from "../../utils/format";
 import { IconButton } from "../ui";
@@ -9,8 +9,8 @@ interface Props { items: EventDefinition[]; busyId: string; onDetails: (event: E
 function Action({ event }: { event: EventDefinition }) {
   if (event.action_type === "email") return <><Mail className="size-3.5" />Email</>;
   if (event.action_type === "webhook") return <><Webhook className="size-3.5" />Webhook</>;
-  if (event.action_type === "sms") return <><MessageSquareText className="size-3.5" />SMS</>;
-  return <><Radar className="size-3.5" />Monitoring</>;
+  if (event.action_type === "http") return <><Globe2 className="size-3.5" />HTTP</>;
+  return <><ScanSearch className="size-3.5" />Monitoring</>;
 }
 
 function Actions({ event, props }: { event: EventDefinition; props: Props }) {

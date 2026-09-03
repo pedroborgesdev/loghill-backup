@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { createBlock, findBlock, fromRule, groupWithPrevious, insertBlock, moveBlock, removeBlock, toRule, ungroupBlock, updateBlock, validateBlocks } from "./blockModel";
+import { blockProblem, createBlock, findBlock, fromRule, groupWithPrevious, insertBlock, moveBlock, removeBlock, toRule, ungroupBlock, updateBlock, validateBlocks } from "./blockModel";
 
 describe("monitoring block model", () => {
   it("keeps trigger, conditions and actions in a valid vertical order", () => {
@@ -67,6 +67,14 @@ describe("monitoring block model", () => {
       type: "sender_status",
       condition: { type: "sender_status", operator: "became", value: { status: "online" } },
     });
+  });
+
+  it("creates and validates an HTTP action block", () => {
+    const action = createBlock("send_http");
+    expect(action).toMatchObject({ category: "action", type: "send_http", action: { type: "send_http", config: { method: "POST", headers: {}, cookies: {}, body: "" } } });
+    expect(blockProblem(action)).toMatch(/public HTTPS URL/i);
+    const configured = updateBlock([action], action.id, { action: { ...action.action!, config: { ...action.action!.config, url: "https://api.example.com/hook" } } })[0];
+    expect(blockProblem(configured)).toBe("");
   });
 
   it("creates Wait Until as a sequential time block", () => {

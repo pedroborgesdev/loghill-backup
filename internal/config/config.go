@@ -41,8 +41,6 @@ type Config struct {
 	EmailAlertSendTimeout, EmailAlertRetryInterval                 time.Duration
 	ExecutionHistoryRetentionDays, ExecutionHistoryMaxRecords      int
 	ExecutionHistoryCleanupInterval                                time.Duration
-	TwilioSMSEnabled                                               bool
-	TwilioAccountSID, TwilioAuthToken, TwilioFromNumber            string
 }
 
 func Load() (Config, error) {
@@ -109,8 +107,6 @@ func Load() (Config, error) {
 		EmailAlertRetryInterval:       envDuration("EMAIL_ALERT_RETRY_INTERVAL", 5*time.Second),
 		ExecutionHistoryRetentionDays: envInt("EXECUTION_HISTORY_RETENTION_DAYS", 90), ExecutionHistoryMaxRecords: envInt("EXECUTION_HISTORY_MAX_RECORDS", 100000),
 		ExecutionHistoryCleanupInterval: envDuration("EXECUTION_HISTORY_CLEANUP_INTERVAL", time.Hour),
-		TwilioSMSEnabled:                envBool("TWILIO_SMS_ENABLED", false), TwilioAccountSID: strings.TrimSpace(os.Getenv("TWILIO_ACCOUNT_SID")),
-		TwilioAuthToken: os.Getenv("TWILIO_AUTH_TOKEN"), TwilioFromNumber: strings.TrimSpace(os.Getenv("TWILIO_FROM_NUMBER")),
 	}
 	c.EmailManagedByEnvironment = anyEnvironmentSet(
 		"OUTLOOK_ENABLED", "OUTLOOK_TENANT_ID", "OUTLOOK_CLIENT_ID",
@@ -150,22 +146,7 @@ func Load() (Config, error) {
 	if c.ExecutionHistoryRetentionDays < 1 || c.ExecutionHistoryMaxRecords < 1 || c.ExecutionHistoryCleanupInterval <= 0 {
 		return c, fmt.Errorf("invalid execution history configuration")
 	}
-	if c.TwilioSMSEnabled && (c.TwilioAccountSID == "" || c.TwilioAuthToken == "" || !validE164(c.TwilioFromNumber)) {
-		return c, fmt.Errorf("TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN and an E.164 TWILIO_FROM_NUMBER are required when SMS is enabled")
-	}
 	return c, nil
-}
-
-func validE164(value string) bool {
-	if len(value) < 8 || len(value) > 16 || value[0] != '+' {
-		return false
-	}
-	for _, char := range value[1:] {
-		if char < '0' || char > '9' {
-			return false
-		}
-	}
-	return true
 }
 
 func (c Config) Address() string { return c.Host + ":" + c.Port }

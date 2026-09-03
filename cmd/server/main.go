@@ -27,7 +27,6 @@ import (
 	"logtheater/internal/scheduler"
 	"logtheater/internal/services"
 	settingsstore "logtheater/internal/settings"
-	"logtheater/internal/smsprovider"
 	"logtheater/internal/webhook"
 	webassets "logtheater/web"
 )
@@ -89,8 +88,7 @@ func main() {
 		slog.Error("notification outbox initialization failed", "error", err)
 		os.Exit(1)
 	}
-	dispatcher.SetWebhookSender(webhook.NewClient())
-	dispatcher.SetSMSSender(smsprovider.NewTwilio(cfg.TwilioSMSEnabled, cfg.TwilioAccountSID, cfg.TwilioAuthToken, cfg.TwilioFromNumber, &http.Client{Timeout: cfg.EmailAlertSendTimeout}, emailTemplate))
+	dispatcher.SetWebhookSender(webhook.NewClient(emailTemplate))
 	notificationService := services.NewNotificationService(alertService, eventService, svc, emailSettings, emailProvider, dispatcher, cfg.PublicURL, cfg.EmailAlertSendTimeout)
 	dispatcher.Start()
 	monitoringService.SetExecutor(monitoring.NewExecutor(monitoringService, eventService, dispatcher))

@@ -92,6 +92,13 @@ func (e *Executor) ExecuteMonitoringAction(ctx context.Context, rule Rule, actio
 		}
 		e.service.notify(ctx, sender, generated, "", correlation, depth)
 		return nil
+	case ActionHTTP:
+		var config domain.HTTPRequestConfig
+		if err := json.Unmarshal(action.Config, &config); err != nil {
+			return err
+		}
+		event := domain.EventDefinition{ID: "evt_monitoring_" + rule.ID, Name: rule.Name, Key: "monitoring_" + rule.ID, ActionType: domain.EventActionHTTP, HTTPRequest: &config, Enabled: true}
+		return e.dispatcher.Dispatch(ctx, domain.Notification{SourceType: domain.NotificationSourceMonitoring, SourceID: rule.ID, Event: event, Sender: sender, Entry: entry})
 	default:
 		return errors.New("invalid monitoring action type")
 	}

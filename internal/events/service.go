@@ -180,7 +180,7 @@ func (s *Service) Create(ctx context.Context, input domain.EventInput) (domain.E
 		return domain.EventDefinition{}, err
 	}
 	now := s.clock.Now()
-	event := domain.EventDefinition{ID: id, Name: input.Name, Key: input.Key, SenderIDs: input.SenderIDs, ActionType: input.ActionType, Recipients: input.Recipients, SubjectTemplate: input.SubjectTemplate, MessageTemplate: input.MessageTemplate, WebhookURL: input.WebhookURL, PhoneNumbers: input.PhoneNumbers, SMSTemplate: input.SMSTemplate, Enabled: input.Enabled, CreatedAt: now, UpdatedAt: now}
+	event := domain.EventDefinition{ID: id, Name: input.Name, Key: input.Key, SenderIDs: input.SenderIDs, ActionType: input.ActionType, Recipients: input.Recipients, SubjectTemplate: input.SubjectTemplate, MessageTemplate: input.MessageTemplate, WebhookURL: input.WebhookURL, HTTPRequest: input.HTTPRequest, Enabled: input.Enabled, CreatedAt: now, UpdatedAt: now}
 	if err = s.store.Put(event); err != nil {
 		return domain.EventDefinition{}, err
 	}
@@ -210,8 +210,7 @@ func (s *Service) Update(ctx context.Context, id string, input domain.EventInput
 	existing.SubjectTemplate = input.SubjectTemplate
 	existing.MessageTemplate = input.MessageTemplate
 	existing.WebhookURL = input.WebhookURL
-	existing.PhoneNumbers = input.PhoneNumbers
-	existing.SMSTemplate = input.SMSTemplate
+	existing.HTTPRequest = input.HTTPRequest
 	existing.Enabled = input.Enabled
 	existing.UpdatedAt = s.clock.Now()
 	if err = s.store.Put(existing); err != nil {
@@ -226,7 +225,7 @@ func (s *Service) SetEnabled(ctx context.Context, id string, enabled bool) (doma
 	if err != nil {
 		return domain.EventDefinition{}, err
 	}
-	return s.Update(ctx, id, domain.EventInput{Name: existing.Name, Key: existing.Key, SenderIDs: existing.SenderIDs, ActionType: existing.ActionType, Recipients: existing.Recipients, SubjectTemplate: existing.SubjectTemplate, MessageTemplate: existing.MessageTemplate, WebhookURL: existing.WebhookURL, PhoneNumbers: existing.PhoneNumbers, SMSTemplate: existing.SMSTemplate, Enabled: enabled})
+	return s.Update(ctx, id, domain.EventInput{Name: existing.Name, Key: existing.Key, SenderIDs: existing.SenderIDs, ActionType: existing.ActionType, Recipients: existing.Recipients, SubjectTemplate: existing.SubjectTemplate, MessageTemplate: existing.MessageTemplate, WebhookURL: existing.WebhookURL, HTTPRequest: existing.HTTPRequest, Enabled: enabled})
 }
 
 func (s *Service) Delete(id string) error {
@@ -351,7 +350,7 @@ func (s *Service) validate(ctx context.Context, input domain.EventInput, require
 	if input.ActionType == "" {
 		input.ActionType = domain.EventActionEmail
 	}
-	if input.ActionType != domain.EventActionEmail && input.ActionType != domain.EventActionNone && input.ActionType != domain.EventActionWebhook && input.ActionType != domain.EventActionSMS {
+	if input.ActionType != domain.EventActionEmail && input.ActionType != domain.EventActionNone && input.ActionType != domain.EventActionWebhook && input.ActionType != domain.EventActionHTTP {
 		return input, &ValidationError{Code: "EVENT_ACTION_NOT_AVAILABLE", Field: "action_type", Message: "The selected action is not available."}
 	}
 	if input.ActionType == domain.EventActionNone {
@@ -359,8 +358,7 @@ func (s *Service) validate(ctx context.Context, input domain.EventInput, require
 		input.SubjectTemplate = ""
 		input.MessageTemplate = ""
 		input.WebhookURL = ""
-		input.PhoneNumbers = nil
-		input.SMSTemplate = ""
+		input.HTTPRequest = nil
 		sort.Strings(input.SenderIDs)
 		return input, nil
 	}
@@ -369,46 +367,33 @@ func (s *Service) validate(ctx context.Context, input domain.EventInput, require
 		input.SubjectTemplate = ""
 		input.MessageTemplate = ""
 		input.WebhookURL = strings.TrimSpace(input.WebhookURL)
-		input.PhoneNumbers = nil
-		input.SMSTemplate = ""
+		input.HTTPRequest = nil
 		if err := webhook.ValidateURL(input.WebhookURL); err != nil {
 			return input, invalid("webhook_url", "Enter a public HTTPS webhook URL without embedded credentials.")
 		}
 		sort.Strings(input.SenderIDs)
 		return input, nil
 	}
-	if input.ActionType == domain.EventActionSMS {
-		input.Recipients = nil
+	if input.ActionType == domain.EventActionHTTP {
+		input.Recipients = []string{}
 		input.SubjectTemplate = ""
 		input.MessageTemplate = ""
 		input.WebhookURL = ""
-		if len(input.PhoneNumbers) == 0 || len(input.PhoneNumbers) > MaxEventRecipients {
-			return input, invalid("phone_numbers", "Enter between 1 and 20 E.164 phone numbers.")
+		if input.HTTPRequest == nil {
+			return input, invalid("http_request", "Configure the HTTP request.")
 		}
-		seen := make(map[string]bool)
-		clean := make([]string, 0, len(input.PhoneNumbers))
-		for _, raw := range input.PhoneNumbers {
-			number := strings.TrimSpace(raw)
-			if !validE164(number) {
-				return input, invalid("phone_numbers", "Enter valid E.164 phone numbers only.")
-			}
-			if !seen[number] {
-				seen[number] = true
-				clean = append(clean, number)
-			}
+		request := *input.HTTPRequest
+		if err := webhook.ValidateRequestConfig(request); err != nil {
+			return input, invalid("http_request", err.Error())
 		}
-		input.PhoneNumbers = clean
-		input.SMSTemplate = strings.TrimSpace(input.SMSTemplate)
-		if len([]rune(input.SMSTemplate)) == 0 || len([]rune(input.SMSTemplate)) > 1600 {
-			return input, invalid("sms_template", "The SMS message is required and must be at most 1,600 characters.")
-		}
-		sort.Strings(input.PhoneNumbers)
+		request.Method = strings.ToUpper(strings.TrimSpace(request.Method))
+		request.URL = strings.TrimSpace(request.URL)
+		input.HTTPRequest = &request
 		sort.Strings(input.SenderIDs)
 		return input, nil
 	}
 	input.WebhookURL = ""
-	input.PhoneNumbers = nil
-	input.SMSTemplate = ""
+	input.HTTPRequest = nil
 	if len(input.Recipients) == 0 || len(input.Recipients) > MaxEventRecipients {
 		return input, invalid("recipients", "Enter between 1 and 20 recipients.")
 	}

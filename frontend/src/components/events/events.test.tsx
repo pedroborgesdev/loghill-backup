@@ -43,11 +43,11 @@ it("selects webhook as an event action", () => {
   expect(onChange).toHaveBeenCalledWith("webhook");
 });
 
-it("selects SMS as an event action", () => {
+it("selects HTTP as an event action", () => {
   const onChange = vi.fn();
   const view = render(<EventActionSelector value="none" onChange={onChange} />);
-  fireEvent.click(within(view.container).getByRole("radio", { name: /send sms/i }));
-  expect(onChange).toHaveBeenCalledWith("sms");
+  fireEvent.click(within(view.container).getByRole("radio", { name: /http request/i }));
+  expect(onChange).toHaveBeenCalledWith("http");
 });
 
 it("normalizes null collections returned by legacy event records", () => {
@@ -71,5 +71,4 @@ it("normalizes null collections returned by legacy event records", () => {
 
   expect(event.sender_ids).toEqual([]);
   expect(event.recipients).toEqual([]);
-  expect(event.phone_numbers).toEqual([]);
 });

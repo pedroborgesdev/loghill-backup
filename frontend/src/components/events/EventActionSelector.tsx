@@ -1,11 +1,11 @@
-import { Mail, MessageSquareText, Radar, Webhook } from "lucide-react";
+import { Globe2, Mail, ScanSearch, Webhook } from "lucide-react";
 import type { EventActionType } from "../../types/event";
 
 const actions: Array<{ value: EventActionType; title: string; description: string; icon: typeof Mail }> = [
-  { value: "none", title: "Monitoring only", description: "Use as a trigger without external delivery.", icon: Radar },
+  { value: "none", title: "Monitoring only", description: "Use as a trigger without external delivery.", icon: ScanSearch },
   { value: "email", title: "Send email", description: "Send the configured email template.", icon: Mail },
   { value: "webhook", title: "Call webhook", description: "POST the event to a public HTTPS endpoint.", icon: Webhook },
-  { value: "sms", title: "Send SMS", description: "Send a short message through Twilio.", icon: MessageSquareText },
+  { value: "http", title: "HTTP request", description: "Call an HTTPS endpoint with a custom request.", icon: Globe2 },
 ];
 
 export function EventActionSelector({ value, disabled, onChange }: { value: EventActionType; disabled?: boolean; onChange: (value: EventActionType) => void }) {

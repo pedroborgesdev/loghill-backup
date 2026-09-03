@@ -47,6 +47,7 @@ func Open(dataDir string) (*Store, error) {
 		return nil, fmt.Errorf("unsupported events file version %d", persisted.Version)
 	}
 	keys := make(map[string]bool)
+	normalized := false
 	for _, event := range persisted.Events {
 		if event.ID == "" || !ValidKey(event.Key) {
 			return nil, fmt.Errorf("stored event %q is invalid", event.ID)
@@ -57,8 +58,23 @@ func Open(dataDir string) (*Store, error) {
 		if keys[event.Key] {
 			return nil, fmt.Errorf("duplicate stored event key %q", event.Key)
 		}
+		if event.ActionType != domain.EventActionNone && event.ActionType != domain.EventActionEmail && event.ActionType != domain.EventActionWebhook && event.ActionType != domain.EventActionHTTP {
+			event.ActionType = domain.EventActionNone
+			event.Recipients = []string{}
+			event.SubjectTemplate = ""
+			event.MessageTemplate = ""
+			event.WebhookURL = ""
+			event.HTTPRequest = nil
+			event.Enabled = false
+			normalized = true
+		}
 		keys[event.Key] = true
 		store.items[event.ID] = cloneEvent(event)
+	}
+	if normalized {
+		if err = store.writeAtomic(mapValues(store.items)); err != nil {
+			return nil, fmt.Errorf("normalize retired event actions: %w", err)
+		}
 	}
 	return store, nil
 }
@@ -197,8 +213,24 @@ func (s *Store) writeAtomic(items []domain.EventDefinition) error {
 func cloneEvent(event domain.EventDefinition) domain.EventDefinition {
 	event.SenderIDs = append([]string{}, event.SenderIDs...)
 	event.Recipients = append([]string{}, event.Recipients...)
-	event.PhoneNumbers = append([]string{}, event.PhoneNumbers...)
+	if event.HTTPRequest != nil {
+		request := *event.HTTPRequest
+		request.Headers = cloneStrings(request.Headers)
+		request.Cookies = cloneStrings(request.Cookies)
+		event.HTTPRequest = &request
+	}
 	return event
+}
+
+func cloneStrings(source map[string]string) map[string]string {
+	if source == nil {
+		return nil
+	}
+	result := make(map[string]string, len(source))
+	for key, value := range source {
+		result[key] = value
+	}
+	return result
 }
 
 func cloneMap(source map[string]domain.EventDefinition) map[string]domain.EventDefinition {

@@ -25,6 +25,7 @@ const (
 	ConditionWaitUntil    ConditionType   = "wait_until"
 	ActionEvent           ActionType      = "trigger_event"
 	ActionEmail           ActionType      = "send_email"
+	ActionHTTP            ActionType      = "send_http"
 	LogicalAnd            LogicalOperator = "and"
 	LogicalOr             LogicalOperator = "or"
 )

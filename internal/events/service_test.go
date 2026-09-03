@@ -40,6 +40,30 @@ func TestStoreNormalizesLegacyNullCollections(t *testing.T) {
 	}
 }
 
+func TestStoreDisablesRetiredEventActions(t *testing.T) {
+	dir := t.TempDir()
+	legacy := `{"version":1,"events":[{"id":"evt_123456789abc","name":"Legacy action","key":"legacy_action","sender_ids":[],"action_type":"retired","recipients":["dev@example.com"],"subject_template":"subject","message_template":"message","enabled":true,"created_at":"2026-08-01T00:00:00Z","updated_at":"2026-08-01T00:00:00Z","obsolete_destination":"external"}]}`
+	path := filepath.Join(dir, "events.json")
+	if err := os.WriteFile(path, []byte(legacy), 0600); err != nil {
+		t.Fatal(err)
+	}
+	store, err := Open(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	event, ok := store.Get("evt_123456789abc")
+	if !ok || event.Enabled || event.ActionType != domain.EventActionNone || len(event.Recipients) != 0 {
+		t.Fatalf("retired action was not safely disabled: %+v", event)
+	}
+	persisted, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(persisted), "retired") || strings.Contains(string(persisted), "obsolete_destination") {
+		t.Fatalf("retired action data was not removed: %s", persisted)
+	}
+}
+
 type fixedClock struct{ now time.Time }
 
 func (c fixedClock) Now() time.Time { return c.now }
@@ -108,27 +132,28 @@ func TestWebhookEventValidationAndPersistence(t *testing.T) {
 	}
 }
 
-func TestSMSEventValidationAndPersistence(t *testing.T) {
+func TestHTTPRequestEventValidationAndPersistence(t *testing.T) {
 	service, dir, sender, _ := eventFixture(t)
-	input := domain.EventInput{Name: "SMS financeiro", Key: "sms_financeiro", SenderIDs: []string{sender}, ActionType: domain.EventActionSMS, PhoneNumbers: []string{" +5511999999999 ", "+5511999999999"}, SMSTemplate: "Falha em {{sender.name}}", Enabled: true}
+	request := &domain.HTTPRequestConfig{Method: "patch", URL: "https://api.example.com/items/1", Headers: map[string]string{"Authorization": "Bearer token"}, Cookies: map[string]string{"session": "value"}, Body: `{"status":"failed"}`}
+	input := domain.EventInput{Name: "Atualizar integração", Key: "atualizar_integracao", SenderIDs: []string{sender}, ActionType: domain.EventActionHTTP, HTTPRequest: request, Enabled: true}
 	event, err := service.Create(context.Background(), input)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(event.PhoneNumbers) != 1 || event.PhoneNumbers[0] != "+5511999999999" || event.SMSTemplate != input.SMSTemplate || len(event.Recipients) != 0 {
-		t.Fatalf("unexpected SMS event: %#v", event)
+	if event.HTTPRequest == nil || event.HTTPRequest.Method != "PATCH" || event.HTTPRequest.URL != request.URL || event.HTTPRequest.Cookies["session"] != "value" {
+		t.Fatalf("unexpected HTTP event: %#v", event)
 	}
 	reopened, err := Open(dir)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if restored, ok := reopened.Get(event.ID); !ok || len(restored.PhoneNumbers) != 1 || restored.SMSTemplate != input.SMSTemplate {
-		t.Fatalf("SMS event was not persisted: %#v", restored)
+	if restored, ok := reopened.Get(event.ID); !ok || restored.HTTPRequest == nil || restored.HTTPRequest.Headers["Authorization"] != "Bearer token" {
+		t.Fatalf("HTTP event was not persisted: %#v", restored)
 	}
-	input.Key = "sms_invalido"
-	input.PhoneNumbers = []string{"11999999999"}
+	input.Key = "integracao_insegura"
+	input.HTTPRequest.URL = "https://127.0.0.1/private"
 	if _, err = service.Create(context.Background(), input); err == nil {
-		t.Fatal("non-E.164 phone number was accepted")
+		t.Fatal("private HTTP target was accepted")
 	}
 }
 
