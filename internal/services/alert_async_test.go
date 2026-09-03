@@ -33,7 +33,7 @@ func (p *blockingProvider) Send(context.Context, domain.EmailMessage) error {
 
 func TestReceiveLogDoesNotWaitForEmailDelivery(t *testing.T) {
 	dir := filepath.Join(t.TempDir(), "data")
-	cfg := config.Config{DataDir: dir, MaxMessageSize: 1024, MaxMetadataSize: 1024, SSEBuffer: 10, SSEMaxClients: 10, EmailManagedByEnvironment: true, OutlookEnabled: true, OutlookTenantID: "tenant", OutlookClientID: "client", OutlookClientSecret: "secret", OutlookSenderEmail: "logs@example.com", OutlookSenderName: "LogHill"}
+	cfg := config.Config{DataDir: dir, MaxMessageSize: 1024, MaxMetadataSize: 1024, SSEBuffer: 10, SSEMaxClients: 10, EmailManagedByEnvironment: true, OutlookEnabled: true, OutlookTenantID: "tenant", OutlookClientID: "client", OutlookClientSecret: "secret", OutlookSenderEmail: "logs@example.com", OutlookSenderName: "LogMate"}
 	repo := repositories.New(dir)
 	if err := repo.Init(); err != nil {
 		t.Fatal(err)

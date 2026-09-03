@@ -2,7 +2,7 @@
 .github
 .env
 data
-.loghill
+.logmate
 frontend/node_modules
 frontend/dist
 web/dist

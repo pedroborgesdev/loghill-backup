@@ -5,7 +5,7 @@
 
 ## Contexto
 
-O LogHill é distribuído como um binário ou container autocontido e não deve
+O LogMate é distribuído como um binário ou container autocontido e não deve
 exigir PostgreSQL, Redis, RabbitMQ ou outro serviço de dados. O estado atual já
 é persistido sob `DATA_DIR` em arquivos JSON e JSONL.
 
@@ -31,7 +31,7 @@ implementação física, mas o produto terá apenas o driver de arquivos.
 
 Uma única instância gravadora continua sendo o modo padrão e recomendado.
 Quando múltiplos processos forem habilitados, todos deverão apontar para o
-mesmo `DATA_DIR` e o LogHill usará locks de arquivo para serializar alterações.
+mesmo `DATA_DIR` e o LogMate usará locks de arquivo para serializar alterações.
 
 Réplicas com discos locais separados não compartilham estado e não são um modo
 suportado. Compartilhamentos de rede só poderão ser declarados compatíveis se

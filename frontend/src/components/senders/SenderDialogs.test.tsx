@@ -37,7 +37,7 @@ describe("administrative sender registration", () => {
     expect(created).toHaveBeenCalled();
     await userEvent.click(screen.getByRole("button", { name: "Copy environment configuration" }));
     await waitFor(() => expect(navigator.clipboard.writeText).toHaveBeenCalledWith(
-      expect.stringContaining("LOGHILL_SENDER_NAME=financial-automation"),
+      expect.stringContaining("LOGMATE_SENDER_NAME=financial-automation"),
     ));
   });
 });

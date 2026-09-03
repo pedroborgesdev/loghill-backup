@@ -3,7 +3,7 @@ import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { EmailSettings } from "./EmailSettings";
 
-const settings = { provider: "outlook", enabled: true, configured: true, outlook: { tenant_id: "tenant", client_id: "client", client_secret_configured: true, sender_email: "logs@example.com", sender_name: "LogHill", managed_by_environment: false }, gmail: { host: "smtp.gmail.com", port: 587, username: "", password_configured: false, from: "", sender_name: "LogHill", managed_by_environment: false }, providers: [{ id: "outlook", enabled: true, available: true }, { id: "gmail", enabled: false, available: true }], updated_at: "2026-07-31T10:00:00Z", last_test_at: null };
+const settings = { provider: "outlook", enabled: true, configured: true, outlook: { tenant_id: "tenant", client_id: "client", client_secret_configured: true, sender_email: "logs@example.com", sender_name: "LogMate", managed_by_environment: false }, gmail: { host: "smtp.gmail.com", port: 587, username: "", password_configured: false, from: "", sender_name: "LogMate", managed_by_environment: false }, providers: [{ id: "outlook", enabled: true, available: true }, { id: "gmail", enabled: false, available: true }], updated_at: "2026-07-31T10:00:00Z", last_test_at: null };
 
 describe("EmailSettings", () => {
   beforeEach(() => vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify(settings), { status: 200 }))));

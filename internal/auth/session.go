@@ -9,7 +9,7 @@ import (
 	"time"
 )
 
-const CookieName = "loghill_session"
+const CookieName = "logmate_session"
 
 type Session struct {
 	ID        string

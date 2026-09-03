@@ -30,7 +30,7 @@ func testJWT(t *testing.T, roles ...string) string {
 
 func outlookSettings(t *testing.T) *emailconfig.Store {
 	t.Helper()
-	cfg := config.Config{EmailManagedByEnvironment: true, OutlookEnabled: true, OutlookTenantID: "tenant", OutlookClientID: "client", OutlookClientSecret: "secret", OutlookSenderEmail: "logs@example.com", OutlookSenderName: "LogHill"}
+	cfg := config.Config{EmailManagedByEnvironment: true, OutlookEnabled: true, OutlookTenantID: "tenant", OutlookClientID: "client", OutlookClientSecret: "secret", OutlookSenderEmail: "logs@example.com", OutlookSenderName: "LogMate"}
 	store, err := emailconfig.Open(t.TempDir(), cfg, time.Now())
 	if err != nil {
 		t.Fatal(err)

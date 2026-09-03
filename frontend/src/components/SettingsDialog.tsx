@@ -660,7 +660,7 @@ export function SettingsDialog({
                         </div>
                       </div>
                       <div className="rounded-xl border border-zinc-800 bg-[#111113] p-4 text-xs leading-6 text-zinc-500">
-                        Saved changes take effect during the next write and maintenance cycles without restarting LogHill.
+                        Saved changes take effect during the next write and maintenance cycles without restarting LogMate.
                       </div>
                     </div>
                   )}

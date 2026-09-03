@@ -25,7 +25,7 @@ import (
 
 const (
 	demoDir    = "data"
-	demoMarker = ".loghill-demo-data"
+	demoMarker = ".logmate-demo-data"
 )
 
 type senderSeed struct {
@@ -47,7 +47,7 @@ func main() {
 		fmt.Fprintln(os.Stderr, "populate demo data:", err)
 		os.Exit(1)
 	}
-	fmt.Printf("LogHill demo data created in %s\n", demoDir)
+	fmt.Printf("LogMate demo data created in %s\n", demoDir)
 }
 
 func run() error {
@@ -269,7 +269,7 @@ func seedSettings(root string, now time.Time) error {
 }
 
 func seedEmailSettings(root string, now time.Time) error {
-	key := base64.StdEncoding.EncodeToString([]byte("loghill-public-demo-key-32-bytes"))
+	key := base64.StdEncoding.EncodeToString([]byte("logmate-public-demo-key-32-bytes"))
 	if err := os.WriteFile(filepath.Join(root, "email-encryption.key"), []byte(key+"\n"), 0o600); err != nil {
 		return err
 	}
@@ -277,7 +277,7 @@ func seedEmailSettings(root string, now time.Time) error {
 	if err != nil {
 		return err
 	}
-	_, err = store.Update(emailconfig.Input{Provider: domain.EmailProviderGmail, Enabled: true, Gmail: emailconfig.GmailInput{Host: "smtp.gmail.com", Port: 587, Username: "platform-alerts@example.com", Password: "demo-password-not-valid", From: "platform-alerts@example.com", SenderName: "LogHill Platform Alerts"}}, now)
+	_, err = store.Update(emailconfig.Input{Provider: domain.EmailProviderGmail, Enabled: true, Gmail: emailconfig.GmailInput{Host: "smtp.gmail.com", Port: 587, Username: "platform-alerts@example.com", Password: "demo-password-not-valid", From: "platform-alerts@example.com", SenderName: "LogMate Platform Alerts"}}, now)
 	return err
 }
 

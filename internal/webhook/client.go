@@ -134,7 +134,7 @@ func (c *Client) Send(ctx context.Context, value domain.Notification) error {
 		return ErrInvalidURL
 	}
 	request.Header.Set("Content-Type", "application/json")
-	request.Header.Set("User-Agent", "LogHill-Webhook/1.0")
+	request.Header.Set("User-Agent", "LogMate-Webhook/1.0")
 	transport := pinnedTransport(parsed, target)
 	defer transport.CloseIdleConnections()
 	client := &http.Client{
@@ -183,7 +183,7 @@ func (c *Client) sendRequest(ctx context.Context, value domain.Notification) err
 	}
 	request.Close = true
 	if request.Header.Get("User-Agent") == "" {
-		request.Header.Set("User-Agent", "LogHill-HTTP/1.0")
+		request.Header.Set("User-Agent", "LogMate-HTTP/1.0")
 	}
 	transport := pinnedTransport(parsed, target)
 	defer transport.CloseIdleConnections()

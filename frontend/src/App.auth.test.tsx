@@ -17,6 +17,6 @@ it("redirects an anonymous session to the login URL", async () => {
   const view = render(<App />);
 
   await waitFor(() => expect(window.location.pathname).toBe("/login"));
-  await screen.findByRole("heading", { name: "LogHill" });
+  await screen.findByRole("heading", { name: "LogMate" });
   view.unmount();
 });

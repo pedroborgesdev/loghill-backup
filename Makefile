@@ -7,7 +7,7 @@ dev:
 	@echo "Execute 'make backend' e 'make frontend' em terminais separados"
 build:
 	cd frontend && npm ci && npm run build
-	go build -o log-theater ./cmd/server
+	go build -o logmate ./cmd/server
 test:
 	go test -race ./...
 	cd frontend && npm run test:run

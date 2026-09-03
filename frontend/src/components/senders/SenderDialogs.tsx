@@ -85,8 +85,8 @@ async function copyText(value: string) {
 export function SenderCredentialsDialog({ value, onClose }: { value: CredentialsState; onClose: () => void }) {
   const [copied, setCopied] = useState(false);
   const baseURL = window.location.origin;
-  const environment = `LOGHILL_API_URL=${baseURL}\nLOGHILL_SENDER_NAME=${value.sender.id}`;
-  const pythonExample = `from loghill import create_logger\n\nlog = create_logger(name=${JSON.stringify(value.sender.id)})`;
+  const environment = `LOGMATE_API_URL=${baseURL}\nLOGMATE_SENDER_NAME=${value.sender.id}`;
+  const pythonExample = `from logmate import create_logger\n\nlog = create_logger(name=${JSON.stringify(value.sender.id)})`;
 
   return (
       <ModalFrame title="Sender created" description="The sender is ready to receive connections by name." onClose={onClose} width="max-w-2xl" footer={<Button onClick={onClose} className="border-zinc-500 bg-zinc-800 text-zinc-100 hover:border-zinc-400 hover:bg-zinc-700">Done</Button>}>

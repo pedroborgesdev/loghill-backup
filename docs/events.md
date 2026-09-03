@@ -1,4 +1,4 @@
-# Eventos do LogHill
+# Eventos do LogMate
 
 Eventos executam uma ação somente quando o cliente informa explicitamente uma chave no log. As ações disponíveis são monitoramento sem entrega, e-mail, webhook HTTPS e requisição HTTP configurável. As entregas externas compartilham a mesma outbox durável, workers, timeout e política de retry.
 

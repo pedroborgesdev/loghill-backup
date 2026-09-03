@@ -24,7 +24,7 @@ func TestValidateURLRejectsSSRFAndUnsafeForms(t *testing.T) {
 			t.Fatalf("unsafe URL accepted: %s", value)
 		}
 	}
-	if err := ValidateURL("https://hooks.example.com/loghill"); err != nil {
+	if err := ValidateURL("https://hooks.example.com/logmate"); err != nil {
 		t.Fatalf("public HTTPS URL rejected: %v", err)
 	}
 	if !errors.Is(ValidateURL("https://127.0.0.1/hook"), ErrUnsafeTarget) {

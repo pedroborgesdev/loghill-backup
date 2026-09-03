@@ -1,6 +1,6 @@
-# Instalação do LogHill
+# Instalação do LogMate
 
-Este guia apresenta duas formas de executar o LogHill:
+Este guia apresenta duas formas de executar o LogMate:
 
 1. [Binário nativo](#1-binário-nativo), compilado a partir do código-fonte;
 2. [Docker Compose](#2-docker-compose), construindo localmente ou usando a imagem publicada no GHCR.
@@ -53,8 +53,8 @@ O frontend precisa ser compilado antes do backend porque os arquivos de `web/dis
 ### 1.2 Obter o código
 
 ```bash
-git clone https://github.com/pedroborgesdev/loghill-backup.git
-cd loghill-backup
+git clone https://github.com/pedroborgesdev/logmate-backup.git
+cd logmate-backup
 ```
 
 ### 1.3 Compilar no Linux
@@ -66,7 +66,7 @@ npm run build
 cd ..
 
 go test ./...
-go build -trimpath -ldflags="-s -w" -o log-theater ./cmd/server
+go build -trimpath -ldflags="-s -w" -o logmate ./cmd/server
 ```
 
 ### 1.4 Compilar no Windows
@@ -78,7 +78,7 @@ npm run build
 Set-Location ..
 
 go test ./...
-go build -trimpath -ldflags="-s -w" -o log-theater.exe ./cmd/server
+go build -trimpath -ldflags="-s -w" -o logmate.exe ./cmd/server
 ```
 
 ### 1.5 Executar
@@ -87,14 +87,14 @@ Linux:
 
 ```bash
 mkdir -p data
-./log-theater
+./logmate
 ```
 
 Windows:
 
 ```powershell
 New-Item -ItemType Directory -Force data | Out-Null
-./log-theater.exe
+./logmate.exe
 ```
 
 O servidor carrega `.env` do diretório de trabalho e fica disponível em:
@@ -109,29 +109,29 @@ O servidor carrega `.env` do diretório de trabalho e fica disponível em:
 Crie um usuário dedicado e prepare o diretório:
 
 ```bash
-sudo useradd --system --home /opt/loghill --shell /usr/sbin/nologin loghill
-sudo mkdir -p /opt/loghill/data
-sudo cp log-theater /opt/loghill/log-theater
-sudo cp .env /opt/loghill/.env
-sudo chown -R loghill:loghill /opt/loghill
-sudo chmod 750 /opt/loghill/log-theater
-sudo chmod 600 /opt/loghill/.env
+sudo useradd --system --home /opt/logmate --shell /usr/sbin/nologin logmate
+sudo mkdir -p /opt/logmate/data
+sudo cp logmate /opt/logmate/logmate
+sudo cp .env /opt/logmate/.env
+sudo chown -R logmate:logmate /opt/logmate
+sudo chmod 750 /opt/logmate/logmate
+sudo chmod 600 /opt/logmate/.env
 ```
 
-Crie `/etc/systemd/system/loghill.service`:
+Crie `/etc/systemd/system/logmate.service`:
 
 ```ini
 [Unit]
-Description=LogHill Observability Server
+Description=LogMate Observability Server
 After=network-online.target
 Wants=network-online.target
 
 [Service]
 Type=simple
-User=loghill
-Group=loghill
-WorkingDirectory=/opt/loghill
-ExecStart=/opt/loghill/log-theater
+User=logmate
+Group=logmate
+WorkingDirectory=/opt/logmate
+ExecStart=/opt/logmate/logmate
 Restart=on-failure
 RestartSec=5
 TimeoutStopSec=30
@@ -146,14 +146,14 @@ Ative o serviço:
 
 ```bash
 sudo systemctl daemon-reload
-sudo systemctl enable --now loghill
-sudo systemctl status loghill
+sudo systemctl enable --now logmate
+sudo systemctl status logmate
 ```
 
 Logs do serviço:
 
 ```bash
-journalctl -u loghill -f
+journalctl -u logmate -f
 ```
 
 ### 1.7 Atualizar o binário
@@ -161,14 +161,14 @@ journalctl -u loghill -f
 Compile a nova versão, pare o serviço, substitua o executável e inicie novamente:
 
 ```bash
-sudo systemctl stop loghill
-sudo cp log-theater /opt/loghill/log-theater
-sudo chown loghill:loghill /opt/loghill/log-theater
-sudo chmod 750 /opt/loghill/log-theater
-sudo systemctl start loghill
+sudo systemctl stop logmate
+sudo cp logmate /opt/logmate/logmate
+sudo chown logmate:logmate /opt/logmate/logmate
+sudo chmod 750 /opt/logmate/logmate
+sudo systemctl start logmate
 ```
 
-O diretório `/opt/loghill/data` não deve ser removido durante a atualização.
+O diretório `/opt/logmate/data` não deve ser removido durante a atualização.
 
 ## 2. Docker Compose
 
@@ -182,8 +182,8 @@ O diretório `/opt/loghill/data` não deve ser removido durante a atualização.
 O repositório contém [`Dockerfile`](./Dockerfile) e [`docker-compose.yml`](./docker-compose.yml).
 
 ```bash
-git clone https://github.com/pedroborgesdev/loghill-backup.git
-cd loghill-backup
+git clone https://github.com/pedroborgesdev/logmate-backup.git
+cd logmate-backup
 docker compose up -d --build
 ```
 
@@ -200,7 +200,7 @@ Para habilitar autenticação no compose padrão, defina `APP_PASSWORD` na seç�
 ```yaml
 # docker-compose.override.yml
 services:
-  log-theater:
+  logmate:
     environment:
       APP_PASSWORD: ${APP_PASSWORD}
       APP_PUBLIC_URL: ${APP_PUBLIC_URL:-http://localhost:8080}
@@ -227,16 +227,16 @@ docker compose up -d --build
 A imagem publicada pela GitHub Action é:
 
 ```text
-ghcr.io/pedroborgesdev/loghill-backup:latest
+ghcr.io/pedroborgesdev/logmate-backup:latest
 ```
 
 Crie um diretório de implantação contendo o seguinte `compose.yml`:
 
 ```yaml
 services:
-  loghill:
-    image: ghcr.io/pedroborgesdev/loghill-backup:latest
-    container_name: loghill
+  logmate:
+    image: ghcr.io/pedroborgesdev/logmate-backup:latest
+    container_name: logmate
     restart: unless-stopped
     ports:
       - "8080:8080"
@@ -247,7 +247,7 @@ services:
       APP_PORT: "8080"
       DATA_DIR: /app/data
     volumes:
-      - loghill-data:/app/data
+      - logmate-data:/app/data
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8080/health"]
       interval: 30s
@@ -256,7 +256,7 @@ services:
       retries: 3
 
 volumes:
-  loghill-data:
+  logmate-data:
 ```
 
 Crie `.env` ao lado do compose:
@@ -293,13 +293,13 @@ docker compose ps
 Logs:
 
 ```bash
-docker compose logs -f loghill
+docker compose logs -f logmate
 ```
 
 Reiniciar:
 
 ```bash
-docker compose restart loghill
+docker compose restart logmate
 ```
 
 Atualizar para a imagem mais recente:
@@ -323,7 +323,7 @@ Com bind mount `./data`, pare o serviço e copie o diretório:
 
 ```bash
 docker compose stop
-tar -czf loghill-data-backup.tar.gz data/
+tar -czf logmate-data-backup.tar.gz data/
 docker compose start
 ```
 
@@ -331,7 +331,7 @@ Com volume nomeado, identifique o volume:
 
 ```bash
 docker volume ls
-docker volume inspect loghill-data
+docker volume inspect logmate-data
 ```
 
 O backup deve incluir todo o conteúdo de `/app/data`, especialmente:
@@ -344,16 +344,16 @@ O backup deve incluir todo o conteúdo de `/app/data`, especialmente:
 
 ### 2.6 Aplicações clientes em Docker
 
-Dentro de um container, `localhost` aponta para o próprio container. Se o cliente e o LogHill estiverem no mesmo compose, use o nome do serviço:
+Dentro de um container, `localhost` aponta para o próprio container. Se o cliente e o LogMate estiverem no mesmo compose, use o nome do serviço:
 
 ```env
-LOGHILL_API_URL=http://loghill:8080
+LOGMATE_API_URL=http://logmate:8080
 ```
 
-Se o LogHill estiver exposto por domínio:
+Se o LogMate estiver exposto por domínio:
 
 ```env
-LOGHILL_API_URL=https://loghill.exemplo.com
+LOGMATE_API_URL=https://logmate.exemplo.com
 ```
 
 ## 3. Validação da instalação
@@ -424,8 +424,8 @@ Confirme que `DATA_DIR=/app/data` e que `/app/data` está associado a um volume 
 
 ### Aplicação cliente não conecta
 
-- Fora de containers, use `http://localhost:8080` apenas quando o LogHill estiver na mesma máquina;
-- entre serviços do Compose, use `http://loghill:8080`;
+- Fora de containers, use `http://localhost:8080` apenas quando o LogMate estiver na mesma máquina;
+- entre serviços do Compose, use `http://logmate:8080`;
 - em Kubernetes, use o DNS do Service;
 - confira firewall, TLS, proxy e CORS conforme o ambiente.
 

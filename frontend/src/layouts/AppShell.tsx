@@ -25,6 +25,7 @@ import { monitoringApi } from "../api/monitoring";
 import { queryClient } from "../api/queryClient";
 import { useAuth } from "../auth/AuthProvider";
 import { SettingsButton, SettingsDialog } from "../components/SettingsDialog";
+import { AppFooter } from "../components/AppFooter";
 import type { SettingsCategory } from "../components/SettingsDialog";
 import type { StreamState } from "../hooks/useLogStream";
 import { IconButton, StatusIndicator, Tooltip } from "../components/ui";
@@ -92,14 +93,14 @@ function SidebarContent({
       <div className="flex h-14 shrink-0 items-center gap-3 border-b border-zinc-800 px-2">
         <span className="grid h-11 w-12 shrink-0 place-items-center overflow-hidden">
           <img
-            src="/loghill.png"
-            alt="LogHill"
+            src="/logmate.png"
+            alt="LogMate"
             className="size-full object-contain"
           />
         </span>
         {!collapsed && (
           <div className="min-w-0">
-            <p className="truncate text-sm font-semibold text-zinc-100">LogHill</p>
+            <p className="truncate text-sm font-semibold text-zinc-100">LogMate</p>
             <p className="truncate text-[10px] uppercase tracking-wider text-zinc-600">
               Observability
             </p>
@@ -257,9 +258,9 @@ export function AppShell() {
 
   return (
     <ShellContext.Provider value={context}>
-      <div className="h-[100dvh] overflow-hidden bg-[#0c0c0f] text-zinc-100">
+      <div className="flex h-[100dvh] flex-col overflow-hidden bg-[#0c0c0f] text-zinc-100">
         <aside
-          className={`fixed inset-y-0 left-0 z-40 hidden border-r border-zinc-800 bg-[#111113] transition-[width] duration-150 ease-out lg:block ${
+          className={`fixed inset-y-0 bottom-16 left-0 z-40 hidden border-r border-zinc-800 bg-[#111113] transition-[width] duration-150 ease-out lg:block ${
             collapsed ? "w-16" : "w-60"
           }`}
         >
@@ -276,7 +277,7 @@ export function AppShell() {
         </aside>
 
         {mobileOpen && (
-          <div className="fixed inset-0 z-50 lg:hidden">
+          <div className="fixed inset-x-0 bottom-24 top-0 z-50 sm:bottom-16 lg:hidden">
             <button
               className="absolute inset-0 bg-black/70"
               aria-label="Close menu"
@@ -314,7 +315,7 @@ export function AppShell() {
         )}
 
         <div
-          className={`flex h-[100dvh] min-w-0 flex-col overflow-hidden transition-[padding] duration-150 ease-out ${
+          className={`flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden transition-[padding] duration-150 ease-out ${
             collapsed ? "lg:pl-16" : "lg:pl-60"
           }`}
         >
@@ -388,6 +389,7 @@ export function AppShell() {
             <Outlet />
           </main>
         </div>
+        <AppFooter />
       </div>
     </ShellContext.Provider>
   );

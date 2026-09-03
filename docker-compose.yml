@@ -1,5 +1,5 @@
 services:
-  log-theater:
+  logmate:
     build: .
     ports:
       - "8080:8080"

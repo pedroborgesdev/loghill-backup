@@ -3,6 +3,7 @@ import { useState, type FormEvent } from "react";
 import { APIError } from "../types/api";
 import { useAuth } from "../auth/AuthProvider";
 import { Button, Input } from "../components/ui";
+import { AppFooter } from "../components/AppFooter";
 
 export function LoginPage() {
   const { login } = useAuth();
@@ -30,15 +31,16 @@ export function LoginPage() {
   };
 
   return (
-    <div className="grid min-h-[100dvh] place-items-center bg-[#0c0c0f] px-4 py-8 text-zinc-100">
-      <div className="w-full max-w-md">
+    <div className="flex min-h-[100dvh] flex-col bg-[#0c0c0f] text-zinc-100">
+      <div className="flex min-h-0 flex-1 items-center justify-center px-4 py-8">
+        <div className="w-full max-w-md">
         <div className="mb-8 flex flex-col items-center text-center">
           <img
-            src="/loghill.png"
-            alt="LogHill"
+            src="/logmate.png"
+            alt="LogMate"
             className="h-36 w-36 object-contain sm:h-44 sm:w-44"
           />
-          <h1 className="mt-5 text-2xl font-semibold tracking-tight text-zinc-100">LogHill</h1>
+          <h1 className="mt-5 text-2xl font-semibold tracking-tight text-zinc-100">LogMate</h1>
           <p className="mt-2 max-w-sm text-sm text-zinc-500">
             Observability center. Sign in with the password configured in the environment to continue.
           </p>
@@ -89,7 +91,9 @@ export function LoginPage() {
             {submitting ? "Signing in..." : "Sign in"}
           </Button>
         </form>
+        </div>
       </div>
+      <AppFooter />
     </div>
   );
 }

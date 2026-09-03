@@ -207,7 +207,7 @@ func TestSenderInstancesSeparateLogsWithoutCreatingNewSenders(t *testing.T) {
 	replayedRequest.Header.Set("Content-Type", "application/json")
 	replayedRequest.Header.Set("X-Sender-Instance-ID", newExecution.InstanceID)
 	replayedRequest.Header.Set("X-Sender-Instance-Token", newExecution.InstanceToken)
-	replayedRequest.Header.Set("X-LogHill-Origin-Instance-ID", nameInstance.InstanceID)
+	replayedRequest.Header.Set("X-LogMate-Origin-Instance-ID", nameInstance.InstanceID)
 	replayedResponse := httptest.NewRecorder()
 	router.ServeHTTP(replayedResponse, replayedRequest)
 	if replayedResponse.Code != http.StatusAccepted || !strings.Contains(replayedResponse.Body.String(), `"instance_id":"`+nameInstance.InstanceID+`"`) {
@@ -222,7 +222,7 @@ func TestSenderInstancesSeparateLogsWithoutCreatingNewSenders(t *testing.T) {
 	invalidOriginRequest.Header.Set("Content-Type", "application/json")
 	invalidOriginRequest.Header.Set("X-Sender-Instance-ID", newExecution.InstanceID)
 	invalidOriginRequest.Header.Set("X-Sender-Instance-Token", newExecution.InstanceToken)
-	invalidOriginRequest.Header.Set("X-LogHill-Origin-Instance-ID", "ins_00000000000000000000000000000000")
+	invalidOriginRequest.Header.Set("X-LogMate-Origin-Instance-ID", "ins_00000000000000000000000000000000")
 	invalidOriginResponse := httptest.NewRecorder()
 	router.ServeHTTP(invalidOriginResponse, invalidOriginRequest)
 	if invalidOriginResponse.Code != http.StatusConflict {

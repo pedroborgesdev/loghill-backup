@@ -158,8 +158,8 @@ func Open(dataDir string, cfg config.Config, now time.Time) (*Store, error) {
 		}
 		store.stored = Stored{
 			Provider:  provider,
-			Outlook:   OutlookStored{SenderName: "LogHill"},
-			Gmail:     GmailStored{Host: "smtp.gmail.com", Port: 587, SenderName: "LogHill"},
+			Outlook:   OutlookStored{SenderName: "LogMate"},
+			Gmail:     GmailStored{Host: "smtp.gmail.com", Port: 587, SenderName: "LogMate"},
 			UpdatedAt: now,
 		}
 		if err = store.writeAtomic(store.stored); err != nil {
@@ -193,7 +193,7 @@ func Open(dataDir string, cfg config.Config, now time.Time) (*Store, error) {
 		store.stored.Gmail.Port = 587
 	}
 	if store.stored.Gmail.SenderName == "" {
-		store.stored.Gmail.SenderName = "LogHill"
+		store.stored.Gmail.SenderName = "LogMate"
 	}
 	return store, nil
 }

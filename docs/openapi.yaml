@@ -1,6 +1,6 @@
 openapi: 3.0.0
 info:
-  title: LogHill API
+  title: LogMate API
   version: 2.4.0
   description: API para cadastro administrativo de senders, recebimento autenticado de logs, alertas e eventos assíncronos por e-mail e HTTP.
 servers:
@@ -449,7 +449,7 @@ components:
     AlertID: { name: alertID, in: path, required: true, schema: { type: string, pattern: "^alert-[a-f0-9]{16}$" } }
     EventID: { name: eventID, in: path, required: true, schema: { type: string, pattern: "^evt_[a-f0-9]{12}$" } }
     SenderInstanceHeader: { name: X-Sender-Instance-ID, in: header, required: false, schema: { type: string, pattern: "^ins_[a-f0-9]{32}$" }, description: ID retornado pelo handshake de inicialização do processo cliente }
-    OriginInstanceHeader: { name: X-LogHill-Origin-Instance-ID, in: header, required: false, schema: { type: string, pattern: "^ins_[a-f0-9]{32}$" }, description: Instância que originou um log pendente. É validada no mesmo sender autenticado e usada automaticamente pelo cliente oficial durante reenvios. }
+    OriginInstanceHeader: { name: X-LogMate-Origin-Instance-ID, in: header, required: false, schema: { type: string, pattern: "^ins_[a-f0-9]{32}$" }, description: Instância que originou um log pendente. É validada no mesmo sender autenticado e usada automaticamente pelo cliente oficial durante reenvios. }
   schemas:
     ExecutionSourceType: { type: string, enum: [alert, event, monitoring] }
     ExecutionStatus: { type: string, enum: [pending, processing, success, partial, failed, cancelled, skipped] }

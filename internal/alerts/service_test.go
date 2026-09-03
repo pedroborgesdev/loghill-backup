@@ -95,7 +95,7 @@ func alertFixture(t *testing.T) (*Service, *Store, *repositories.FileRepository,
 		t.Fatal(err)
 	}
 	clock := &fixedClock{value: time.Date(2026, 7, 31, 12, 0, 0, 0, time.UTC)}
-	cfg := config.Config{EmailManagedByEnvironment: true, OutlookEnabled: true, OutlookTenantID: "tenant", OutlookClientID: "client", OutlookClientSecret: "secret", OutlookSenderEmail: "logs@example.com", OutlookSenderName: "LogHill"}
+	cfg := config.Config{EmailManagedByEnvironment: true, OutlookEnabled: true, OutlookTenantID: "tenant", OutlookClientID: "client", OutlookClientSecret: "secret", OutlookSenderEmail: "logs@example.com", OutlookSenderName: "LogMate"}
 	emailSettings, err := emailconfig.Open(filepath.Join(dir, "data"), cfg, clock.Now())
 	if err != nil {
 		t.Fatal(err)

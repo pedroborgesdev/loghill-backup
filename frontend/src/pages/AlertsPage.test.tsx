@@ -8,7 +8,7 @@ import { AlertsPage } from "./AlertsPage";
 const emptyResponse = {
   items: [], pagination: { page: 1, page_size: 20, total: 0, total_pages: 0 },
   summary: { total: 0, active: 0, recent_failures: 0 },
-  email_provider: { provider: "outlook", enabled: false, configured: false, outlook: { tenant_id: "", client_id: "", client_secret_configured: false, sender_email: "", sender_name: "LogHill", managed_by_environment: false }, providers: [{ id: "outlook", enabled: false, available: true }, { id: "gmail", enabled: false, available: false }], updated_at: "2026-07-31T10:00:00Z", last_test_at: null },
+  email_provider: { provider: "outlook", enabled: false, configured: false, outlook: { tenant_id: "", client_id: "", client_secret_configured: false, sender_email: "", sender_name: "LogMate", managed_by_environment: false }, providers: [{ id: "outlook", enabled: false, available: true }, { id: "gmail", enabled: false, available: false }], updated_at: "2026-07-31T10:00:00Z", last_test_at: null },
 };
 
 describe("AlertsPage", () => {

@@ -55,14 +55,14 @@ func (t *Template) Render(value domain.Notification) (domain.EmailMessage, error
 		AlertName: value.Alert.Name, SenderName: value.Sender.Name, SenderID: value.Sender.ID,
 		SenderStatus: statusLabel(value.Sender.Status), Severity: string(value.Entry.Severity),
 		Message: value.Entry.Message, Timestamp: formatEmailTime(value.Entry.Timestamp), SentAt: formatEmailTime(time.Now()),
-		Metadata: string(metadata), Link: link, LogoURL: t.publicURL + "/loghill.png",
+		Metadata: string(metadata), Link: link, LogoURL: t.publicURL + "/logmate.png",
 		Kicker: kicker, Headline: theme.Headline, Description: description, ButtonLabel: "Open sender logs",
 		SeverityColor: theme.Color, SeverityBackground: theme.Background, SeverityBorder: theme.Border,
 		Test: value.Test, HasMetadata: len(value.Entry.Metadata) > 0,
 	}
-	subjectPrefix := "LogHill"
+	subjectPrefix := "LogMate"
 	if value.Test {
-		subjectPrefix = "LogHill test"
+		subjectPrefix = "LogMate test"
 	}
 	subject := cleanSubject(fmt.Sprintf("%s — %s on %s: %s", subjectPrefix, theme.Subject, data.SenderName, data.Message))
 	return renderMessage(value.Alert.Recipients, subject, data)
@@ -89,7 +89,7 @@ func (t *Template) renderEvent(value domain.Notification) (domain.EmailMessage, 
 		AlertName: value.Event.Name, SenderName: value.Sender.Name, SenderID: value.Sender.ID,
 		SenderStatus: statusLabel(value.Sender.Status), Severity: string(value.Entry.Severity),
 		Message: messageText, Timestamp: formatEmailTime(value.Entry.Timestamp), SentAt: formatEmailTime(time.Now()),
-		Metadata: string(metadata), Link: link, LogoURL: t.publicURL + "/loghill.png",
+		Metadata: string(metadata), Link: link, LogoURL: t.publicURL + "/logmate.png",
 		Kicker: kicker, Headline: value.Event.Name, Description: description, ButtonLabel: "Open sender logs",
 		SeverityColor: theme.Color, SeverityBackground: theme.Background, SeverityBorder: theme.Border,
 		Test: value.Test, HasMetadata: len(value.Entry.Metadata) > 0,
@@ -148,25 +148,25 @@ func (t *Template) RenderProviderTest(recipient string, provider domain.EmailPro
 	now := formatEmailTime(time.Now())
 	providerName := "Microsoft 365 / Outlook"
 	integrationName := "Microsoft Graph"
-	message := "This message confirms that LogHill successfully authenticated and sent email through Microsoft 365."
-	description := "The LogHill integration with Outlook is working and ready to deliver your alerts."
+	message := "This message confirms that LogMate successfully authenticated and sent email through Microsoft 365."
+	description := "The LogMate integration with Outlook is working and ready to deliver your alerts."
 	if provider == domain.EmailProviderGmail {
 		providerName = "Gmail"
 		integrationName = "SMTP with STARTTLS"
-		message = "This message confirms that LogHill successfully authenticated and sent email through Gmail via SMTP."
-		description = "The LogHill integration with Gmail is working and ready to deliver your alerts."
+		message = "This message confirms that LogMate successfully authenticated and sent email through Gmail via SMTP."
+		description = "The LogMate integration with Gmail is working and ready to deliver your alerts."
 	}
 	data := templateData{
 		AlertName: "Email configuration", SenderName: providerName, SenderID: integrationName,
 		SenderStatus: "Configuration validated", Severity: "SUCCESS",
 		Message:   message,
-		Timestamp: now, SentAt: now, Link: t.publicURL, LogoURL: t.publicURL + "/loghill.png",
+		Timestamp: now, SentAt: now, Link: t.publicURL, LogoURL: t.publicURL + "/logmate.png",
 		Kicker: "EMAIL TEST", Headline: "Your email is ready",
 		Description: description,
-		ButtonLabel: "Open LogHill", SeverityColor: "#34d399", SeverityBackground: "#052e2b", SeverityBorder: "#065f46",
+		ButtonLabel: "Open LogMate", SeverityColor: "#34d399", SeverityBackground: "#052e2b", SeverityBorder: "#065f46",
 		Test: true, ProviderTest: true,
 	}
-	return renderMessage([]string{recipient}, "LogHill email test — configuration complete", data)
+	return renderMessage([]string{recipient}, "LogMate email test — configuration complete", data)
 }
 
 func renderMessage(recipients []string, subject string, data templateData) (domain.EmailMessage, error) {

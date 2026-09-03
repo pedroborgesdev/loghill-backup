@@ -266,7 +266,7 @@ func (a *APIController) ReceiveLog(c *gin.Context) {
 	if instanceID == "" {
 		instanceID = strings.TrimSpace(c.Query("instance_id"))
 	}
-	originInstanceID := strings.TrimSpace(c.GetHeader("X-LogHill-Origin-Instance-ID"))
+	originInstanceID := strings.TrimSpace(c.GetHeader("X-LogMate-Origin-Instance-ID"))
 	if originInstanceID == "" {
 		originInstanceID = instanceID
 	}

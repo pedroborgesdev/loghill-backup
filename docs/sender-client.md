@@ -1,20 +1,20 @@
-# Cliente de logs do LogHill
+# Cliente de logs do LogMate
 
 O cliente conecta pelo nome do sender e a API o cria automaticamente quando necessário. Configure apenas a URL da API e o nome desejado (ou seu identificador normalizado).
 
 ```env
-LOGHILL_API_URL=http://localhost:8080
-LOGHILL_SENDER_NAME=automacao-financeira
+LOGMATE_API_URL=http://localhost:8080
+LOGMATE_SENDER_NAME=automacao-financeira
 ```
 
-Ao usar `instrument(name="automacao-financeira")`, `LOGHILL_SENDER_NAME` é opcional: o nome do logger será usado. `LOGHILL_SENDER_ID` continua aceito como alias de migração.
+Ao usar `instrument(name="automacao-financeira")`, `LOGMATE_SENDER_NAME` é opcional: o nome do logger será usado. `LOGMATE_SENDER_ID` continua aceito como alias de migração.
 
 ## Inicialização da instância
 
-Cada processo chama `POST /api/v1/instances/init` com `sender_name`. Se ainda não existir um sender com esse nome, a API o cria automaticamente; não é necessário cadastrá-lo previamente. A API retorna o ID canônico, um `instance_id` e um `instance_token` exclusivo da execução. Somente o hash do token é persistido pelo LogHill.
+Cada processo chama `POST /api/v1/instances/init` com `sender_name`. Se ainda não existir um sender com esse nome, a API o cria automaticamente; não é necessário cadastrá-lo previamente. A API retorna o ID canônico, um `instance_id` e um `instance_token` exclusivo da execução. Somente o hash do token é persistido pelo LogMate.
 
 ```bash
-curl -X POST "$LOGHILL_API_URL/api/v1/instances/init" \
+curl -X POST "$LOGMATE_API_URL/api/v1/instances/init" \
   -H "Content-Type: application/json" \
   -d '{"sender_name":"automacao-financeira"}'
 ```
@@ -31,10 +31,10 @@ curl -X POST "$LOGHILL_API_URL/api/v1/instances/init" \
 O `sender_name` é usado somente nessa inicialização. Logs seguintes usam o `sender_id` devolvido, junto de `X-Sender-Instance-ID` e `X-Sender-Instance-Token`. O token deve ficar apenas na memória do processo e ser descartado ao encerrar.
 
 ```bash
-curl -X POST "$LOGHILL_API_URL/api/v1/logs" \
+curl -X POST "$LOGMATE_API_URL/api/v1/logs" \
   -H "Content-Type: application/json" \
-  -H "X-Sender-Instance-ID: $LOGHILL_INSTANCE_ID" \
-  -H "X-Sender-Instance-Token: $LOGHILL_INSTANCE_TOKEN" \
+  -H "X-Sender-Instance-ID: $LOGMATE_INSTANCE_ID" \
+  -H "X-Sender-Instance-Token: $LOGMATE_INSTANCE_TOKEN" \
   -d '{"sender_id":"automacao-financeira","severity":"ERROR","message":"Falha ao processar boleto"}'
 ```
 
@@ -45,7 +45,7 @@ Uma instância sem logs ou healthchecks passa a inativa após o prazo configurad
 ## Python
 
 ```python
-from loghill import instrument
+from logmate import instrument
 
 log = instrument(name="automacao-financeira")
 

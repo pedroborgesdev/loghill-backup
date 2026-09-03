@@ -81,7 +81,7 @@ func eventFixture(t *testing.T) (*Service, string, string, string) {
 			t.Fatal(err)
 		}
 	}
-	cfg := config.Config{EmailManagedByEnvironment: true, OutlookEnabled: true, OutlookTenantID: "tenant", OutlookClientID: "client", OutlookClientSecret: "secret", OutlookSenderEmail: "logs@example.com", OutlookSenderName: "LogHill"}
+	cfg := config.Config{EmailManagedByEnvironment: true, OutlookEnabled: true, OutlookTenantID: "tenant", OutlookClientID: "client", OutlookClientSecret: "secret", OutlookSenderEmail: "logs@example.com", OutlookSenderName: "LogMate"}
 	emailSettings, err := emailconfig.Open(dir, cfg, now)
 	if err != nil {
 		t.Fatal(err)
@@ -110,7 +110,7 @@ func TestEventWithoutEmailCanBeActive(t *testing.T) {
 
 func TestWebhookEventValidationAndPersistence(t *testing.T) {
 	service, dir, sender, _ := eventFixture(t)
-	input := domain.EventInput{Name: "Webhook financeiro", Key: "webhook_financeiro", SenderIDs: []string{sender}, ActionType: domain.EventActionWebhook, WebhookURL: "https://hooks.example.com/loghill", Enabled: true}
+	input := domain.EventInput{Name: "Webhook financeiro", Key: "webhook_financeiro", SenderIDs: []string{sender}, ActionType: domain.EventActionWebhook, WebhookURL: "https://hooks.example.com/logmate", Enabled: true}
 	event, err := service.Create(context.Background(), input)
 	if err != nil {
 		t.Fatal(err)

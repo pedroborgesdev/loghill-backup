@@ -1,11 +1,11 @@
 <div align="center">
-  <img src="./loghill.png" alt="LogHill" width="180" />
+  <img src="./logmate.png" alt="LogMate" width="180" />
 
-  # LogHill
+  # LogMate
 
   **Centralize logs, acompanhe a saúde dos serviços e automatize respostas operacionais.**
 
-  O LogHill reúne logs estruturados, instâncias de aplicações, alertas, eventos, regras de monitoramento e histórico de execuções em uma interface única e leve.
+  O LogMate reúne logs estruturados, instâncias de aplicações, alertas, eventos, regras de monitoramento e histórico de execuções em uma interface única e leve.
 
   [![Go](https://img.shields.io/badge/Go-1.24+-00ADD8?logo=go&logoColor=white)](https://go.dev/)
   [![React](https://img.shields.io/badge/React-19-61DAFB?logo=react&logoColor=111827)](https://react.dev/)
@@ -13,11 +13,11 @@
   [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](./LICENSE.md)
 </div>
 
-![Dashboard do LogHill com saúde dos serviços, volume de logs, atividade recente e execuções](docs/screenshots/dashboard.jpeg)
+![Dashboard do LogMate com saúde dos serviços, volume de logs, atividade recente e execuções](docs/screenshots/dashboard.jpeg)
 
-## O que é o LogHill
+## O que é o LogMate
 
-O LogHill é uma plataforma de observabilidade para equipes que precisam centralizar logs sem manter uma infraestrutura distribuída complexa. Aplicações enviam logs por HTTP, cada processo é identificado como uma instância e a interface permite investigar falhas, acompanhar serviços inativos e criar automações sobre os sinais recebidos.
+O LogMate é uma plataforma de observabilidade para equipes que precisam centralizar logs sem manter uma infraestrutura distribuída complexa. Aplicações enviam logs por HTTP, cada processo é identificado como uma instância e a interface permite investigar falhas, acompanhar serviços inativos e criar automações sobre os sinais recebidos.
 
 O backend persiste os dados localmente em JSON e JSONL. O frontend React é incorporado ao binário Go, permitindo distribuir o sistema como um único executável ou container com um diretório persistente.
 
@@ -47,7 +47,7 @@ Aplicação cliente
     ├─ inicializa uma instância e recebe uma credencial efêmera
     ├─ envia logs, eventos, metadata e healthchecks
     ▼
-LogHill API
+LogMate API
     ├─ valida e persiste o log
     ├─ publica o registro no stream SSE
     ├─ avalia alertas e eventos associados ao sender
@@ -84,7 +84,7 @@ Um **sender** representa uma aplicação que produz logs. Uma **instância** rep
 
 Na listagem é possível pesquisar, filtrar por status, comparar volume e erros recentes, criar um sender legado, editar informações, revogar ou reativar acesso e excluir depois de revisar dependências.
 
-O demo mostra perfis diferentes: `Checkout API` e `Payment Worker` estão online, enquanto `Billing Worker` e `Catalog Indexer` ficaram inativos por não enviarem atividade no prazo configurado. Se um sender tiver várias instâncias, o LogHill permite selecionar qual execução será investigada, sem misturar logs de processos simultâneos.
+O demo mostra perfis diferentes: `Checkout API` e `Payment Worker` estão online, enquanto `Billing Worker` e `Catalog Indexer` ficaram inativos por não enviarem atividade no prazo configurado. Se um sender tiver várias instâncias, o LogMate permite selecionar qual execução será investigada, sem misturar logs de processos simultâneos.
 
 ### Investigação de logs
 
@@ -192,15 +192,15 @@ As configurações controlam limite e compactação dos logs, tempo para uma ins
 Requer Docker com Compose v2.
 
 ```bash
-git clone https://github.com/pedroborgesdev/loghill-backup.git
-cd loghill-backup
+git clone https://github.com/pedroborgesdev/logmate-backup.git
+cd logmate-backup
 docker compose up -d --build
 ```
 
 Abra [http://localhost:8080](http://localhost:8080). O Compose compila a aplicação, publica `8080`, persiste `/app/data` em `./data`, reinicia o container e verifica `/health`.
 
 ```bash
-docker compose logs -f log-theater
+docker compose logs -f logmate
 docker compose down
 ```
 
@@ -213,8 +213,8 @@ Veja o [guia de instalação](./INSTALATION.md) para binário nativo, systemd, G
 O gerador cria oito serviços, logs variados, metadata, alertas, eventos, regras e execuções recentes. Requer Go 1.24+, Node.js 22+ e npm.
 
 ```bash
-git clone https://github.com/pedroborgesdev/loghill-backup.git
-cd loghill-backup
+git clone https://github.com/pedroborgesdev/logmate-backup.git
+cd logmate-backup
 go run ./cmd/demo-data
 
 cd frontend
@@ -275,10 +275,10 @@ Em períodos sem logs, envie healthchecks autenticados. O contrato completo est�
 
 ## Cliente Python de exemplo
 
-[`examples/loghill.py`](./examples/loghill.py) inicializa instâncias, mantém healthchecks, envia em background e pode capturar `stdout`, `stderr`, tracebacks e subprocessos.
+[`examples/logmate.py`](./examples/logmate.py) inicializa instâncias, mantém healthchecks, envia em background e pode capturar `stdout`, `stderr`, tracebacks e subprocessos.
 
 ```python
-from loghill import instrument
+from logmate import instrument
 
 log = instrument(
     name="worker-financeiro",

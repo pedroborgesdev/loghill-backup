@@ -1,4 +1,4 @@
-LOGHILL — {{.Kicker}}
+LOGMATE — {{.Kicker}}
 
 {{.Headline}}
 {{.Description}}
@@ -18,4 +18,4 @@ Log time: {{.Timestamp}}
 
 {{end}}{{.ButtonLabel}}: {{.Link}}
 
-Sent automaticamente pelo LogHill.
+Sent automaticamente pelo LogMate.

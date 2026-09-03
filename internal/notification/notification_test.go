@@ -184,7 +184,7 @@ func TestDispatcherDeliversWebhookThroughDurableWorker(t *testing.T) {
 		t.Fatal(err)
 	}
 	dispatcher.SetWebhookSender(webhook).Start()
-	value := domain.Notification{SourceType: domain.NotificationSourceEvent, SourceID: "evt-webhook", Event: domain.EventDefinition{ID: "evt-webhook", ActionType: domain.EventActionWebhook, WebhookURL: "https://hooks.example.com/loghill"}, Sender: domain.Sender{ID: "worker-1"}, Entry: domain.LogEntry{Event: "finished", Severity: domain.Info}}
+	value := domain.Notification{SourceType: domain.NotificationSourceEvent, SourceID: "evt-webhook", Event: domain.EventDefinition{ID: "evt-webhook", ActionType: domain.EventActionWebhook, WebhookURL: "https://hooks.example.com/logmate"}, Sender: domain.Sender{ID: "worker-1"}, Entry: domain.LogEntry{Event: "finished", Severity: domain.Info}}
 	if err = dispatcher.Dispatch(context.Background(), value); err != nil {
 		t.Fatal(err)
 	}
@@ -270,10 +270,10 @@ func TestTemplateEscapesHTMLAndKeepsFullBody(t *testing.T) {
 	if !strings.Contains(message.Text, "<script>") || !strings.Contains(message.HTML, "/senders/worker-1?severity=ERROR") {
 		t.Fatal("plain body or link missing")
 	}
-	if strings.Contains(message.Subject, "[") || !strings.HasPrefix(message.Subject, "LogHill — Error detected on worker:") {
+	if strings.Contains(message.Subject, "[") || !strings.HasPrefix(message.Subject, "LogMate — Error detected on worker:") {
 		t.Fatalf("subject is not readable: %q", message.Subject)
 	}
-	for _, expected := range []string{`align="center"`, "Observability center", "An error was detected", "#f59e0b", "/loghill.png"} {
+	for _, expected := range []string{`align="center"`, "Observability center", "An error was detected", "#f59e0b", "/logmate.png"} {
 		if !strings.Contains(message.HTML, expected) {
 			t.Fatalf("themed email is missing %q", expected)
 		}
@@ -289,18 +289,18 @@ func TestTemplateRendersBeautifulProviderTestWithoutBracketedSubject(t *testing.
 	if err != nil {
 		t.Fatal(err)
 	}
-	if message.Subject != "LogHill email test — configuration complete" || strings.Contains(message.Subject, "[") {
+	if message.Subject != "LogMate email test — configuration complete" || strings.Contains(message.Subject, "[") {
 		t.Fatalf("unexpected subject: %q", message.Subject)
 	}
 	if len(message.To) != 1 || message.To[0] != "dev@example.com" {
 		t.Fatalf("unexpected recipients: %v", message.To)
 	}
-	for _, expected := range []string{"Your email is ready", "Microsoft 365 / Outlook", "Configuration validated", "Open LogHill", "https://logs.example.com/loghill.png"} {
+	for _, expected := range []string{"Your email is ready", "Microsoft 365 / Outlook", "Configuration validated", "Open LogMate", "https://logs.example.com/logmate.png"} {
 		if !strings.Contains(message.HTML, expected) {
 			t.Fatalf("provider test email is missing %q", expected)
 		}
 	}
-	if !strings.Contains(message.Text, "The LogHill integration with Outlook is working") {
+	if !strings.Contains(message.Text, "The LogMate integration with Outlook is working") {
 		t.Fatal("provider test plain-text fallback is incomplete")
 	}
 }

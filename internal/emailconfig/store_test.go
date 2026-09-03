@@ -19,7 +19,7 @@ func TestSecretIsEncryptedHiddenAndPreserved(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	input := Input{Provider: domain.EmailProviderOutlook, Enabled: true, Outlook: OutlookInput{TenantID: "tenant", ClientID: "client", ClientSecret: "super-secret", SenderEmail: "logs@example.com", SenderName: "LogHill"}}
+	input := Input{Provider: domain.EmailProviderOutlook, Enabled: true, Outlook: OutlookInput{TenantID: "tenant", ClientID: "client", ClientSecret: "super-secret", SenderEmail: "logs@example.com", SenderName: "LogMate"}}
 	safe, err := store.Update(input, time.Now())
 	if err != nil {
 		t.Fatal(err)
@@ -75,7 +75,7 @@ func TestGmailSettingsAreEncryptedHiddenAndRestored(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	input := Input{Provider: domain.EmailProviderGmail, Enabled: true, Gmail: GmailInput{Host: "smtp.gmail.com", Port: 587, Username: "sender@gmail.com", Password: "app-password", From: "sender@gmail.com", SenderName: "LogHill"}}
+	input := Input{Provider: domain.EmailProviderGmail, Enabled: true, Gmail: GmailInput{Host: "smtp.gmail.com", Port: 587, Username: "sender@gmail.com", Password: "app-password", From: "sender@gmail.com", SenderName: "LogMate"}}
 	safe, err := store.Update(input, time.Now())
 	if err != nil {
 		t.Fatal(err)

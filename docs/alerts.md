@@ -1,4 +1,4 @@
-# Alertas de e-mail do LogHill
+# Alertas de e-mail do LogMate
 
 ## Fluxo
 
@@ -22,7 +22,7 @@ OUTLOOK_TENANT_ID=
 OUTLOOK_CLIENT_ID=
 OUTLOOK_CLIENT_SECRET=
 OUTLOOK_SENDER_EMAIL=logs@empresa.com
-OUTLOOK_SENDER_NAME=LogHill
+OUTLOOK_SENDER_NAME=LogMate
 APP_PUBLIC_URL=https://logs.empresa.com
 ```
 

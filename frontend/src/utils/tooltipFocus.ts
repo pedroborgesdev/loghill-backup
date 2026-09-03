@@ -1,4 +1,4 @@
-export const tooltipOpenEvent = "loghill:tooltip-open";
+export const tooltipOpenEvent = "logmate:tooltip-open";
 export const tooltipDismissDetail = "__dismiss_tooltips__";
 
 export function restoreFocusWithoutTooltip(element?: HTMLElement | null) {
