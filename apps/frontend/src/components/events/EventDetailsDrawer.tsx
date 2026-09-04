@@ -1,0 +1,54 @@
+import { Clipboard, Edit3, Globe2, Mail, ScanSearch, Send, Webhook } from "lucide-react";
+import { useEffect, useId, useState } from "react";
+import { createPortal } from "react-dom";
+import type { EventDefinition } from "../../types/event";
+import { formatDate, formatNumber } from "../../utils/format";
+import { SourceRecentExecutions } from "../executions/SourceRecentExecutions";
+import { Button, ModalCloseButton } from "../ui";
+import { EventDeliveryBadge, EventStatusBadge } from "./EventStatusBadge";
+
+function ActionLabel({ event }: { event: EventDefinition }) {
+  if (event.action_type === "email") return <span className="inline-flex items-center gap-1.5"><Mail className="size-3.5" />Email</span>;
+  if (event.action_type === "webhook") return <span className="inline-flex items-center gap-1.5"><Webhook className="size-3.5" />Webhook</span>;
+  if (event.action_type === "http") return <span className="inline-flex items-center gap-1.5"><Globe2 className="size-3.5" />HTTP request</span>;
+  return <span className="inline-flex items-center gap-1.5"><ScanSearch className="size-3.5" />Monitoring only</span>;
+}
+
+function displayHeaderValue(name: string, value: string) {
+  return /(authorization|api[-_]?key|token|secret)/.test(name.toLowerCase()) ? "••••••" : value;
+}
+
+export function EventDetailsDrawer({ event, onClose, onEdit, onTest }: { event?: EventDefinition; onClose: () => void; onEdit: (event: EventDefinition) => void; onTest: (event: EventDefinition) => void }) {
+  const titleId = useId();
+  const [copied, setCopied] = useState(false);
+  useEffect(() => {
+    if (!event) return;
+    const close = (keyboard: KeyboardEvent) => { if (keyboard.key === "Escape") onClose(); };
+    document.addEventListener("keydown", close);
+    return () => document.removeEventListener("keydown", close);
+  }, [event, onClose]);
+  if (!event) return null;
+  const copy = () => { void navigator.clipboard.writeText(event.key); setCopied(true); window.setTimeout(() => setCopied(false), 1500); };
+  return createPortal(
+    <div className="fixed inset-0 z-[215]">
+      <button type="button" aria-label="Close details" onClick={onClose} className="absolute inset-0 bg-black/65" />
+      <aside role="dialog" aria-modal="true" aria-labelledby={titleId} className="absolute inset-y-0 right-0 flex w-full max-w-xl flex-col border-l border-zinc-700 bg-[#111113] shadow-2xl shadow-black/70">
+        <header className="flex items-start justify-between gap-4 border-b border-zinc-800 px-5 py-4"><div className="min-w-0"><div className="flex items-center gap-2"><h2 id={titleId} className="truncate text-base font-semibold text-zinc-100">{event.name}</h2><EventStatusBadge enabled={event.enabled} /></div><div className="mt-1 flex items-center gap-1"><code className="truncate text-[10px] text-zinc-500">{event.key}</code><button type="button" onClick={copy} aria-label="Copy key" className="rounded p-1 text-zinc-600 hover:text-zinc-200"><Clipboard className="size-3" /></button>{copied && <span role="status" className="text-[9px] text-emerald-400">Copied</span>}</div></div><ModalCloseButton label="Close event details" onClick={onClose} /></header>
+        <div className="min-h-0 flex-1 space-y-5 overflow-y-auto p-5">
+          <section className="grid gap-3 sm:grid-cols-2"><Value label="Action" value={<ActionLabel event={event} />} /><Value label="Last result" value={<EventDeliveryBadge status={event.last_delivery_status} />} /></section>
+          <section><h3 className="text-[10px] font-medium uppercase tracking-wide text-zinc-600">Associated senders</h3><div className="mt-2 flex flex-wrap gap-1.5">{event.sender_ids.map((id) => <code key={id} className="rounded-md border border-zinc-800 bg-zinc-950 px-2 py-1 text-[10px] text-zinc-300">{id}</code>)}</div></section>
+          {event.action_type === "email" && <><section><h3 className="text-[10px] font-medium uppercase tracking-wide text-zinc-600">Recipients</h3><div className="mt-2 flex flex-wrap gap-1.5">{event.recipients.map((recipient) => <span key={recipient} className="rounded-md border border-zinc-800 bg-zinc-950 px-2 py-1 text-[10px] text-zinc-300">{recipient}</span>)}</div></section><section className="space-y-3"><Value label="Subject" value={event.subject_template} /><Value label="Message" value={<pre className="whitespace-pre-wrap font-sans">{event.message_template}</pre>} /></section></>}
+          {event.action_type === "webhook" && <section><h3 className="text-[10px] font-medium uppercase tracking-wide text-zinc-600">HTTPS destination</h3><code className="mt-2 block break-all rounded-lg border border-zinc-800 bg-zinc-950 p-3 text-[10px] text-zinc-300">{event.webhook_url}</code></section>}
+          {event.action_type === "http" && event.http_request && <section className="space-y-3"><Value label="Request" value={<code>{event.http_request.method} {event.http_request.url}</code>} /><Value label="Headers" value={Object.keys(event.http_request.headers ?? {}).length ? Object.entries(event.http_request.headers).map(([name, value]) => <code key={name} className="block break-all">{name}: {displayHeaderValue(name, value)}</code>) : "None"} /><Value label="Cookies" value={Object.keys(event.http_request.cookies ?? {}).length ? Object.keys(event.http_request.cookies).join(", ") : "None"} /><Value label="Body" value={<pre className="whitespace-pre-wrap font-mono text-xs">{event.http_request.body || "Empty"}</pre>} /></section>}
+          <section className="grid grid-cols-2 gap-3 rounded-xl border border-zinc-800 bg-zinc-950/40 p-4 text-xs"><Value label="Created" value={formatDate(event.created_at)} /><Value label="Last updated" value={formatDate(event.updated_at)} /><Value label="Last trigger" value={formatDate(event.last_triggered_at)} /><Value label="Last delivery" value={formatDate(event.last_delivery_at)} /><Value label="Executions" value={formatNumber(event.trigger_count)} /><Value label="Deliveries" value={formatNumber(event.delivery_count)} /><Value label="Failures" value={formatNumber(event.failure_count)} />{event.last_delivery_error && <div className="col-span-2"><p className="text-zinc-600">Last error</p><p className="mt-1 break-words text-red-400">{event.last_delivery_error}</p></div>}</section>
+          <SourceRecentExecutions source="event" sourceID={event.id} />
+        </div>
+        <footer className="flex justify-end gap-2 border-t border-zinc-800 bg-zinc-950 p-3">{event.action_type === "email" && <Button onClick={() => onTest(event)}><Send className="size-4" />Send test</Button>}<Button onClick={() => onEdit(event)}><Edit3 className="size-4" />Edit</Button></footer>
+      </aside>
+    </div>, document.body,
+  );
+}
+
+function Value({ label, value }: { label: string; value: React.ReactNode }) {
+  return <div><p className="text-zinc-600">{label}</p><div className="mt-1 break-words text-zinc-300">{value}</div></div>;
+}

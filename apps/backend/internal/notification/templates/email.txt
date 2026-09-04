@@ -1,0 +1,21 @@
+LOGMATE — {{.Kicker}}
+
+{{.Headline}}
+{{.Description}}
+
+MESSAGE
+{{.Message}}
+
+{{if .ProviderTest}}Provider{{else}}Sender{{end}}: {{.SenderName}}
+{{if .ProviderTest}}Integration{{else}}Identifier{{end}}: {{.SenderID}}
+Status: {{.SenderStatus}}
+{{if not .ProviderTest}}Severity: {{.Severity}}
+Log time: {{.Timestamp}}
+{{end}}Sent em: {{.SentAt}}
+
+{{if .HasMetadata}}METADADOS
+{{.Metadata}}
+
+{{end}}{{.ButtonLabel}}: {{.Link}}
+
+Sent automaticamente pelo LogMate.

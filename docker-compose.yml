@@ -7,8 +7,6 @@ services:
       APP_PORT: "8080"
       DATA_DIR: /app/data
       APP_PUBLIC_URL: http://localhost:8080
-      # Defina APP_PASSWORD para exigir login na interface.
-      # APP_PASSWORD: troque-me
       TZ: America/Sao_Paulo
     volumes:
       - ./data:/app/data

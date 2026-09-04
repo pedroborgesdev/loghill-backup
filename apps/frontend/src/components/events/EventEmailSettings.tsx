@@ -1,0 +1,6 @@
+import { AlertTriangle, MailCheck } from "lucide-react";
+import { RecipientInput } from "../alerts/RecipientInput";
+
+export function EventEmailSettings({ recipients, onChange, outlookReady, disabled, onConfigureOutlook }: { recipients: string[]; onChange: (value: string[]) => void; outlookReady: boolean; disabled?: boolean; onConfigureOutlook: (trigger: HTMLButtonElement) => void }) {
+  return <div className="space-y-4"><RecipientInput value={recipients} onChange={onChange} disabled={disabled} />{outlookReady ? <div className="flex items-center gap-2 rounded-lg border border-emerald-950 bg-emerald-950/15 px-3 py-2 text-xs text-emerald-400"><MailCheck className="size-4" />Email is ready to send.</div> : <div className="flex items-start gap-3 rounded-lg border border-amber-950 bg-amber-950/20 p-3"><AlertTriangle className="mt-0.5 size-4 shrink-0 text-amber-500" /><div className="text-xs leading-5 text-amber-300"><p>No email provider is configured. The event can only be saved as inactive.</p><button type="button" onClick={(event) => onConfigureOutlook(event.currentTarget)} className="mt-1 rounded font-medium underline underline-offset-2 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-white/50">Configure email</button></div></div>}</div>;
+}

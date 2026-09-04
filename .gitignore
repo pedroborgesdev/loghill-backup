@@ -1,5 +1,14 @@
 /data/
-/frontend/node_modules/
+/apps/frontend/node_modules/
+/apps/frontend/dist/
+/apps/backend/web/dist/
+/apps/backend/data/
+/bin/
+/dist/
+/build/
+/logmate
+*.out
+*.prof
 /.cache/
 /.tools-go/
 /.tools-node/
@@ -7,10 +16,31 @@
 /.tools-node.zip
 *.exe
 *.test
+*.log
+*.sqlite
+*.sqlite3
+*.tmp
+*.swp
 .env
+.env.*
+!.env.example
 coverage/
 **/__pycache__/
 *.py[cod]
+.DS_Store
+Thumbs.db
+
+# Frontend tooling
+apps/frontend/.vite/
+apps/frontend/.eslintcache
+apps/frontend/npm-debug.log*
+apps/frontend/yarn-debug.log*
+apps/frontend/yarn-error.log*
+
+# Local editor and OS files
+.idea/
+.vscode/
+*.code-workspace
 
 # Azure deployment files are maintained only in Azure branches.
 /charts/

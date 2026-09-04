@@ -1,0 +1,1 @@
+export function RecentBadge({startedAt}:{startedAt:string}){return <span title={`Executed at ${new Date(startedAt).toLocaleString("en-US")}`} className="inline-flex w-14 justify-center rounded-md border border-zinc-700 bg-zinc-800 px-1.5 py-0.5 text-[9px] font-medium tracking-wide text-zinc-200">RECENT</span>}

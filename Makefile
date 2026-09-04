@@ -1,18 +1,26 @@
-.PHONY: dev backend frontend build test lint docker
+ifeq ($(OS),Windows_NT)
+BINARY := logmate.exe
+RUN_BINARY := .\logmate.exe
+CLEAR_TERMINAL := cls
+else
+BINARY := logmate
+RUN_BINARY := ./logmate
+CLEAR_TERMINAL := clear
+endif
+
+.PHONY: backend frontend build run lint docker
 backend:
-	go run ./cmd/server
+	cd apps/backend && go run ./cmd/server
 frontend:
-	cd frontend && npm run dev
-dev:
-	@echo "Execute 'make backend' e 'make frontend' em terminais separados"
+	cd apps/frontend && npm run dev
 build:
-	cd frontend && npm ci && npm run build
-	go build -o logmate ./cmd/server
-test:
-	go test -race ./...
-	cd frontend && npm run test:run
+	cd apps/frontend && npm ci && npm run build
+	cd apps/backend && go build -o ../../$(BINARY) ./cmd/server
+run: build
+	$(CLEAR_TERMINAL)
+	$(RUN_BINARY)
 lint:
-	go vet ./...
-	cd frontend && npm run lint
+	cd apps/backend && go vet ./...
+	cd apps/frontend && npm run lint
 docker:
 	docker compose up --build
